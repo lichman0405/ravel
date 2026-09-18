@@ -36,6 +36,24 @@ class User(Record):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+#: The authority each user role carries, weakest first. An approval's
+#: `required_role` names the least authority that may answer it, so the
+#: comparison is a ranking rather than an equality.
+#:
+#: Admin outranks a project owner here, and that is narrower than it looks.
+#: It lets an administrator *administer* — answer a request that is waiting on
+#: a human — and it does not make them a scientific decision maker: the DAG is
+#: mutated by the Master agent role, and no method anywhere takes a user
+#: identity and writes a node. So the rule the spec states, "admin cannot
+#: silently become scientific decision maker", holds by there being no path,
+#: not by this ordering.
+_USER_ROLE_RANK: dict[UserRole, int] = {
+    UserRole.LAB_USER: 0,
+    UserRole.PROJECT_OWNER: 1,
+    UserRole.ADMIN: 2,
+}
+
+
 class ProjectMembership(Record):
     """What one user may do in one project."""
 
@@ -60,6 +78,10 @@ class ProjectMembership(Record):
         authority, which is what the separation exists to prevent.
         """
         return self.role is UserRole.PROJECT_OWNER
+
+    def satisfies(self, required: UserRole) -> bool:
+        """Whether this membership carries at least the required authority."""
+        return _USER_ROLE_RANK[self.role] >= _USER_ROLE_RANK[required]
 
 
 class AgentIdentity(Record):

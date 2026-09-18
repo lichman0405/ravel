@@ -104,7 +104,35 @@ class MembershipRepository(ProjectScopedRepository[ProjectMembership]):
         role: UserRole,
         granted_by: str | None = None,
     ) -> ProjectMembership:
-        """Give a user a role in this project."""
+        """Give a user a role in this project.
+
+        Membership is where authority comes from, so this is the one write in
+        the system that can manufacture it. It is therefore checked twice: a
+        granter must hold authority at least equal to what is being granted,
+        and only the project's *first* membership may be created without a
+        granter at all. Without the second rule a caller could always reach
+        power by way of an empty project; without the first, a lab user could
+        promote themselves to owner.
+
+        Raises:
+            PermissionError: No granter was named for a project that already
+                has members, or the granter does not hold this much authority.
+        """
+        existing = self.all()
+        if granted_by is None:
+            if existing:
+                raise PermissionError(
+                    f"{self.project_id} already has {len(existing)} membership(s); "
+                    "only the first may be created without naming who granted it"
+                )
+        else:
+            granter = self.for_user(granted_by)
+            if granter is None or not granter.satisfies(role):
+                held = granter.role.value if granter is not None else "no membership"
+                raise PermissionError(
+                    f"{granted_by!r} may not grant {role.value} in {self.project_id} "
+                    f"({held}); a user cannot confer authority they do not hold"
+                )
         return self.add(
             ProjectMembership(
                 project_id=self.project_id,
@@ -202,11 +230,24 @@ class ApprovalRepository(ProjectScopedRepository[ApprovalRequest]):
         *,
         requested_by: str,
         action: str,
+        role: AgentRole,
         rationale: str = "",
         required_role: UserRole = UserRole.PROJECT_OWNER,
         payload: dict[str, Any] | None = None,
     ) -> ApprovalRequest:
-        """Raise a request. Master does this; Master cannot answer it."""
+        """Raise a request. Master does this; Master cannot answer it.
+
+        Raises:
+            PermissionError: The requester is not Master. Asking a human to
+                authorize an action is part of deciding to take it, and
+                deciding is Master's.
+        """
+        if role is not AgentRole.MASTER:
+            raise PermissionError(
+                f"the {role.value} role may not raise an approval request; asking "
+                f"a human to authorize an action is part of "
+                f"{AgentRole.MASTER.value}'s decision to take it"
+            )
         approval = ApprovalRequest(
             project_id=self.project_id,
             requested_by=requested_by,
@@ -236,11 +277,20 @@ class ApprovalRepository(ProjectScopedRepository[ApprovalRequest]):
     ) -> ApprovalRequest:
         """Record a human's answer.
 
-        `resolved_by` is a user identifier. There is no overload that accepts an
-        agent, because an agent resolving its own request is the separation of
-        powers failing in the one place it matters most.
+        `resolved_by` is a user identifier, and it is *checked*: the identifier
+        must name an active account holding a membership in this project whose
+        role satisfies the request's `required_role`. Taking the identifier on
+        trust would make this method a way for any caller — an agent included —
+        to answer its own question by writing down the name of a human who never
+        saw it, which is the separation of powers failing in the one place it
+        matters most.
+
+        Raises:
+            PermissionError: `resolved_by` is not an active member of this
+                project, or does not hold the authority the request requires.
         """
         approval = self.get(approval_id=approval_id)
+        self._require_resolver(approval, resolved_by)
         resolved = approval.resolve(status, resolved_by=resolved_by, note=note)
 
         row = self.session.get(ApprovalRequestRow, approval_id)
@@ -261,3 +311,27 @@ class ApprovalRepository(ProjectScopedRepository[ApprovalRequest]):
             },
         )
         return resolved
+
+    def _require_resolver(self, approval: ApprovalRequest, resolved_by: str) -> None:
+        """Refuse an answer from anyone without standing to give one.
+
+        Raises:
+            PermissionError: The resolver is not an active member holding the
+                required authority.
+        """
+        membership = MembershipRepository(self.session, self.project_id).for_user(
+            resolved_by
+        )
+        if membership is None:
+            raise PermissionError(
+                f"{resolved_by!r} is not a member of {self.project_id}; an approval "
+                "is answered by a person with standing in the project, not by any "
+                "identifier that happens to be written down"
+            )
+        if not membership.satisfies(approval.required_role):
+            raise PermissionError(
+                f"{resolved_by!r} holds {membership.role.value} in {self.project_id} "
+                f"and {approval.display_id} requires {approval.required_role.value}"
+            )
+        if not UserRepository(self.session).get(resolved_by).is_active:
+            raise PermissionError(f"account {resolved_by!r} is deactivated")
