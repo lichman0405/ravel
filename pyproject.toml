@@ -1,0 +1,78 @@
+[project]
+name = "ravel"
+version = "0.1.0"
+description = "RAVEL — Research Autonomous Validation & Execution Loop"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    # Domain / schema
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    # Authoritative state
+    "sqlalchemy>=2.0.35",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    # Durable execution
+    "temporalio>=1.7",
+    # Gateway
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.31",
+    # TUI
+    "textual>=0.83",
+    # Research
+    "httpx>=0.27",
+    "playwright>=1.47",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.3",
+    # Object storage
+    "boto3>=1.35",
+    # Identity
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.9",
+    "python-multipart>=0.0.12",
+    "websockets>=13",
+    # Resilience
+    "tenacity>=9.0",
+    # Agent tool seam. The harness runtime binary arrives as a matched
+    # dependency of this wheel; see vendor/DSH_PIN.json for the pin.
+    "mcp>=1.2",
+    "deepseek-harness-sdk==0.1.5rc1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-timeout>=2.3",
+    "respx>=0.21",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ravel"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+timeout = 300
+markers = [
+    "integration: requires the docker compose stack",
+    "dsh: drives a real pinned DSH runtime",
+    "live: reaches the real Internet; never mocked",
+    "e2e: full loop or TUI",
+    "acceptance: one of the A01-A20 acceptance cases",
+]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

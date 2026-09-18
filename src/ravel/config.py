@@ -1,0 +1,135 @@
+"""Process-wide configuration.
+
+Every setting is read from the environment, optionally seeded by the repository
+`.env` file. Nothing here reads a secret from a checked-in file: `.env` is
+git-ignored and `.env.example` documents the names.
+
+`DEEPSEEK_API_KEY` deliberately carries no `RAVEL_` prefix. It is the name the
+pinned harness resolves per request through its `apiKeyEnv` config key, and the
+inherited environment outranks every file layer the harness consults, so a value
+set here is authoritative for RAVEL-launched runtimes.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class Settings(BaseSettings):
+    """RAVEL runtime configuration, resolved once per process."""
+
+    model_config = SettingsConfigDict(
+        env_file=REPO_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="RAVEL_",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    env: Literal["development", "test", "production"] = "development"
+    log_level: str = "INFO"
+
+    # Runtime state owned by RAVEL: DSH homes, workspaces, research snapshots.
+    # Never placed inside a workspace an agent can influence.
+    runtime_dir: Path = Path("./runtime")
+
+    # ── Authoritative state ────────────────────────────────────────────────
+    postgres_host: str = "127.0.0.1"
+    postgres_port: int = 55432
+    postgres_db: str = "ravel"
+    postgres_user: str = "ravel"
+    postgres_password: SecretStr = SecretStr("ravel_dev_password")
+    postgres_dsn_override: str | None = Field(default=None, alias="RAVEL_POSTGRES_DSN")
+
+    # ── Durable execution ──────────────────────────────────────────────────
+    temporal_host: str = "127.0.0.1:7233"
+    temporal_namespace: str = "default"
+    temporal_task_queue: str = "ravel-v0"
+
+    # ── Object storage ─────────────────────────────────────────────────────
+    # Artifact bytes live here. They never enter PostgreSQL.
+    s3_endpoint: str = "http://127.0.0.1:9100"
+    s3_access_key: str = "ravel_minio"
+    s3_secret_key: SecretStr = SecretStr("ravel_minio_dev_password")
+    s3_bucket: str = "ravel-artifacts"
+    s3_region: str = "us-east-1"
+
+    # ── Harness ────────────────────────────────────────────────────────────
+    dsh_home: Path = Path("./runtime/dsh_home")
+    dsh_bin: str | None = None
+
+    # ── Model credentials ──────────────────────────────────────────────────
+    deepseek_api_key: SecretStr | None = Field(default=None, alias="DEEPSEEK_API_KEY")
+    deepseek_base_url: str | None = Field(default=None, alias="DEEPSEEK_BASE_URL")
+
+    # ── Research ───────────────────────────────────────────────────────────
+    research_contact_email: str | None = None
+    search_api_key: SecretStr | None = None
+    search_provider: str | None = None
+    playwright_headless: bool = True
+
+    # ── Gateway ────────────────────────────────────────────────────────────
+    gateway_host: str = "127.0.0.1"
+    gateway_port: int = 8000
+    gateway_jwt_secret: SecretStr = SecretStr("dev-only-change-me")
+    gateway_token_ttl_seconds: int = 3600
+
+    # ── Derived paths ──────────────────────────────────────────────────────
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def repo_root(self) -> Path:
+        """The repository checkout this process was started from."""
+        return REPO_ROOT
+
+    @property
+    def postgres_dsn(self) -> str:
+        """SQLAlchemy DSN for the authoritative Project State database."""
+        if self.postgres_dsn_override:
+            return self.postgres_dsn_override
+        password = self.postgres_password.get_secret_value()
+        return (
+            f"postgresql+psycopg://{self.postgres_user}:{password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    def runtime_path(self, *parts: str) -> Path:
+        """A path under the runtime root, created on demand."""
+        path = (REPO_ROOT / self.runtime_dir).joinpath(*parts)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def dsh_home_path(self) -> Path:
+        """The DSH home shared by every RAVEL-launched runtime process.
+
+        Profiles and session logs accumulate under this root. It sits outside
+        every research workspace on purpose: the pinned harness reads
+        `<cwd>/.env` as a credential fallback, so a runtime must never be
+        launched with a working directory an agent or a fetched page can write
+        to.
+        """
+        path = (REPO_ROOT / self.dsh_home).resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def dsh_runtime_cwd(self, project_id: str, role: str) -> Path:
+        """An empty, RAVEL-owned working directory for one runtime process.
+
+        Agents reach project data through RAVEL MCP tools that carry their
+        authority in the process environment, so this directory is never a
+        source of truth and never needs to hold anything.
+        """
+        return self.runtime_path("dsh_cwd", project_id, role)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """The process settings, constructed once."""
+    return Settings()

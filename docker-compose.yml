@@ -1,0 +1,96 @@
+# RAVEL V0 infrastructure.
+#
+# PostgreSQL, Temporal, and MinIO only. RAVEL itself runs natively in the
+# project venv; see docs/14_DEVELOPMENT_ENVIRONMENT.md.
+#
+# Host ports deliberately avoid the common defaults (5432/9000/9001), which are
+# frequently already bound on a shared development machine. Override any of them
+# through the matching RAVEL_* variable in `.env`.
+#
+#   scripts/dev_up.sh      start and wait for health
+#   scripts/dev_down.sh    stop, keeping volumes
+#   scripts/dev_down.sh -v stop and delete volumes
+
+name: ravel
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${RAVEL_POSTGRES_USER:-ravel}
+      POSTGRES_PASSWORD: ${RAVEL_POSTGRES_PASSWORD:-ravel_dev_password}
+      POSTGRES_DB: ${RAVEL_POSTGRES_DB:-ravel}
+    ports:
+      - "${RAVEL_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates the two Temporal databases on first initialisation.
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RAVEL_POSTGRES_USER:-ravel} -d ${RAVEL_POSTGRES_DB:-ravel}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: ${RAVEL_POSTGRES_USER:-ravel}
+      POSTGRES_PWD: ${RAVEL_POSTGRES_PASSWORD:-ravel_dev_password}
+      POSTGRES_SEEDS: postgres
+      # V0 keeps the single default namespace. Nothing scientific depends on it.
+      DEFAULT_NAMESPACE: ${RAVEL_TEMPORAL_NAMESPACE:-default}
+    ports:
+      - "${RAVEL_TEMPORAL_PORT:-7233}:7233"
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  temporal-ui:
+    image: temporalio/ui:2.32.0
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${RAVEL_TEMPORAL_UI_PORT:-8088}
+    ports:
+      - "${RAVEL_TEMPORAL_UI_PORT:-8088}:8080"
+
+  minio:
+    # MinIO's official registry is quay.io. The Docker Hub `minio/minio`
+    # namespace answers `pull access denied` in some networks, so the Quay
+    # image is used unconditionally — same publisher, same release tags.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${RAVEL_S3_ACCESS_KEY:-ravel_minio}
+      MINIO_ROOT_PASSWORD: ${RAVEL_S3_SECRET_KEY:-ravel_minio_dev_password}
+    ports:
+      - "${RAVEL_S3_PORT:-9100}:9000"
+      - "${RAVEL_S3_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  postgres-data:
+  minio-data:
