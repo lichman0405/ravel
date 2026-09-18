@@ -39,6 +39,11 @@ class EvidenceSource(Record):
     """
 
     source_id: str = Field(default_factory=new_id)
+    #: The project that read this source. Sources are project-scoped like every
+    #: other record: two projects may legitimately reach the same URL, and
+    #: sharing one row between them would create a read path across the
+    #: authorization boundary that nothing else in RAVEL has.
+    project_id: str
     url: str = Field(min_length=1)
     title: str = ""
     publisher: str = ""

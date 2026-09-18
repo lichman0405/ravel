@@ -233,3 +233,40 @@ def is_join_satisfied(
             f"join_threshold {join_threshold} exceeds the {dependency_count} dependencies"
         )
     return succeeded >= join_threshold
+
+
+def is_join_unsatisfiable(
+    join_policy: JoinPolicy | str | None,
+    join_threshold: int | None,
+    dependency_count: int,
+    succeeded: int,
+    still_running: int,
+) -> bool:
+    """Whether a fan-in can no longer be satisfied, however the rest turn out.
+
+    The complement of `is_join_satisfied`, and the reason it exists: a node
+    whose dependencies have all failed would otherwise sit in PLANNED forever.
+    A silently stalled DAG is worse than a blocked node, because nothing in the
+    system can tell the difference between "waiting" and "never going to run".
+
+    `still_running` counts dependencies that have not reached a terminal status
+    and so might still succeed.
+
+    Raises:
+        ValueError: A THRESHOLD join carries no usable threshold.
+    """
+    if join_policy is None:
+        return dependency_count == 0
+    policy = JoinPolicy(join_policy)
+    if dependency_count == 0:
+        return False
+    if is_join_satisfied(join_policy, join_threshold, dependency_count, succeeded):
+        return False
+
+    best_possible = succeeded + still_running
+    if policy is JoinPolicy.ALL:
+        return best_possible < dependency_count
+    if policy is JoinPolicy.ANY:
+        return best_possible < 1
+    threshold = 1 if join_threshold is None else join_threshold
+    return best_possible < threshold

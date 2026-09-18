@@ -25,6 +25,7 @@ from ravel.domain.evidence import (
 
 def _source(**overrides: object) -> EvidenceSource:
     defaults: dict[str, object] = {
+        "project_id": "proj-a",
         "url": "https://example.org/paper",
         "access_status": AccessStatus.OK,
         "retrieved_at": utcnow(),

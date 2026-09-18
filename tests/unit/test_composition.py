@@ -10,6 +10,7 @@ with.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -28,7 +29,18 @@ def composition(tmp_path: Path) -> RoleComposition:
     )
 
 
-def _row(patch: list[dict[str, object]], row_id: str) -> dict[str, object]:
+def _inserted_rows(composition: RoleComposition) -> list[dict[str, Any]]:
+    """The rows the overlay inserts.
+
+    `as_patch()` is typed as a list of rows holding `object` values, which is
+    honest — the rows are heterogeneous. Reading into them is what needs the
+    wider type, and widening it in one place keeps the assertions readable.
+    """
+    patch: list[dict[str, Any]] = composition.as_patch()
+    return patch[-1]["insert"]
+
+
+def _row(patch: list[dict[str, Any]], row_id: str) -> dict[str, Any]:
     for row in patch:
         if row.get("id") == row_id:
             return row
@@ -60,7 +72,7 @@ def test_overlay_mounts_exactly_one_tool_server(composition: RoleComposition) ->
 
 def test_tool_server_row_carries_the_scope_in_its_environment(composition: RoleComposition) -> None:
     """This is the whole reason a tool handler can trust its project id."""
-    row = composition.as_patch()[-1]["insert"][0]
+    row = _inserted_rows(composition)[0]
     config = row["config"]
     assert config["serverName"] == MCP_SERVER_NAME
     assert config["transport"] == "stdio"
@@ -82,7 +94,7 @@ def test_every_role_composes(tmp_path: Path, role: AgentRole) -> None:
         mcp_command="/usr/bin/python3",
         brief_path=tmp_path / "b.json",
     )
-    row = composed.as_patch()[-1]["insert"][0]
+    row = _inserted_rows(composed)[0]
     assert row["config"]["env"]["RAVEL_ROLE"] == role.value
 
 

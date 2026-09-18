@@ -71,6 +71,15 @@ markers = [
 ]
 addopts = "-q --strict-markers"
 
+[tool.pyright]
+# `src` layout: the package is installed into the venv, but the language
+# server needs the source root on its path to resolve `ravel.*` before an
+# editable install exists.
+extraPaths = ["src", "tests"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -78,3 +87,11 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic writes the DDL out one statement per line with its own wrapping, and
+# the file is regenerated rather than edited. Reformatting it by hand would be
+# undone by the next `revision --autogenerate`, so line length is not enforced
+# there. The hand-written helpers at the top of the file are still covered by
+# every other rule.
+"src/ravel/state/migrations/versions/*.py" = ["E501"]

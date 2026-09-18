@@ -14,6 +14,7 @@ being skipped.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ def live_settings(tmp_path_factory: pytest.TempPathFactory, model_credential: st
 
 
 @pytest.fixture
-def pool(live_settings: Settings) -> DshRuntimePool:
+def pool(live_settings: Settings) -> Iterator[DshRuntimePool]:
     """A pool whose runtimes are all shut down when the test ends.
 
     Function-scoped on purpose: a leaked Node process would make the next test's

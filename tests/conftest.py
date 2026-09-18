@@ -19,7 +19,8 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(
         runtime_dir=tmp_path / "runtime",
         dsh_home=tmp_path / "runtime" / "dsh_home",
-        deepseek_api_key=None,
+        # Addressed by alias: these tests must not pick up an ambient key.
+        DEEPSEEK_API_KEY=None,
     )
 
 
