@@ -1,0 +1,79 @@
+{
+  "harness": "DeepSeek Harness",
+  "role": "RAVEL V0 sole harness",
+  "pinned_at": "2026-09-19",
+  "upstream": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness",
+    "license": "MIT",
+    "default_branch": "master",
+    "stability": "Developer Preview — compatibility-breaking changes expected"
+  },
+  "pin": {
+    "tag": "dsh-v0.1.5-rc.1",
+    "commit": "183f08e9c6dde7e36cd2318eaee70b0da08fb35e",
+    "commit_date": "2026-09-10T09:36:48+08:00",
+    "root_package_version": "0.1.5-rc.1",
+    "runtime_self_reported_version": "0.1.5-rc.1"
+  },
+  "python_distributions": {
+    "deepseek-harness-sdk": "0.1.5rc1",
+    "deepseek-harness-runtime-bin": "0.1.5rc1",
+    "index": "https://pypi.org/simple",
+    "platform_wheel": "manylinux_2_28_x86_64",
+    "requires_python": ">=3.10",
+    "note": "The two wheels are released as a matched pair; version 0.1.5rc1 corresponds exactly to tag dsh-v0.1.5-rc.1. PyPI distributions are the only prebuilt artifacts: GitHub releases carry no assets."
+  },
+  "verification": {
+    "verified_at": "2026-09-19",
+    "verifier": "RAVEL V0 implementation agent",
+    "environment": "Ubuntu 24.04.5 LTS x86_64, Python 3.12.7",
+    "checks": [
+      {
+        "check": "wheels install and import",
+        "command": "uv pip install 'deepseek-harness-sdk==0.1.5rc1'",
+        "result": "PASS",
+        "detail": "installs deepseek-harness-runtime-bin==0.1.5rc1; deepseek_harness and deepseek_harness_runtime both import; bundled runtime at site-packages/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-linux-x64"
+      },
+      {
+        "check": "runtime reports pinned version",
+        "command": "dsh --version (with DSH_HOME set)",
+        "result": "PASS",
+        "detail": "prints 0.1.5-rc.1, matching the pinned tag"
+      },
+      {
+        "check": "end-to-end agent turn with real model and real tool execution",
+        "command": "DeepSeekHarness(profile='sdk-minimal').run(prompt, session_id='probe-001')",
+        "result": "PASS",
+        "detail": "finish_reason=completed; 17 session events including tool/call and tool/result; the agent used the persistent bash tool to create pong.txt in the workspace, verified on disk"
+      },
+      {
+        "check": "session log durability",
+        "command": "inspect DSH_HOME after the turn",
+        "result": "PASS",
+        "detail": "$DSH_HOME/sessions/--tmp-dsh_probe-ws--/probe-001/session.v3.jsonl, 18 append-only JSONL records, keyed by workspace path then session id"
+      },
+      {
+        "check": "cross-process session resume via the Python SDK",
+        "command": "second process, same DSH_HOME, session_id='probe-001'",
+        "result": "FAIL — known limitation reproduced",
+        "detail": "JSON-RPC error: session \"probe-001\" already exists. The pinned SDK server (packages/sdk/server/src/server.ts) exposes only initialize / session/prompt / shutdown and creates a session implicitly via ctx.agents.create(). It has no session/open or session/resume method, so a persisted session id collides on a fresh runtime process. An official resume exists one layer down (AgentFactory.resume) but is not reachable over the SDK wire protocol at this pin."
+      }
+    ]
+  },
+  "consequences_for_ravel": {
+    "master_persistence": "A DSH session cannot be reopened across runtime restarts through the pinned SDK. RAVEL therefore treats PostgreSQL Project State plus MasterCheckpoint as the recovery source of truth and rebuilds a replacement Master session under the same Master identity with a fresh session id, as docs/07_DSH_INTEGRATION.md section 8 already prescribes. No recovery path depends on replaying old chat context.",
+    "tool_exposure": "The pinned JSON-RPC protocol carries no tool-registration surface in either direction (initialize / session/prompt / shutdown only; server-to-client requests are a dormant capability with no producer). RAVEL tools are therefore exposed to agents as MCP servers over stdio through @deepseek-ai/dsh-mcp-client, which is configuration-only and keeps all tool logic in Python.",
+    "per_session_tool_scope": "The SDK server composes sessions without joining an agent preset, so per-session preset selection is unreachable through the pinned SDK. Tool scope is enforced per role by composing one DSH profile per agent role, each mounting only that role's MCP server and prompt sections. This is a documented deviation; see docs/IMPLEMENTATION_DEVIATIONS.md.",
+    "no_core_modification": "No DSH core source is modified, forked, or vendored into RAVEL. Only shipped composition mechanisms are used: profiles, profile patch layers, bundles, agent presets, and MCP server rows."
+  },
+  "patches": {
+    "required": false,
+    "documented_in": "vendor/DSH_PATCHES.md",
+    "detail": "No upstream patch is required at this pin."
+  },
+  "reproduction": {
+    "checkout": "git clone https://github.com/deepseek-ai/deepseek-harness.git && git checkout 183f08e9c6dde7e36cd2318eaee70b0da08fb35e",
+    "local_path": "vendor/deepseek-harness (git-ignored; re-fetch deterministically from the commit above)",
+    "install": "uv pip install 'deepseek-harness-sdk==0.1.5rc1'"
+  }
+}
