@@ -84,3 +84,35 @@ Each entry:
 - **Acceptance behavior:** Stronger. A03 and A04 require registered Evidence to carry verifiable
   provenance, which the built-in tool could not supply.
 - **Follow-up:** None.
+
+## D-004 — The address guard allows the benchmarking range, and pairs it with a name check
+
+- **Date:** 2026-09-19
+- **Spec section:** `docs/09_SECURITY_AND_IDENTITY.md`; `docs/05_RESEARCH_AND_EVIDENCE.md`
+- **Original requirement:** Research retrieval must reach real sources, and must not become a way
+  for a model-supplied URL to make requests inside the network RAVEL runs in.
+- **Actual implementation:** `src/ravel/research/addressing.py` refuses any URL whose scheme is not
+  http/https, whose host is one of the well-known instance-metadata names, or whose resolved
+  addresses are not public — checked at the httpx transport so redirect hops are checked too, and
+  again before every browser navigation. The blocklist covers loopback, link-local, RFC 1918,
+  carrier-grade NAT, unique-local, unspecified, multicast and reserved space. It deliberately does
+  **not** cover `198.18.0.0/15`, nor the documentation ranges.
+- **Reason:** The deployment host intercepts DNS: every name answers with a `198.18.56.x`
+  placeholder (RFC 2544 benchmarking space, the usual choice for this) and the interceptor forwards
+  the connection itself. Verified on the host — `api.crossref.org`, `arxiv.org`, `doi.org` and
+  twelve other real sources all resolve into that range, and all of them answer HTTP 200 through
+  it. Blocking the range would leave RAVEL unable to reach the open Internet *while protecting
+  nothing*, because a connection to a placeholder address is answered by the interceptor rather
+  than by any internal service. The same property breaks the address check in the other direction:
+  `metadata.google.internal` also resolves to a placeholder, so the address cannot distinguish it
+  from a journal. The name check is what covers that case, and it is the reason both checks exist.
+- **Risk:** On a host whose DNS is intercepted, a hostname the attacker controls that resolves to
+  the metadata service through the interceptor's own resolver is not caught by the address check,
+  and is caught by the name check only if it uses a well-known metadata name. `SECURITY_NOTES.md`
+  and `KNOWN_LIMITATIONS.md` record this as a property of the environment, with the deployment
+  assumption (a host that resolves names honestly) stated explicitly.
+- **Acceptance behavior:** Equivalent. A05–A08 concern what is recorded about a source that was
+  read, which is unchanged; the guard only decides which URLs reach the fetching layer at all.
+- **Follow-up:** If RAVEL is later deployed on a host without DNS interception, re-check that the
+  allowed ranges are still the intended set; a deployment-time probe would make the assumption
+  visible rather than documented.

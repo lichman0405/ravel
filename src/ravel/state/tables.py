@@ -567,7 +567,12 @@ class EvidenceSourceRow(Base):
     content_hash: Mapped[str | None] = mapped_column(String(128))
     media_type: Mapped[str | None] = mapped_column(String(128))
     artifact_ref: Mapped[str | None] = mapped_column(REF)
-    snapshot_ref: Mapped[str | None] = mapped_column(REF)
+    #: The object-store key of the stored copy, which is a path and not an
+    #: identifier: it is built from the project, the artifact and the version,
+    #: so it is longer than `REF` and grows with the length of a filename. Typed
+    #: as text to match `ArtifactVersionRow.storage_key`, which holds the same
+    #: string for the same object.
+    snapshot_ref: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
