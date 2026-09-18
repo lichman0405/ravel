@@ -1,0 +1,45 @@
+version: 1
+name: ComputeBackend
+
+principle: >
+  Deterministic backend interface. Compute Worker invokes this interface.
+  Worker must not hardcode Slurm/SSH/backend-specific behavior.
+
+operations:
+  submit:
+    input:
+      project_id: server_scoped
+      node_id: id
+      execution_contract_version: id
+      task_spec: object
+    output:
+      backend_job_id: string
+      state: SUBMITTED
+
+  get_status:
+    input: { backend_job_id: string }
+    output:
+      state: enum(SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED, TIMED_OUT)
+      progress: optional_object
+
+  wait:
+    semantics: durable_wait_via_temporal
+
+  cancel:
+    input: { backend_job_id: string }
+    output: { accepted: boolean }
+
+  collect_outputs:
+    input: { backend_job_id: string }
+    output:
+      artifacts: list
+      logs: list
+      completion_metadata: object
+
+v0_implementation:
+  - MockComputeBackend
+
+future_examples:
+  - SlurmComputeBackend
+  - CloudComputeBackend
+  - LocalComputeBackend

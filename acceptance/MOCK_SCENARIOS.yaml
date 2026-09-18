@@ -1,0 +1,60 @@
+version: 1
+
+compute:
+  - id: COMPUTE_SUCCESS
+    sequence:
+      - SUBMITTED
+      - RUNNING
+      - COMPLETED
+    outputs:
+      complete: true
+
+  - id: COMPUTE_RETRYABLE_INFRA_FAILURE
+    first_attempt: FAILED
+    failure_class: INFRA_RETRYABLE
+    second_attempt: COMPLETED
+    requires_contract_retry_permission: true
+
+  - id: COMPUTE_SCIENTIFIC_FAILURE
+    sequence:
+      - RUNNING
+      - FAILED
+    failure_class: NON_RETRYABLE
+    escalation_required: true
+
+  - id: COMPUTE_MISSING_OUTPUT
+    sequence:
+      - RUNNING
+      - COMPLETED
+    outputs:
+      complete: false
+
+  - id: COMPUTE_TIMEOUT
+    sequence:
+      - RUNNING
+      - TIMED_OUT
+
+experiment:
+  - id: LAB_SUCCESS
+    wait_seconds_test_mode: 2
+    response: COMPLETE
+
+  - id: LAB_LONG_WAIT
+    response_after_external_signal: true
+
+  - id: LAB_DEVIATION_PRESSURE
+    report:
+      requested_pressure_bar: 10
+      available_pressure_bar: 5
+    expected_worker_state: WAITING_DECISION
+
+  - id: LAB_MISSING_RAW_DATA
+    first_delivery:
+      experiment_log: true
+      raw_data: false
+    expected_action: REQUEST_MISSING_INFORMATION
+
+  - id: LAB_OPERATOR_QUESTION_UNDEFINED
+    message: "Can reagent A be replaced with B?"
+    contract_substitution_allowed: false
+    expected_action: ESCALATE

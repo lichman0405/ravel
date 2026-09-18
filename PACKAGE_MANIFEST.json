@@ -1,0 +1,158 @@
+{
+  "package": "RAVEL_v0_build_spec_linux_first",
+  "canonical_environment": "Ubuntu 24.04 LTS x86_64 + Python 3.12",
+  "files": {
+    "START_PROMPT.md": {
+      "sha256": "defe93214d09af45520e01aa75b4aabdb98b0dd8b04b526dc7c8b15318234507",
+      "bytes": 7422
+    },
+    "CLAUDE.md": {
+      "sha256": "0daf7ba621e34b9b91d156c2e851eb851848b995ca453328cd8e965daae4efb3",
+      "bytes": 2049
+    },
+    "AGENTS.md": {
+      "sha256": "66b5089d400d1558c9a8f17a8f5db8eec056851fce5920bbaaaa4c15dfd49d68",
+      "bytes": 1918
+    },
+    "README.md": {
+      "sha256": "4536c6b0dc032d8010d12e87a845eb0298c14976d35ad344c0e1a1eb087ade31",
+      "bytes": 3446
+    },
+    "RAVEL_V0_MASTER_SPEC.md": {
+      "sha256": "8b74cf7d3d26fe197aac53c644fe9ddd5ab8a1d4ef4b9cf0d2b83dffd3bc90d6",
+      "bytes": 48060
+    },
+    "acceptance/E2E_REFERENCE_PROJECT.md": {
+      "sha256": "b1e3d4cc023c8de36f97514de8830db564955a9295e30bc005c423e0212de888",
+      "bytes": 853
+    },
+    "acceptance/V0_ACCEPTANCE.md": {
+      "sha256": "1a5d3e19bac89db1cde4598ce79e5aabbcda24cf25a607dceca93a615a8220f1",
+      "bytes": 3193
+    },
+    "acceptance/MOCK_SCENARIOS.yaml": {
+      "sha256": "6014183d3dbe2b3037ffac70d7f215da73afc89c60f1d8d132a01485cc4ec139",
+      "bytes": 1266
+    },
+    "references/BUILD_MANIFEST.yaml": {
+      "sha256": "bad37dba3e670fba1912660153718b798f021207f60ffaae0d43c7a9b9cabe1e",
+      "bytes": 633
+    },
+    "references/DSH_CURRENT_STATE_2026-09-17.md": {
+      "sha256": "cac91fd39d2cda8578d8289fdb79e54397e499287f85f396aefc42b65d40d10d",
+      "bytes": 2716
+    },
+    "schemas/experiment_backend_contract.yaml": {
+      "sha256": "6ed054e3daaabe40c1d0a2c4602f1765161f57145959ef446635b4f6ab4d1e5c",
+      "bytes": 1015
+    },
+    "schemas/research_record.schema.yaml": {
+      "sha256": "91bd501df10f628d88306f2fd2cfffa2be985036114f779a660679bf59cb6c84",
+      "bytes": 1472
+    },
+    "schemas/domain_records.schema.yaml": {
+      "sha256": "f38302aea036928005ea9c7ce98e0a1c40eb6430a8363068728c1202c40e8326",
+      "bytes": 1448
+    },
+    "schemas/scientific_dag.schema.yaml": {
+      "sha256": "dd1d7da1a86d8d24f678d82d824aaf9142c8fe8f8da250aae788863f7750a48d",
+      "bytes": 1374
+    },
+    "schemas/project_events.yaml": {
+      "sha256": "02d1dbba10565f96a7037be0a6464b19c2104b01853f1991bfcd9e5d8baf7563",
+      "bytes": 720
+    },
+    "schemas/compute_backend_contract.yaml": {
+      "sha256": "c9e2a9176af3d228de52b04c488ade0d6702632f4ae71eb938710ef17c837160",
+      "bytes": 978
+    },
+    "prompts/review_role.md": {
+      "sha256": "a42f5d289d5bdbf2c758c1f01a657ad7979fc801e2f5d75988718221668bf55a",
+      "bytes": 647
+    },
+    "prompts/research_role.md": {
+      "sha256": "a759017b21bef1539a87bb1c21841023245ab4ded631236e1359d790e7746380",
+      "bytes": 843
+    },
+    "prompts/experimental_worker_role.md": {
+      "sha256": "62aa6ef969d8e42f49fb78d1df253585c518933537e21210b947781a02046363",
+      "bytes": 633
+    },
+    "prompts/compute_worker_role.md": {
+      "sha256": "68395288dde87f75aeb28c0a74585f021489f5e8b3a015080a5462e0de9d9889",
+      "bytes": 659
+    },
+    "prompts/master_role.md": {
+      "sha256": "60865d5809b7229a90094a58f650afbd3fc2b87cb4de9a5035d63a934f835579",
+      "bytes": 1260
+    },
+    "docs/09_SECURITY_AND_IDENTITY.md": {
+      "sha256": "9aa8b8c4ace5a9b2be4168bd1a5aad44465e096e76fba2852aef35b8e34179cf",
+      "bytes": 1797
+    },
+    "docs/04_STATE_AND_DATA.md": {
+      "sha256": "9c198419ae123ae082228f7fd274d27aa1814804a096b204d6043512b927af42",
+      "bytes": 2112
+    },
+    "docs/10_IMPLEMENTATION_PLAN.md": {
+      "sha256": "3b93da86b1c23a801074b42325aa6b5cdfd5499e1a1ecc69c2b8d614770e94d1",
+      "bytes": 3149
+    },
+    "docs/11_TECH_DECISIONS.md": {
+      "sha256": "70021d586f197c00474a2e511d4ab9a86a00304dd4a5362ac9e80ab45b525124",
+      "bytes": 1326
+    },
+    "docs/05_RESEARCH_AND_EVIDENCE.md": {
+      "sha256": "0e308f200818d377c508cc1f2ffdf48e4a890585ab80ab810de38e91de7bd0b2",
+      "bytes": 4058
+    },
+    "docs/IMPLEMENTATION_DEVIATIONS.md": {
+      "sha256": "e10af4c08b5eb34de2c7f05eac72e9070b5d753ca59065f4092de654fa6fc112",
+      "bytes": 279
+    },
+    "docs/08_GATEWAY_AND_TUI.md": {
+      "sha256": "f44b693a4126af39d3d2d627f2bb915dec751c03c0a0ae0a38f58b8da5c45d1c",
+      "bytes": 2311
+    },
+    "docs/07_DSH_INTEGRATION.md": {
+      "sha256": "c225e0f7a212e6121e7a965763ea52c66f2e0be63656724a4301cfd7d98d0a42",
+      "bytes": 3420
+    },
+    "docs/06_EXECUTION_AND_REVIEW.md": {
+      "sha256": "e143df99273417b3c287274046fd6b82be953b84e39d846eb645da916900b2ca",
+      "bytes": 2652
+    },
+    "docs/12_POST_BOUNDARY.md": {
+      "sha256": "315af5341f60a2ead7e17d82527c0649bbe8aeed183e17e06743392238943805",
+      "bytes": 744
+    },
+    "docs/03_SCIENTIFIC_DAG.md": {
+      "sha256": "f42a8d95e45fb0ebddb5959621d81232bdc9217d6462dd1165302f7ae1fb8e56",
+      "bytes": 2690
+    },
+    "docs/13_REPOSITORY_TARGET_STRUCTURE.md": {
+      "sha256": "a82350271eef07528d2da17692d8855f15973d8f0d4c32c2383d1be23a8fd867",
+      "bytes": 3530
+    },
+    "docs/02_AGENT_MODEL.md": {
+      "sha256": "8966aafaf1bfe0400d428bb8fd01c39bb849c91f9fba093ff59b8a57c90a73e3",
+      "bytes": 4018
+    },
+    "docs/00_PRODUCT_AND_SCOPE.md": {
+      "sha256": "666fb4f0895a57a4a2b75542c8d679e1874b9713d2edf2a6e4842ace4cceb7df",
+      "bytes": 3481
+    },
+    "docs/01_ARCHITECTURE.md": {
+      "sha256": "3e60a6ab8f56de26eb242689481560eb33ff0bf021c2b4016eaec0b3435bdfa8",
+      "bytes": 3504
+    },
+    "docs/14_DEVELOPMENT_ENVIRONMENT.md": {
+      "sha256": "29d0126a885e1506b4b925db05dc6216d8d2a5f81297566db2d74515ee92551a",
+      "bytes": 2810
+    },
+    "docs/15_AUTONOMOUS_DEVELOPMENT_CONTRACT.md": {
+      "sha256": "0859babc67357246b45769056ec85be18b06770fbb3b8b10976c1f7ababbd2a2",
+      "bytes": 2217
+    }
+  }
+}

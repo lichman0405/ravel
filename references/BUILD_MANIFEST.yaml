@@ -1,0 +1,29 @@
+project: RAVEL
+version_target: V0
+date_spec_frozen: 2026-09-17
+
+required_components:
+  - ravel_runtime
+  - research_gateway
+  - dsh_integration
+  - five_agent_presets
+  - scientific_dag
+  - temporal_execution
+  - postgres_state
+  - object_storage
+  - research_source_gateway
+  - mock_compute_backend
+  - mock_lab_backend
+  - textual_tui
+  - auth_authorization
+  - test_suites
+
+forbidden_shortcuts:
+  - mock_web_research
+  - user_editable_dag
+  - temporal_as_scientific_dag
+  - dsh_session_as_project_state
+  - direct_public_dsh
+  - fabricated_evidence
+  - default_coding_agent_as_master_without_scientific_preset
+  - post_dependency

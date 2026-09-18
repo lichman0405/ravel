@@ -1,0 +1,74 @@
+version: 1
+
+source_tiers:
+  A:
+    - peer_reviewed_primary_literature
+    - official_standard
+    - authoritative_scientific_database
+    - original_experiment_or_computation_data
+  B:
+    - preprint
+    - patent
+    - official_technical_report
+    - government_university_research_institute
+  C:
+    - vendor_technical_page
+    - product_specification
+    - industry_association
+  D:
+    - general_website
+    - news
+    - blog
+    - forum
+
+evidence_sufficiency:
+  - STRONG
+  - MODERATE
+  - WEAK
+  - INSUFFICIENT
+
+claim_classes:
+  - FACT
+  - INFERENCE
+  - HYPOTHESIS
+
+research_record:
+  required:
+    - research_id
+    - project_id
+    - task_id
+    - facts
+    - inferences
+    - hypotheses
+    - evidence_refs
+    - conflicts
+    - sufficiency
+    - unknowns
+    - completion_status
+  fields:
+    research_id: id
+    project_id: id
+    task_id: id
+    facts: list
+    inferences: list
+    hypotheses: list
+    evidence_refs: list[id]
+    conflicts: list
+    sufficiency: object
+    suggested_acceptance_criteria: list
+    recommended_followups: list
+    unknowns: list
+    completion_status: enum(COMPLETE, INCOMPLETE)
+
+evidence:
+  fields:
+    evidence_id: id
+    statement: string
+    source_tier: enum(A, B, C, D)
+    source_refs: list
+    conditions: object
+    retrieved_at: timestamp
+    content_hash: string
+    access_status: enum(OK, PAYWALLED, AUTH_REQUIRED, ACCESS_LIMITED, POLICY_BLOCKED)
+    conflicts_with: list[id]
+    confidence: enum(LOW, MEDIUM, HIGH)

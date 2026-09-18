@@ -1,0 +1,36 @@
+version: 1
+events:
+  - PROJECT_CREATED
+  - PROJECT_STATUS_CHANGED
+  - MASTER_STARTED
+  - MASTER_CHECKPOINTED
+  - MASTER_RECOVERED
+  - NODE_CREATED
+  - NODE_READY
+  - NODE_STARTED
+  - NODE_WAITING
+  - NODE_COMPLETED
+  - NODE_FAILED
+  - NODE_CANCELLED
+  - REVIEW_SUBMITTED
+  - DECISION_CREATED
+  - DAG_MUTATED
+  - DEVIATION_REPORTED
+  - ARTIFACT_REGISTERED
+  - EVIDENCE_REGISTERED
+  - APPROVAL_REQUESTED
+  - APPROVAL_RESOLVED
+  - BACKEND_STATUS_CHANGED
+  - AGENT_SESSION_STARTED
+  - AGENT_SESSION_ENDED
+
+event:
+  fields:
+    seq: monotonically_increasing_per_project
+    event_id: id
+    project_id: id
+    event_type: enum(events)
+    actor_type: string
+    actor_id: string
+    payload: object
+    created_at: timestamp

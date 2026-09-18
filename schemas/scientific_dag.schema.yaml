@@ -1,0 +1,63 @@
+version: 1
+node_types:
+  - RESEARCH
+  - HYPOTHESIS
+  - COMPUTATION
+  - EXPERIMENT
+  - REVIEW
+  - DECISION
+
+statuses:
+  - PLANNED
+  - READY
+  - RUNNING
+  - WAITING_EXTERNAL
+  - WAITING_DECISION
+  - REVIEWING
+  - PASSED
+  - FAILED
+  - PARTIAL
+  - BLOCKED
+  - CANCELLED
+
+node:
+  required:
+    - node_id
+    - project_id
+    - node_type
+    - objective
+    - status
+    - executor_role
+    - created_by
+    - created_at
+  fields:
+    node_id: stable_id
+    project_id: stable_id
+    node_type: enum(node_types)
+    objective: string
+    status: enum(statuses)
+    executor_role: enum(MASTER, RESEARCH, REVIEW, COMPUTE_WORKER, EXPERIMENTAL_WORKER)
+    dependencies: [node_id]
+    join_policy: null_or(enum(ALL, ANY, THRESHOLD))
+    join_threshold: null_or(integer)
+    failure_policy: null_or(enum(BLOCK, CONTINUE, MASTER_DECIDES))
+    acceptance_contract_ref: null_or(stable_id)
+    execution_contract_ref: null_or(stable_id)
+    artifact_refs: [stable_id]
+    decision_ref: null_or(stable_id)
+    roadmap_phase: null_or(string)
+    created_by: stable_id
+    created_at: timestamp
+    started_at: null_or(timestamp)
+    completed_at: null_or(timestamp)
+
+mutation:
+  actor_must_be: MASTER
+  decision_record_required_for_material_change: true
+
+acceptance_freeze:
+  applies_to:
+    - COMPUTATION
+    - EXPERIMENT
+  freeze_before_status: RUNNING
+  retroactive_change_allowed: false

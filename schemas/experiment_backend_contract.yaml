@@ -1,0 +1,49 @@
+version: 1
+name: ExperimentBackend
+
+principle: >
+  Deterministic interaction backend. Experimental Worker owns task dialogue
+  only within Execution Contract. Backend does not make scientific decisions.
+
+operations:
+  create_task:
+    input:
+      project_id: server_scoped
+      node_id: id
+      execution_contract_version: id
+      assignee_ref: optional_id
+    output:
+      backend_task_id: string
+
+  send_instruction:
+    input:
+      backend_task_id: string
+      approved_instruction: object
+
+  get_status:
+    output:
+      state: enum(READY, ACTIVE, WAITING, RESPONSE_AVAILABLE, COMPLETED, CANCELLED)
+
+  wait_for_response:
+    semantics: durable_wait_via_temporal
+
+  request_missing_output:
+    input:
+      backend_task_id: string
+      missing_items: list
+
+  receive_artifacts:
+    output:
+      artifacts: list
+      messages: list
+
+  cancel_task:
+    input: { backend_task_id: string }
+
+v0_implementation:
+  - MockLabBackend
+
+future_examples:
+  - HumanLabBackend
+  - LIMSBackend
+  - RoboticLabBackend

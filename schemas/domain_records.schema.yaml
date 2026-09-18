@@ -1,0 +1,61 @@
+version: 1
+
+research_contract:
+  fields:
+    original_user_goal: string
+    business_context: string
+    scientific_problem: string
+    research_hypotheses: list
+    target_metrics: list
+    acceptance_strategy: string
+    known_constraints: list
+    assumed_constraints: list
+    available_resources: list
+    prohibited_actions: list
+    budget_time_limits: object
+    uncertainties: list
+    authority_envelope_ref: id
+
+decision_record:
+  immutable: true
+  fields:
+    decision_id: id
+    project_id: id
+    trigger_refs: list[id]
+    decision_type: string
+    rationale: string
+    alternatives_considered: list
+    evidence_refs: list[id]
+    affected_nodes: object
+    confidence: enum(LOW, MEDIUM, HIGH)
+    authority_check: object
+    created_at: timestamp
+
+review_record:
+  immutable: true
+  fields:
+    review_id: id
+    project_id: id
+    node_id: id
+    checkpoint: enum(PRE_RUN, RUNTIME, FINAL)
+    frozen_acceptance_version: id
+    outcome: enum(PASS, FAIL, PARTIAL)
+    criterion_results: list
+    diagnosis: string
+    recommendations: list
+    artifact_refs: list[id]
+    evidence_refs: list[id]
+    created_at: timestamp
+
+master_checkpoint:
+  fields:
+    master_identity_id: id
+    project_id: id
+    current_focus: string
+    active_hypotheses: list
+    pending_questions: list
+    waiting_on: list[id]
+    recent_decision_refs: list[id]
+    important_context_refs: list[id]
+    last_event_seq: integer
+    created_at: timestamp

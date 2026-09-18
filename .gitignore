@@ -1,0 +1,105 @@
+# ── Secrets ────────────────────────────────────────────────────────────────
+# Real secrets never enter Git. Only .env.example is tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.secrets/
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Test / coverage / type artifacts
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.hypothesis/
+
+# ── Node / DSH bundle layer (thin, JS/TS only) ─────────────────────────────
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.tsbuildinfo
+
+# ── Runtime state / local data ─────────────────────────────────────────────
+# DSH home, project workspaces, checkpoints, local object cache
+.dsh_home/
+dsh_home/
+runtime/
+workspaces/
+.data/
+*.sqlite3
+*.db
+
+# ── Local infrastructure volumes (docker compose bind mounts) ──────────────
+.devtools/
+infra/volumes/
+volumes/
+
+# ── Browser automation ─────────────────────────────────────────────────────
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# ── Logs / temp ────────────────────────────────────────────────────────────
+*.log
+logs/
+tmp/
+.tmp/
+.cache/
+
+# ── Editors / OS ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Vendored upstream DSH checkout ─────────────────────────────────────────
+# We pin DSH by tag+commit in vendor/DSH_PIN.json and re-fetch deterministically.
+# The upstream source tree itself is NOT committed (never copy DSH internals).
+vendor/deepseek-harness/
+vendor/*.tgz
+vendor/*.whl
