@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from ravel.dsh.roles import AgentRole
+from ravel.domain.roles import AgentRole
 
 ENV_PROJECT_ID = "RAVEL_PROJECT_ID"
 ENV_ROLE = "RAVEL_ROLE"

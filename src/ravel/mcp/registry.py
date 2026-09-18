@@ -12,7 +12,7 @@ roster beyond what its behavioral contract already permits.
 
 from __future__ import annotations
 
-from ravel.dsh.roles import AgentRole
+from ravel.domain.roles import AgentRole
 
 MASTER = AgentRole.MASTER
 RESEARCH = AgentRole.RESEARCH

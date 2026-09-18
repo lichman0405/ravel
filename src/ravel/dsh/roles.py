@@ -1,63 +1,21 @@
-"""The five RAVEL agent roles.
+"""How each role is composed into a harness runtime.
 
-Exactly five roles exist, and each is a fixed contract rather than a label: the
-role decides the behavioral prompt the agent runs under and the tools it can
-reach. Nothing else in RAVEL may add a role — deterministic responsibilities
-belong to software components, not to another agent.
+The role *set* is a domain fact and lives in `ravel.domain.roles`. What is
+harness-specific is the rest: which behavioral prompt a role boots with and
+which tool server it mounts.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
+
+from ravel.domain.roles import AgentRole as AgentRole  # re-exported for the harness seam
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROMPTS_DIR = REPO_ROOT / "prompts"
 
-
-class AgentRole(StrEnum):
-    """The five agent roles. The value is the on-the-wire role name."""
-
-    MASTER = "master"
-    RESEARCH = "research"
-    REVIEW = "review"
-    COMPUTE_WORKER = "compute-worker"
-    EXPERIMENTAL_WORKER = "experimental-worker"
-
-    @property
-    def slug(self) -> str:
-        """A filesystem-safe form, used for runtime directories."""
-        return self.value
-
-    @property
-    def display_name(self) -> str:
-        """A human-readable name for logs, the TUI, and the API."""
-        return {
-            AgentRole.MASTER: "Master",
-            AgentRole.RESEARCH: "Research Agent",
-            AgentRole.REVIEW: "Review Agent",
-            AgentRole.COMPUTE_WORKER: "Compute Worker",
-            AgentRole.EXPERIMENTAL_WORKER: "Experimental Worker",
-        }[self]
-
-    @property
-    def is_task_scoped(self) -> bool:
-        """Whether one assignment fully describes this role's authority.
-
-        Workers and Research act on a single explicit task. Master and Review
-        act on the project as a whole, so a task identifier never bounds them.
-        """
-        return self in {AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER}
-
-    @property
-    def mutates_dag(self) -> bool:
-        """Whether this role may change the Scientific DAG.
-
-        Only Master may. Every other role requests a change through Master;
-        none of them holds the capability.
-        """
-        return self is AgentRole.MASTER
+__all__ = ["ROLE_DEFINITIONS", "AgentRole", "RoleDefinition", "definition_for"]
 
 
 @dataclass(frozen=True, slots=True)
