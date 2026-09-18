@@ -55,7 +55,7 @@ from ravel.state.repositories.research import (
     ArtifactRepository,
     EvidenceSourceRepository,
 )
-from ravel.state.store import ArtifactStore
+from ravel.state.store import ArtifactStore, hash_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +382,28 @@ class ResearchSourceGateway:
                 "register as evidence. Opening it with GET produces a retrieval that "
                 "can be registered."
             )
+
+        # The hash on the row has to describe bytes RAVEL holds, not just bytes
+        # it was told about.
+        #
+        # When a snapshot is written, the store's own hash of the object is what
+        # is recorded, and it is compared with the retrieval's — that check is
+        # in `_snapshot`. It cannot run when there is no store or no snapshot
+        # was asked for, and then the retrieval's own hash is recorded on the
+        # strength of the retrieval saying so. `register` accepts any
+        # `Retrieval`, including one an agent assembled, so "the retrieval says
+        # so" is not a property this ledger can rest on. Recomputing the hash
+        # here costs one pass over a body already in memory and makes the
+        # recorded hash something RAVEL computed from bytes it has.
+        if retrieval.body is not None and retrieval.content_hash is not None:
+            observed, _ = hash_chunks([retrieval.body])
+            if observed != retrieval.content_hash:
+                raise SourceRefused(
+                    f"the retrieval of {retrieval.final_url} carries the hash "
+                    f"{retrieval.content_hash} but its body hashes to {observed}; the "
+                    "hash does not describe the bytes it came with, so it cannot be "
+                    "recorded as what was read"
+                )
 
         tier = tiers.assign(
             retrieval.final_url,

@@ -22,6 +22,13 @@ Three properties matter more than the navigation itself:
   navigator says exactly which command installs them, and the caller records
   that the source could not be read in a browser. It does not fall back to an
   unrendered fetch and present it as the page.
+
+A browser makes requests RAVEL never asked for. A page can redirect to an
+address RAVEL refuses, and it can carry an image, a script, or a fetch whose URL
+points at the host's own network. Chromium issues all of those itself, so the
+check on the URL handed to `open` is not enough — the context installs a route
+handler that validates every request the browser makes, which is the same fix
+the fetcher applies at the transport. See `addressing` for what the policy is.
 """
 
 from __future__ import annotations
@@ -109,9 +116,12 @@ class BrowserNavigator:
         Raises:
             BrowserUnavailable: Chromium could not be started, or the
                 navigation failed.
-            addressing.UnsafeURL: The URL is one RAVEL will not navigate to.
-                Raised from the calling thread, before the browser is asked for
-                anything, because the answer does not depend on the browser.
+            addressing.UnsafeURL: The URL, or a URL the page navigated to
+                itself, is one RAVEL will not navigate to. The URL RAVEL was
+                given is refused from the calling thread, before the browser is
+                asked for anything, because the answer does not depend on the
+                browser. A redirect is refused on the worker thread, by the
+                route handler that checks every request the page makes.
         """
         addressing.guard(url, resolver=self.resolver)
         return self._on_worker(lambda: self._open(url))
@@ -124,7 +134,8 @@ class BrowserNavigator:
         order, so the caller can prefer what the page itself put first.
 
         Raises:
-            addressing.UnsafeURL: The URL is one RAVEL will not navigate to.
+            addressing.UnsafeURL: The URL, or a URL the page navigated to
+                itself, is one RAVEL will not navigate to.
         """
         addressing.guard(url, resolver=self.resolver)
         return self._on_worker(lambda: self._links(url, limit))
@@ -289,6 +300,10 @@ class _Session:
     def __init__(self, outer: BrowserNavigator) -> None:
         self.outer = outer
         self.response: Any = None
+        #: The first navigation this session was told not to make, if any.
+        #: `goto` re-raises it so that a redirected navigation reports a
+        #: refusal rather than a failure — see `_guard_route`.
+        self.refused: addressing.UnsafeURL | None = None
 
     @property
     def page(self) -> Any:
@@ -305,7 +320,23 @@ class _Session:
         return self.response.status if self.response is not None else None
 
     def goto(self, url: str, timeout_ms: int) -> None:
-        self.response = self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        """Navigate, reporting a refused navigation as the refusal it is.
+
+        A refused navigation reaches Playwright as an aborted request, which
+        surfaces as a generic navigation error. That would be recorded
+        downstream as "this source could not be read" — a different and untrue
+        statement about a URL RAVEL declined to request, and the record an
+        attacker probing the internal network would be trying to obtain.
+
+        Raises:
+            addressing.UnsafeURL: The navigation was aborted by the guard.
+        """
+        try:
+            self.response = self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception:
+            if self.refused is not None:
+                raise self.refused from None
+            raise
 
     def __enter__(self) -> _Session:
         try:
@@ -330,9 +361,51 @@ class _Session:
                 f"Chromium could not be launched: {type(exc).__name__}: {exc}. "
                 f"To install its system libraries, {_INSTALL_HINT}"
             ) from exc
-        self._context = self._browser.new_context(user_agent=self._user_agent())
+        # `service_workers="block"` because a service worker's requests do not
+        # go through `context.route`. A page that registers one would otherwise
+        # have a way to fetch addresses the guard never sees — the one bypass a
+        # route handler cannot close by checking harder. RAVEL reads documents;
+        # it has no use for an offline cache, and a page that needs one to show
+        # its content is a page RAVEL should read some other way.
+        self._context = self._browser.new_context(
+            user_agent=self._user_agent(), service_workers="block"
+        )
+        # Every request this context makes, not just the one RAVEL asked for.
+        # Registered before the first page exists, so there is no window in
+        # which a navigation could be made unguarded.
+        self._context.route("**/*", self._guard_route)
         self._page = self._context.new_page()
         return self
+
+    def _guard_route(self, route: Any, request: Any) -> None:
+        """Refuse a request the browser is about to make, or let it through.
+
+        The URLs this sees were chosen by the page, not by RAVEL: a `302` to
+        somewhere private, an `<img>` pointing at the metadata service, a script
+        fetching `http://localhost:7233`. Chromium would make all of them
+        itself, which would make RAVEL the client for a request nobody wrote —
+        the failure `addressing` exists to prevent, and the reason the fetcher
+        guards at the transport rather than in front of it.
+
+        An aborted subresource is simply missing from the rendered document,
+        which is the correct outcome for a request RAVEL declined to make. An
+        aborted navigation is recorded so that `goto` can report it as a
+        refusal.
+
+        Resolving the host for each request costs a lookup the browser would
+        otherwise have done itself. That is the price of checking the address
+        the connection will actually use, and it is paid against a request that
+        is about to cross the network anyway.
+        """
+        try:
+            addressing.guard(request.url, resolver=self.outer.resolver)
+        except addressing.UnsafeURL as exc:
+            if request.is_navigation_request():
+                self.refused = exc
+            logger.info("refused a browser request: %s", exc)
+            route.abort()
+            return
+        route.continue_()
 
     def __exit__(self, *_: object) -> None:
         for closer in (self._context.close, self._browser.close, self._playwright.stop):

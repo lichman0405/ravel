@@ -31,6 +31,7 @@ from ravel.research.gateway import (
 )
 from ravel.research.leads import Lead, Retrieval
 from ravel.research.search import SearchUnavailable
+from ravel.state.store import hash_chunks
 
 
 @pytest.fixture
@@ -49,18 +50,62 @@ def gateway(settings: Settings) -> ResearchSourceGateway:
 
 
 def _retrieval(**overrides: object) -> Retrieval:
+    """A retrieval whose hash describes its body, as every real one does.
+
+    Computed rather than typed in, because a fabricated hash is not a detail
+    this helper is free to get wrong: the gateway refuses a retrieval whose
+    hash does not describe the bytes it came with, so a constant here would
+    make every test that reaches registration fail for a reason that has
+    nothing to do with what it is testing.
+    """
+    body = b"<html><title>x</title><p>text</p></html>"
+    digest, _ = hash_chunks([body])
     base: dict[str, object] = {
         "requested_url": "https://example.org/a",
         "final_url": "https://example.org/a",
         "access_status": AccessStatus.OK,
         "retrieved_at": datetime.now(UTC),
-        "content_hash": "sha256:" + "a" * 64,
-        "body": b"<html><title>x</title><p>text</p></html>",
+        "content_hash": digest,
+        "body": body,
         "media_type": "text/html",
         "excerpt": "text",
     }
     base.update(overrides)
     return Retrieval(**base)  # type: ignore[arg-type]
+
+
+def test_a_retrieval_whose_hash_does_not_describe_its_body_is_refused(
+    gateway: ResearchSourceGateway,
+) -> None:
+    """The ledger's hash has to be one RAVEL computed, not one it was told.
+
+    When a snapshot is written the store's own hash is recorded and compared
+    with the retrieval's. That comparison cannot run when there is no snapshot,
+    and then the retrieval's hash would be recorded on the strength of the
+    retrieval saying so — and `register` accepts any `Retrieval`, including one
+    an agent assembled. Recomputing it here closes that, and it is the same
+    check the snapshot path makes, made available on the path that has no store
+    to make it against.
+    """
+    forged = _retrieval(content_hash="sha256:" + "b" * 64)
+
+    with pytest.raises(SourceRefused) as raised:
+        gateway.register(SourceRequest.of(forged.final_url), forged, actor_id="a")
+
+    assert "does not describe the bytes it came with" in str(raised.value)
+
+
+def test_a_retrieval_with_no_body_is_not_checked_against_one() -> None:
+    """A restricted retrieval has no bytes, and the check has nothing to compare.
+
+    Its hash is absent too — `Retrieval` refuses a hash with no body — so this
+    is a statement about where the check applies rather than a gap in it.
+    """
+    restricted = _retrieval(
+        access_status=AccessStatus.PAYWALLED, content_hash=None, body=None, excerpt=""
+    )
+
+    assert restricted.body is None and restricted.content_hash is None
 
 
 def test_a_head_cannot_be_registered_as_evidence(gateway: ResearchSourceGateway) -> None:

@@ -17,6 +17,10 @@ address a name resolves to is a check that a name with two addresses defeats.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -317,3 +321,191 @@ def test_the_browser_refuses_the_same_urls_without_starting_a_browser() -> None:
             navigator.links("http://169.254.169.254/")
     finally:
         navigator.close()
+
+
+# --------------------------------------------------------------------------
+# The requests the page makes for itself
+# --------------------------------------------------------------------------
+
+
+class FakeRoute:
+    """A Playwright route, recording which of the two things was done to it."""
+
+    def __init__(self) -> None:
+        self.decision: str | None = None
+
+    def abort(self) -> None:
+        self.decision = "abort"
+
+    def continue_(self) -> None:
+        self.decision = "continue"
+
+
+class FakeRequest:
+    def __init__(self, url: str, *, navigation: bool = False) -> None:
+        self.url = url
+        self._navigation = navigation
+
+    def is_navigation_request(self) -> bool:
+        return self._navigation
+
+
+@pytest.fixture
+def browser_session() -> Iterator[Callable[..., Any]]:
+    """A factory for browser sessions, with every navigator it makes closed.
+
+    `_guard_route` is the whole of the policy for requests the page chose, and
+    it calls nothing on its arguments that these fakes do not provide. Testing
+    it directly is what lets this file cover the browser path on a host where
+    Chromium cannot start.
+    """
+    navigators: list[BrowserNavigator] = []
+
+    def make(*addresses: str) -> Any:
+        navigator = BrowserNavigator(
+            Settings(env="test", research_contact_email="r@example.org", RAVEL_POSTGRES_DSN=None),
+            resolver=resolver_for(*addresses),
+        )
+        navigators.append(navigator)
+        return navigator._session()
+
+    yield make
+    for navigator in navigators:
+        navigator.close()
+
+
+@pytest.mark.parametrize(
+    ("url", "what"),
+    [
+        ("http://169.254.169.254/latest/meta-data/", "the metadata service"),
+        ("http://localhost:7233/namespaces", "Temporal, through a name"),
+        ("http://10.0.0.5/admin", "a private address"),
+        ("file:///etc/passwd", "the local disk"),
+    ],
+)
+def test_a_subresource_the_page_chose_is_refused_before_it_is_sent(
+    browser_session: Callable[..., Any], url: str, what: str
+) -> None:
+    """The requests `open()` cannot see, because nobody told RAVEL about them.
+
+    A page carries an `<img>` pointing at the metadata service and Chromium
+    asks for it on RAVEL's behalf. Nothing in the URL RAVEL was given says so,
+    and without a hook here the request is made and the answer is in the
+    rendered document.
+    """
+    session = browser_session("127.0.0.1")
+    route = FakeRoute()
+
+    session._guard_route(route, FakeRequest(url))
+
+    assert route.decision == "abort", what
+    assert session.refused is None, "a refused subresource is not a refused navigation"
+
+
+def test_a_subresource_that_is_allowed_is_continued(browser_session: Callable[..., Any]) -> None:
+    """The guard has to be able to say yes, or nothing renders at all."""
+    session = browser_session(PUBLIC)
+    route = FakeRoute()
+
+    session._guard_route(route, FakeRequest("https://cdn.example.org/app.js"))
+
+    assert route.decision == "continue"
+
+
+def test_a_redirect_into_the_network_is_refused_and_reported_as_a_refusal(
+    browser_session: Callable[..., Any],
+) -> None:
+    """The case the entry check cannot cover.
+
+    `https://example.org/x` is a fine URL to open; the `302` it answers with is
+    not, and Chromium follows it without asking. The refusal is remembered so
+    that `goto` can report it as what it is.
+    """
+    session = browser_session("127.0.0.1")
+    route = FakeRoute()
+
+    session._guard_route(
+        route, FakeRequest("http://169.254.169.254/latest/meta-data/", navigation=True)
+    )
+
+    assert route.decision == "abort"
+    assert isinstance(session.refused, UnsafeURL)
+    assert "169.254.169.254" in session.refused.reason
+
+
+def test_a_navigation_aborted_by_the_guard_raises_the_refusal_not_a_navigation_error(
+    browser_session: Callable[..., Any],
+) -> None:
+    """What Playwright reports for an aborted navigation is a failure.
+
+    It is not one: RAVEL made a decision, and a caller has to be able to tell
+    the two apart — one is a source with a problem, the other is a request
+    RAVEL declined to make and must not record as a source at all.
+    """
+
+    class FailingPage:
+        def goto(self, url: str, **_kwargs: object) -> None:
+            raise RuntimeError("net::ERR_FAILED")
+
+    session = browser_session(PUBLIC)
+    session._page = FailingPage()
+    session._guard_route(FakeRoute(), FakeRequest("http://169.254.169.254/", navigation=True))
+
+    with pytest.raises(UnsafeURL):
+        session.goto("https://example.org/x", 1000)
+
+
+def test_a_navigation_that_fails_for_its_own_reason_still_reports_that_reason(
+    browser_session: Callable[..., Any],
+) -> None:
+    """Translation applies to refusals only.
+
+    A page that timed out, or a host that does not resolve, is a source RAVEL
+    tried and could not read. Reporting it as a refusal would hide a real
+    failure behind a policy decision that was never made.
+    """
+    failure = RuntimeError("net::ERR_NAME_NOT_RESOLVED")
+
+    class FailingPage:
+        def goto(self, url: str, **_kwargs: object) -> None:
+            raise failure
+
+    session = browser_session(PUBLIC)
+    session._page = FailingPage()
+
+    with pytest.raises(RuntimeError) as raised:
+        session.goto("https://gone.example.org/x", 1000)
+
+    assert raised.value is failure
+
+
+def test_the_route_handler_is_installed_before_any_page_exists() -> None:
+    """Ordering, checked in the source because the browser cannot be started.
+
+    A context that has a page before it has a guard has a window in which the
+    first navigation is unguarded — and the first navigation is the one RAVEL
+    was asked to make.
+    """
+    setup = _context_setup()
+
+    assert 'route("**/*"' in setup
+    assert setup.index('route("**/*"') < setup.index("new_page()")
+
+
+def test_service_workers_are_blocked_rather_than_guarded() -> None:
+    """The one bypass a route handler cannot close by checking harder.
+
+    Requests a service worker makes do not pass through `context.route`, so a
+    page that registers one has a way to fetch addresses the guard never sees.
+    Blocking them is not a restriction on reading a document — it is closing
+    the path the policy does not cover.
+    """
+    setup = _context_setup()
+
+    assert 'service_workers="block"' in setup
+
+
+def _context_setup() -> str:
+    """The body of `_Session.__enter__`, where the context is built."""
+    source = (Path(__file__).parents[2] / "src/ravel/research/browser.py").read_text()
+    return source.split("def __enter__", 1)[1].split("def _guard_route", 1)[0]
