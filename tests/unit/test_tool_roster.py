@@ -11,8 +11,11 @@ import pytest
 
 from ravel.dsh.roles import AgentRole
 from ravel.mcp.registry import (
+    DAG_MUTATION_TOOLS,
     TOOL_DESCRIPTIONS,
     TOOL_ROLES,
+    WRITE_TOOLS,
+    mutating_tools_for,
     roles_for,
     tools_for,
 )
@@ -68,3 +71,55 @@ def test_roles_for_rejects_an_unknown_tool() -> None:
 def test_tool_order_is_stable() -> None:
     """Registration order reaches the model; a reshuffle would churn prompts."""
     assert tools_for(AgentRole.MASTER) == tuple(sorted(tools_for(AgentRole.MASTER)))
+
+
+# ── The DAG-mutation boundary ───────────────────────────────────────────────
+
+
+def test_master_holds_every_dag_mutation_tool() -> None:
+    assert set(mutating_tools_for(AgentRole.MASTER)) == set(DAG_MUTATION_TOOLS)
+
+
+@pytest.mark.parametrize(
+    "role",
+    [AgentRole.RESEARCH, AgentRole.REVIEW, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER],
+)
+def test_no_other_role_holds_a_dag_mutation_tool(role: AgentRole) -> None:
+    """The separation of powers, as a property of the table.
+
+    `tests/integration/roles` asserts the same thing against the running
+    servers. This one exists so that a mis-edit fails in a second, in the
+    fastest suite, rather than only where the database is available.
+    """
+    assert mutating_tools_for(role) == ()
+    assert set(tools_for(role)).isdisjoint(DAG_MUTATION_TOOLS)
+
+
+def test_every_dag_mutation_tool_is_granted_to_master() -> None:
+    """A mutation tool granted to nobody is dead code wearing a scary name."""
+    for name in DAG_MUTATION_TOOLS:
+        assert TOOL_ROLES[name] == frozenset({AgentRole.MASTER})
+
+
+def test_every_tool_that_writes_is_master_only() -> None:
+    """The write set is named explicitly so a read tool that starts writing, or
+    a writing tool handed to another role, has to be noticed here."""
+    assert DAG_MUTATION_TOOLS <= WRITE_TOOLS
+    for name in WRITE_TOOLS:
+        assert name in TOOL_ROLES, f"{name} writes but is not part of the RAVEL roster"
+        assert TOOL_ROLES[name] == frozenset({AgentRole.MASTER}), (
+            f"{name} writes, so it must not be reachable by any other role"
+        )
+
+
+@pytest.mark.parametrize(
+    "role",
+    [AgentRole.RESEARCH, AgentRole.REVIEW, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER],
+)
+def test_a_worker_role_holds_no_writing_tool_at_all(role: AgentRole) -> None:
+    """A worker's contract is "execute this and report"; it does not write state.
+
+    Stated as a disjointness rather than a fixed roster: later phases give the
+    workers tools of their own, and this rule has to keep holding as they do.
+    """
+    assert set(tools_for(role)).isdisjoint(WRITE_TOOLS)

@@ -9,76 +9,46 @@ and serves the harness over stdio.
 The harness spawns this module itself, through the `@deepseek-ai/dsh-mcp-client`
 row that `ravel.dsh.composition` writes into the runtime's overlay. It is not
 meant to be run by hand except when debugging a role's roster.
+
+**Registration is the authorization.** A tool a role does not hold is not
+merely refused when called — it is never registered, so it does not appear in
+the model's tool list and there is no handler to reach. The refusal path exists
+as well, inside the handlers, but the gate is this one: the roster that reaches
+the model is the roster RAVEL granted.
+
+**Registration is also where refusals are made legible.** An exception that
+escapes a handler reaches the model as `Error executing tool <name>` and
+nothing else, so every handler is wrapped by `report_refusals` on the way in.
+Doing it here rather than in each handler means a new tool cannot be added
+without it — see `ravel.mcp.errors` for where the line is drawn between a
+failure the model should read and a defect that should crash.
 """
 
 from __future__ import annotations
 
 import sys
-from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
 from ravel import __version__
+from ravel.mcp.context import ToolContext
+from ravel.mcp.errors import report_refusals
 from ravel.mcp.registry import TOOL_DESCRIPTIONS, tools_for
-from ravel.mcp.scope import ScopeError, ToolScope
+from ravel.mcp.scope import ScopeError
+from ravel.mcp.tools import IMPLEMENTATIONS
 
-_scope: ToolScope | None = None
+__all__ = ["IMPLEMENTATIONS", "create_server", "main"]
 
 
-def _active_scope() -> ToolScope:
-    """The scope this process was launched with.
+def create_server(context: ToolContext) -> MCPServer:
+    """Build the server for one scope, registering only that role's tools.
 
     Raises:
-        ScopeError: Called before `main` established the scope.
+        ScopeError: A tool is granted to this role but has no implementation,
+            which is a wiring fault in the registry rather than a runtime
+            condition to recover from.
     """
-    if _scope is None:
-        raise ScopeError("tool scope is not established; the server was not started correctly")
-    return _scope
-
-
-# ── Tools ───────────────────────────────────────────────────────────────────
-#
-# Each tool declares its own parameters so the schema the model receives is
-# derived from a real signature. The scope is never a parameter: it comes from
-# the process, which is the only reason the model cannot forge it.
-
-
-async def whoami() -> dict[str, Any]:
-    """Report this session's project, role, and available tools."""
-    scope = _active_scope()
-    return {
-        "project_id": scope.project_id,
-        "role": scope.role.value,
-        "role_name": scope.role.display_name,
-        "tools": list(tools_for(scope.role)),
-        "may_mutate_dag": scope.is_master,
-    }
-
-
-async def read_project_state() -> dict[str, Any]:
-    """Read the authoritative project state for this scope."""
-    scope = _active_scope()
-    brief = scope.brief()
-    return {
-        "project_id": brief.project_id,
-        "project_title": brief.project_title,
-        "objective": brief.objective,
-        "phase": brief.phase,
-        "bindings": list(brief.bindings),
-    }
-
-
-#: Tool name -> implementation. Registration is driven by `TOOL_DESCRIPTIONS`
-#: and `registry.TOOL_ROLES`, so a tool missing here fails at startup rather
-#: than silently vanishing from a role's roster.
-IMPLEMENTATIONS: dict[str, Any] = {
-    "whoami": whoami,
-    "read_project_state": read_project_state,
-}
-
-
-def create_server(scope: ToolScope) -> MCPServer:
-    """Build the server for one scope, registering only that role's tools."""
+    scope = context.scope
     server = MCPServer(
         name="ravel",
         title="RAVEL",
@@ -90,22 +60,25 @@ def create_server(scope: ToolScope) -> MCPServer:
     )
 
     for name in tools_for(scope.role):
-        implementation = IMPLEMENTATIONS.get(name)
-        if implementation is None:
+        factory = IMPLEMENTATIONS.get(name)
+        if factory is None:
             raise ScopeError(
                 f"tool {name!r} is granted to {scope.role.value} but has no implementation"
             )
-        server.tool(name=name, description=TOOL_DESCRIPTIONS[name])(implementation)
+        # Every handler is registered through `report_refusals`. The transport
+        # would otherwise collapse an anticipated refusal into "Error executing
+        # tool <name>", and the reason the model needs in order to try
+        # something else would stop at the server's log.
+        handler = report_refusals(factory(context))
+        server.tool(name=name, description=TOOL_DESCRIPTIONS[name])(handler)
 
     return server
 
 
 def main() -> int:
     """Serve this role's tools over stdio until the harness closes the pipe."""
-    global _scope
-
     try:
-        scope = ToolScope.from_environment()
+        context = ToolContext.from_environment()
     except ScopeError as exc:
         print(f"ravel tool server: {exc}", file=sys.stderr)
         return 2
@@ -114,14 +87,16 @@ def main() -> int:
     # process's scope is a wiring fault; failing now is louder and cheaper than
     # failing inside an agent's first tool call.
     try:
-        scope.brief()
+        context.scope.brief()
     except ScopeError as exc:
         print(f"ravel tool server: {exc}", file=sys.stderr)
         return 2
 
-    _scope = scope
-    server = create_server(scope)
-    server.run(transport="stdio")
+    server = create_server(context)
+    try:
+        server.run(transport="stdio")
+    finally:
+        context.close()
     return 0
 
 
