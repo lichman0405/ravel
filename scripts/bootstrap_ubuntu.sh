@@ -148,8 +148,10 @@ step "Environment file"
 if [[ -f "$REPO_ROOT/.env" ]]; then
     pass ".env exists (left untouched)"
 else
-    cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
-    warn "created .env from .env.example — set DEEPSEEK_API_KEY before running agents"
+    # Owner-only: this file is where a model credential goes, and it is
+    # git-ignored precisely because it holds secrets.
+    install -m 600 "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+    warn "created .env from .env.example (mode 600) — set DEEPSEEK_API_KEY before running agents"
 fi
 
 printf '\n\033[1mBootstrap complete.\033[0m Next:\n'

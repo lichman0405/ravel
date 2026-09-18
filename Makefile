@@ -41,8 +41,8 @@ test-unit: ## Unit tests only; no services required
 test-integration: ## Integration tests; requires make dev-up
 	$(VENV)/bin/pytest tests/integration -m integration
 
-test-dsh: ## Phase 0 DSH integration spike against a real pinned runtime
-	$(VENV)/bin/pytest tests/dsh -m dsh
+test-dsh: ## Phase 0 DSH integration gate against a real pinned runtime
+	RAVEL_REQUIRE_DSH=1 $(VENV)/bin/pytest tests/dsh -m dsh
 
 test-live: ## Real-Internet research acceptance; never mocked
 	scripts/test_live_research.sh

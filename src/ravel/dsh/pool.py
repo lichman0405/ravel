@@ -1,0 +1,217 @@
+"""The set of live harness runtimes.
+
+A runtime is expensive to start and cheap to keep, so RAVEL keeps one per
+`(project_id, role)` that is actually in use and reaps it once it has been idle
+long enough. The pool is the only place that creates a harness process, which
+keeps the authority each process was launched with in one auditable place.
+
+Reaping is explicit rather than timer-driven: `reap_idle` is called on every
+acquire and can be called by an operator or a test at a chosen moment. Nothing
+reaps a runtime out from under a turn, because a turn holds the runtime's lock.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from ravel.config import Settings
+from ravel.dsh.binding import SessionBinding, SessionBindingRegistry
+from ravel.dsh.roles import AgentRole
+from ravel.dsh.runtime import HarnessRuntimeError, RoleRuntime
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class PoolStats:
+    """A snapshot of the pool, for health reporting and tests."""
+
+    live_runtimes: int
+    live_sessions: int
+    scopes: tuple[tuple[str, str], ...]
+    total_turns: int
+
+
+@dataclass
+class DshRuntimePool:
+    """Lazily started, idle-reaped harness runtimes, keyed by `(project, role)`."""
+
+    settings: Settings
+    bindings: SessionBindingRegistry = field(default_factory=SessionBindingRegistry)
+    _runtimes: dict[tuple[str, AgentRole], RoleRuntime] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    # ── Runtimes ───────────────────────────────────────────────────────────
+
+    def runtime(
+        self,
+        project_id: str,
+        role: AgentRole,
+        brief: dict[str, Any] | None = None,
+    ) -> RoleRuntime:
+        """The runtime for a scope, starting one if none is live.
+
+        The brief is only written when a runtime is created: it describes the
+        authority the process launched with, and rewriting it under a running
+        agent would let the agent's view drift from its grant.
+        """
+        key = (project_id, role)
+        with self._lock:
+            existing = self._runtimes.get(key)
+            if existing is not None and not existing.is_closed:
+                return existing
+            if existing is not None:
+                del self._runtimes[key]
+            runtime = RoleRuntime.create(self.settings, project_id, role, brief)
+            self._runtimes[key] = runtime
+            logger.info(
+                "started harness runtime for project=%s role=%s work_dir=%s",
+                project_id,
+                role.value,
+                runtime.work_dir,
+            )
+            return runtime
+
+    def live_runtime(self, project_id: str, role: AgentRole) -> RoleRuntime | None:
+        """The runtime for a scope, if one is currently live."""
+        with self._lock:
+            runtime = self._runtimes.get((project_id, role))
+        return runtime if runtime is not None and not runtime.is_closed else None
+
+    def start_session(
+        self,
+        project_id: str,
+        role: AgentRole,
+        task_id: str | None = None,
+        brief: dict[str, Any] | None = None,
+    ) -> tuple[RoleRuntime, SessionBinding]:
+        """Start a session and record the work it serves.
+
+        Returns the runtime that owns the session and the binding that records
+        what the session is for. Callers must hold the binding to attribute the
+        session's output; the harness session id alone says nothing.
+        """
+        runtime = self.runtime(project_id, role, brief)
+        session_id = runtime.new_session_id(task_id)
+        session_binding = self.bindings.bind(session_id, project_id, role, task_id)
+        return runtime, session_binding
+
+    # ── Session bindings ───────────────────────────────────────────────────
+
+    def binding_for(self, session_id: str) -> SessionBinding | None:
+        """The work a session serves, or None when it is not RAVEL's."""
+        return self.bindings.get(session_id)
+
+    def binding_or_raise(self, session_id: str) -> SessionBinding:
+        """The work a session serves.
+
+        Raises:
+            BindingError: The session is not bound to any project.
+        """
+        return self.bindings.require(session_id)
+
+    # ── Lifecycle ──────────────────────────────────────────────────────────
+
+    def reap_idle(self, now: datetime | None = None) -> int:
+        """Close runtimes idle past the configured timeout, returning how many.
+
+        A runtime mid-turn holds its own lock, so a turn already in flight is
+        never closed here; it becomes eligible on the next call.
+        """
+        cutoff = (now or datetime.now(UTC)) - timedelta(
+            seconds=self.settings.dsh_idle_timeout_seconds
+        )
+        doomed: list[RoleRuntime] = []
+        with self._lock:
+            for key, runtime in list(self._runtimes.items()):
+                if runtime.is_closed:
+                    del self._runtimes[key]
+                    continue
+                if runtime.last_used_at < cutoff and runtime._lock.acquire(blocking=False):
+                    if runtime.last_used_at < cutoff:
+                        del self._runtimes[key]
+                        doomed.append(runtime)
+                    runtime._lock.release()
+
+        for runtime in doomed:
+            logger.info(
+                "reaping idle harness runtime for project=%s role=%s after %d turn(s)",
+                runtime.project_id,
+                runtime.role.value,
+                runtime.turns,
+            )
+            runtime.close()
+            self.bindings.release_scope(runtime.project_id, runtime.role)
+        return len(doomed)
+
+    def close_scope(self, project_id: str, role: AgentRole) -> bool:
+        """Shut down one scope's runtime, returning whether one was live."""
+        with self._lock:
+            runtime = self._runtimes.pop((project_id, role), None)
+        if runtime is None:
+            return False
+        runtime.close()
+        self.bindings.release_scope(project_id, role)
+        return True
+
+    def close_project(self, project_id: str) -> int:
+        """Shut down every runtime serving a project, returning how many closed."""
+        with self._lock:
+            doomed = [key for key in self._runtimes if key[0] == project_id]
+            runtimes = [self._runtimes.pop(key) for key in doomed]
+        for runtime in runtimes:
+            runtime.close()
+        self.bindings.release_project(project_id)
+        return len(runtimes)
+
+    def close(self) -> None:
+        """Shut down every runtime. Safe to call more than once."""
+        with self._lock:
+            runtimes = list(self._runtimes.values())
+            self._runtimes.clear()
+        for runtime in runtimes:
+            try:
+                runtime.close()
+            except Exception:
+                logger.warning(
+                    "failed to close runtime for (%s, %s)",
+                    runtime.project_id,
+                    runtime.role.value,
+                    exc_info=True,
+                )
+
+    def __enter__(self) -> DshRuntimePool:
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        self.close()
+
+    # ── Introspection ──────────────────────────────────────────────────────
+
+    def stats(self) -> PoolStats:
+        """A snapshot of live runtimes and sessions."""
+        with self._lock:
+            live = [r for r in self._runtimes.values() if not r.is_closed]
+            scopes = tuple(sorted((r.project_id, r.role.value) for r in live))
+            turns = sum(r.turns for r in live)
+        return PoolStats(
+            live_runtimes=len(live),
+            live_sessions=len(self.bindings),
+            scopes=scopes,
+            total_turns=turns,
+        )
+
+
+def create_pool(settings: Settings | None = None) -> DshRuntimePool:
+    """Build a pool from settings."""
+    if settings is None:
+        from ravel.config import get_settings
+
+        settings = get_settings()
+    if not settings.dsh_home_path().is_dir():
+        raise HarnessRuntimeError("DSH home could not be created")
+    return DshRuntimePool(settings=settings)

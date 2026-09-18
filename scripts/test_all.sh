@@ -4,10 +4,14 @@
 #
 #   scripts/test_all.sh              unit + integration (needs dev_up.sh)
 #   scripts/test_all.sh --unit       unit only, no services required
+#   scripts/test_all.sh --dsh        the Phase 0 harness gate, live, never skipped
 #   scripts/test_all.sh --all        everything, including live research and e2e
 #
 # The live research suite reaches the real Internet and is never mocked. It is
 # excluded from the default run only because it is slow, never to avoid it.
+#
+# RAVEL_REQUIRE_DSH turns "no model credential" from a skip into a failure. The
+# harness gate is a gate: it must not be able to pass by not running.
 
 set -euo pipefail
 
@@ -24,9 +28,10 @@ fi
 MODE="default"
 case "${1:-}" in
     --unit) MODE="unit" ;;
+    --dsh)  MODE="dsh" ;;
     --all)  MODE="all" ;;
     "")     ;;
-    *) printf 'usage: %s [--unit|--all]\n' "$0" >&2; exit 2 ;;
+    *) printf 'usage: %s [--unit|--dsh|--all]\n' "$0" >&2; exit 2 ;;
 esac
 
 if [[ -f .env ]]; then
@@ -46,17 +51,25 @@ case "$MODE" in
         banner "unit tests"
         pytest tests/unit -m "not live"
         ;;
+    dsh)
+        banner "harness gate (live, must not skip)"
+        RAVEL_REQUIRE_DSH=1 pytest tests/dsh -m dsh
+        ;;
     default)
         banner "unit tests"
         pytest tests/unit
         banner "integration tests"
-        pytest tests/integration tests/dsh
+        pytest tests/integration
+        banner "harness gate (live, must not skip)"
+        RAVEL_REQUIRE_DSH=1 pytest tests/dsh -m dsh
         ;;
     all)
         banner "unit tests"
         pytest tests/unit
         banner "integration tests"
-        pytest tests/integration tests/dsh
+        pytest tests/integration
+        banner "harness gate (live, must not skip)"
+        RAVEL_REQUIRE_DSH=1 pytest tests/dsh -m dsh
         banner "live research"
         pytest tests/live_research -m live
         banner "end-to-end"

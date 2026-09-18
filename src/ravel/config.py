@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, computed_field
+from pydantic import Field, SecretStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     # ── Harness ────────────────────────────────────────────────────────────
     dsh_home: Path = Path("./runtime/dsh_home")
     dsh_bin: str | None = None
+    # The base profile is fixed rather than configurable: the role overlay
+    # targets row ids that only `sdk-minimal` defines, so changing it would
+    # silently drop a role's prompt or leave the shell in place.
+    dsh_provider: str = "deepseek-official"
+    # The SDK default (`deepseek-v4-flash`) is not served by every account, so
+    # RAVEL names the model explicitly rather than inheriting a guess.
+    dsh_model: str = "deepseek-flash"
+    dsh_reasoning_effort: str | None = None
+    # A runtime process is reaped after this long without a turn. Bounds the
+    # number of live Node processes on a single CVM.
+    dsh_idle_timeout_seconds: int = 900
+    dsh_turn_timeout_seconds: float | None = 1800.0
 
     # ── Model credentials ──────────────────────────────────────────────────
     deepseek_api_key: SecretStr | None = Field(default=None, alias="DEEPSEEK_API_KEY")
@@ -80,6 +92,35 @@ class Settings(BaseSettings):
     gateway_port: int = 8000
     gateway_jwt_secret: SecretStr = SecretStr("dev-only-change-me")
     gateway_token_ttl_seconds: int = 3600
+
+    @field_validator(
+        "dsh_bin",
+        "dsh_reasoning_effort",
+        "deepseek_base_url",
+        "research_contact_email",
+        "search_provider",
+        "postgres_dsn_override",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_absent(cls, value: object) -> object:
+        """Treat a blank environment value as unset.
+
+        `.env.example` ships optional keys as `KEY=`, so an empty string is the
+        normal way to say "not configured". Left as-is, `dsh_bin=""` would
+        resolve to the current directory and be executed as the harness binary.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("deepseek_api_key", "search_api_key", mode="before")
+    @classmethod
+    def _blank_secret_is_absent(cls, value: object) -> object:
+        """Treat a blank secret as unset, so an empty `.env` key is not a credential."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # ── Derived paths ──────────────────────────────────────────────────────
 
@@ -100,9 +141,32 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    @staticmethod
+    def _path_component(part: str) -> str:
+        """Reject a path fragment that could escape the runtime root.
+
+        Project ids reach this method from the database, the API, and the TUI,
+        so they are untrusted input rather than constants. A component that is
+        empty, a directory reference, or contains a separator is refused before
+        anything is joined or created.
+
+        Raises:
+            ValueError: The fragment is not usable as a single path component.
+        """
+        if not part or part in {".", ".."} or "/" in part or "\\" in part or "\x00" in part:
+            raise ValueError(f"{part!r} is not usable as a path component")
+        return part
+
     def runtime_path(self, *parts: str) -> Path:
-        """A path under the runtime root, created on demand."""
-        path = (REPO_ROOT / self.runtime_dir).joinpath(*parts)
+        """A path under the runtime root, created on demand.
+
+        Raises:
+            ValueError: A component would escape the runtime root.
+        """
+        root = (REPO_ROOT / self.runtime_dir).resolve()
+        path = root.joinpath(*(self._path_component(part) for part in parts)).resolve()
+        if not path.is_relative_to(root):
+            raise ValueError(f"{path} escapes the runtime root {root}")
         path.mkdir(parents=True, exist_ok=True)
         return path
 

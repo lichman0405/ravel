@@ -7,6 +7,12 @@
 # frequently already bound on a shared development machine. Override any of them
 # through the matching RAVEL_* variable in `.env`.
 #
+# Every published port is bound to loopback. These services carry development
+# credentials and Temporal's and MinIO's APIs are unauthenticated at the
+# transport layer, so publishing them on 0.0.0.0 would expose the project
+# database to anything that can reach the host. A remote deployment reaches
+# them over an SSH tunnel or a private network, not by widening the bind.
+#
 #   scripts/dev_up.sh      start and wait for health
 #   scripts/dev_down.sh    stop, keeping volumes
 #   scripts/dev_down.sh -v stop and delete volumes
@@ -22,7 +28,7 @@ services:
       POSTGRES_PASSWORD: ${RAVEL_POSTGRES_PASSWORD:-ravel_dev_password}
       POSTGRES_DB: ${RAVEL_POSTGRES_DB:-ravel}
     ports:
-      - "${RAVEL_POSTGRES_PORT:-55432}:5432"
+      - "127.0.0.1:${RAVEL_POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       # Creates the two Temporal databases on first initialisation.
@@ -49,7 +55,7 @@ services:
       # V0 keeps the single default namespace. Nothing scientific depends on it.
       DEFAULT_NAMESPACE: ${RAVEL_TEMPORAL_NAMESPACE:-default}
     ports:
-      - "${RAVEL_TEMPORAL_PORT:-7233}:7233"
+      - "127.0.0.1:${RAVEL_TEMPORAL_PORT:-7233}:7233"
     healthcheck:
       test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
       interval: 5s
@@ -67,7 +73,7 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:${RAVEL_TEMPORAL_UI_PORT:-8088}
     ports:
-      - "${RAVEL_TEMPORAL_UI_PORT:-8088}:8080"
+      - "127.0.0.1:${RAVEL_TEMPORAL_UI_PORT:-8088}:8080"
 
   minio:
     # MinIO's official registry is quay.io. The Docker Hub `minio/minio`
@@ -80,8 +86,8 @@ services:
       MINIO_ROOT_USER: ${RAVEL_S3_ACCESS_KEY:-ravel_minio}
       MINIO_ROOT_PASSWORD: ${RAVEL_S3_SECRET_KEY:-ravel_minio_dev_password}
     ports:
-      - "${RAVEL_S3_PORT:-9100}:9000"
-      - "${RAVEL_S3_CONSOLE_PORT:-9101}:9001"
+      - "127.0.0.1:${RAVEL_S3_PORT:-9100}:9000"
+      - "127.0.0.1:${RAVEL_S3_CONSOLE_PORT:-9101}:9001"
     volumes:
       - minio-data:/data
     healthcheck:

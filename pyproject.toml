@@ -34,6 +34,8 @@ dependencies = [
     "websockets>=13",
     # Resilience
     "tenacity>=9.0",
+    # Generates the per-runtime harness composition overlay.
+    "pyyaml>=6.0",
     # Agent tool seam. The harness runtime binary arrives as a matched
     # dependency of this wheel; see vendor/DSH_PIN.json for the pin.
     "mcp>=1.2",
