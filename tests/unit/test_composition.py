@@ -15,8 +15,14 @@ from typing import Any
 import pytest
 import yaml
 
-from ravel.dsh.composition import BASE_PROFILE, MCP_SERVER_NAME, RoleComposition
+from ravel.dsh.composition import (
+    BASE_PROFILE,
+    MCP_SERVER_NAME,
+    RoleComposition,
+    composition_dump,
+)
 from ravel.dsh.roles import AgentRole, definition_for
+from ravel.mcp.registry import DAG_MUTATION_TOOLS, tools_for
 
 
 @pytest.fixture
@@ -132,3 +138,44 @@ def test_rewriting_the_overlay_replaces_it(composition: RoleComposition, tmp_pat
 
 def test_base_profile_is_the_shipped_minimal_tree() -> None:
     assert BASE_PROFILE == "sdk-minimal"
+
+
+# ── The dump ────────────────────────────────────────────────────────────────
+
+
+def _dump(tmp_path: Path) -> dict[str, dict[str, Any]]:
+    entries = composition_dump(
+        project_id="proj-a",
+        mcp_command="/usr/bin/python3",
+        brief_dir=tmp_path / "briefs",
+    )
+    return {str(entry["role"]): entry for entry in entries}
+
+
+def test_the_dump_covers_every_role_exactly_once(tmp_path: Path) -> None:
+    assert set(_dump(tmp_path)) == {role.value for role in AgentRole}
+
+
+@pytest.mark.parametrize("role", list(AgentRole))
+def test_the_dump_reports_the_roster_from_the_registry(tmp_path: Path, role: AgentRole) -> None:
+    """The dump is a view of the roster table, not a second copy of it."""
+    assert _dump(tmp_path)[role.value]["tools"] == list(tools_for(role))
+
+
+def test_the_dump_names_the_dag_mutation_tools_and_only_master_has_them(tmp_path: Path) -> None:
+    for role_value, entry in _dump(tmp_path).items():
+        if role_value == AgentRole.MASTER.value:
+            assert set(entry["dag_mutation_tools"]) == set(DAG_MUTATION_TOOLS)
+        else:
+            assert entry["dag_mutation_tools"] == []
+
+
+def test_the_dump_carries_the_scope_the_runtime_would_be_launched_with(tmp_path: Path) -> None:
+    entry = _dump(tmp_path)[AgentRole.MASTER.value]
+    assert entry["project_id"] == "proj-a"
+    assert entry["mcp_command"] == "/usr/bin/python3"
+    assert entry["mcp_module"] == "ravel.mcp.server"
+    # The persona is measured rather than reproduced: the dump says a contract
+    # was loaded and how large it is, and the overlay is where it is read.
+    assert entry["persona_chars"] == len(definition_for(AgentRole.MASTER).persona)
+    assert entry["persona_chars"] > 0

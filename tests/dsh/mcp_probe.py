@@ -22,15 +22,42 @@ PROBE_TIMEOUT_SECONDS = 30.0
 
 
 @dataclass(frozen=True, slots=True)
+class ToolCall:
+    """What one `tools/call` produced, verbatim.
+
+    `error` is the text the model would read. It is kept as text rather than as
+    an exception because that is the whole question these tests ask: a refusal
+    that reaches the model is a message, and a crash is a message too — the
+    difference is whether the message explains anything.
+    """
+
+    tool: str
+    failed: bool
+    payload: dict[str, Any] | None
+    error: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ProbeResult:
     """What a tool server exposed to a caller in one scope."""
 
     tools: tuple[str, ...]
     whoami: dict[str, Any] | None
+    calls: tuple[ToolCall, ...] = ()
 
 
-async def probe(env: dict[str, str], *, call_whoami: bool = True) -> ProbeResult:
-    """Launch a tool server with `env` and report the tools it registered."""
+async def probe(
+    env: dict[str, str],
+    *,
+    call_whoami: bool = True,
+    calls: tuple[tuple[str, dict[str, Any]], ...] = (),
+) -> ProbeResult:
+    """Launch a tool server with `env` and report what it exposed.
+
+    `calls` are made after listing, in order, and their outcomes are reported
+    rather than raised: a test asserting that a role *cannot* do something is
+    asserting about the refusal, so the refusal has to survive to the assertion.
+    """
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "ravel.mcp.server"],
@@ -45,7 +72,39 @@ async def probe(env: dict[str, str], *, call_whoami: bool = True) -> ProbeResult
         if call_whoami and "whoami" in names:
             result = await session.call_tool("whoami", {})
             whoami = _structured(result)
-        return ProbeResult(tools=names, whoami=whoami)
+
+        outcomes = []
+        for name, arguments in calls:
+            try:
+                result = await session.call_tool(name, arguments)
+            except Exception as exc:  # the transport refused to carry the call
+                outcomes.append(
+                    ToolCall(
+                        tool=name,
+                        failed=True,
+                        payload=None,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
+                continue
+            failed = bool(getattr(result, "is_error", getattr(result, "isError", False)))
+            outcomes.append(
+                ToolCall(
+                    tool=name,
+                    failed=failed,
+                    payload=None if failed else _structured(result),
+                    error=_text(result) if failed else None,
+                )
+            )
+        return ProbeResult(tools=names, whoami=whoami, calls=tuple(outcomes))
+
+
+def _text(result: Any) -> str:
+    """The text blocks of a tool result, joined."""
+    blocks = getattr(result, "content", ()) or ()
+    return " ".join(
+        text for text in (getattr(block, "text", None) for block in blocks) if text
+    )
 
 
 def start_server(env: dict[str, str]) -> tuple[int, str]:

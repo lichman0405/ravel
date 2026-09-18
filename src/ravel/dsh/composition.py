@@ -17,12 +17,15 @@ diffed after the fact.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from ravel.dsh.roles import AgentRole, definition_for
+from ravel.dsh.roles import ROLE_DEFINITIONS, AgentRole, definition_for
+from ravel.mcp.registry import mutating_tools_for, tools_for
 
 #: The shipped profile the overlay is applied to. It is a standalone tree: it
 #: owns every row it mounts and carries no filesystem, web, subagent, or skill
@@ -81,6 +84,35 @@ class RoleComposition:
             mcp_module=definition.mcp_module,
             brief_path=brief_path,
         )
+
+    @property
+    def tools(self) -> tuple[str, ...]:
+        """The tools this role's runtime will actually be able to reach.
+
+        Read from the registry rather than stored on the composition, so that a
+        dump cannot describe a roster the launched server would not register.
+        There is one roster table, and this is a view of it.
+        """
+        return tools_for(self.role)
+
+    def as_dump(self) -> dict[str, Any]:
+        """A reviewable summary of one role's runtime.
+
+        The overlay is the authority; this is the part of it a human or a test
+        wants to check without reading YAML — chiefly, which tools the role
+        holds and whether any of them can change the DAG.
+        """
+        return {
+            "project_id": self.project_id,
+            "role": self.role.value,
+            "role_name": self.role.display_name,
+            "mcp_command": self.mcp_command,
+            "mcp_module": self.mcp_module,
+            "tools": list(self.tools),
+            "dag_mutation_tools": list(mutating_tools_for(self.role)),
+            "persona_chars": len(self.persona),
+            "brief_path": str(self.brief_path),
+        }
 
     def as_patch(self) -> list[dict[str, object]]:
         """The overlay as the harness's patch list."""
@@ -144,3 +176,29 @@ class RoleComposition:
             encoding="utf-8",
         )
         return path
+
+
+def composition_dump(
+    project_id: str,
+    mcp_command: str,
+    brief_dir: Path,
+    roles: Iterable[AgentRole] = tuple(ROLE_DEFINITIONS),
+) -> list[dict[str, Any]]:
+    """What every role would be launched with, as one document.
+
+    This is the profile table a reviewer reads before agreeing that a role has
+    the authority it claims — in particular that exactly one role holds tools
+    that change the DAG. It describes what *would* be launched; the integration
+    suite launches each role's server instead and asserts this dump against
+    what the server actually registered, so the dump cannot quietly drift from
+    the runtime.
+    """
+    return [
+        RoleComposition.for_scope(
+            project_id=project_id,
+            role=role,
+            mcp_command=mcp_command,
+            brief_path=brief_dir / f"{role.value}.brief.json",
+        ).as_dump()
+        for role in roles
+    ]
