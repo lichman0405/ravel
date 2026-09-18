@@ -113,15 +113,28 @@ def test_two_roadmap_phases_cannot_share_an_order() -> None:
         )
 
 
-def test_only_expanded_phases_are_committed_to_nodes() -> None:
+def test_two_roadmap_phases_cannot_share_a_name() -> None:
+    """A node names its stage by name, so the name has to identify one stage."""
+    with pytest.raises(ValidationError, match="share a `name`"):
+        Roadmap(
+            project_id="proj-a",
+            phases=(
+                RoadmapPhase(project_id="proj-a", name="Same", order=0),
+                RoadmapPhase(project_id="proj-a", name="Same", order=1),
+            ),
+        )
+
+
+def test_a_phase_is_looked_up_by_name() -> None:
     roadmap = Roadmap(
         project_id="proj-a",
         phases=(
-            RoadmapPhase(project_id="proj-a", name="Near", order=0, expanded=True),
+            RoadmapPhase(project_id="proj-a", name="Near", order=0),
             RoadmapPhase(project_id="proj-a", name="Far", order=1),
         ),
     )
-    assert [phase.name for phase in roadmap.expanded_phases()] == ["Near"]
+    assert roadmap.phase("Far") is not None
+    assert roadmap.phase("Absent") is None
 
 
 # ── Artifacts ───────────────────────────────────────────────────────────────

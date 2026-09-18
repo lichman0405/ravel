@@ -60,6 +60,10 @@ packages = ["src/ravel"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repository root, so a test module can import a helper from a sibling
+# conftest (`tests` is a namespace package: pytest's own path insertion only
+# reaches the directory the test module is in).
+pythonpath = ["."]
 asyncio_mode = "auto"
 timeout = 300
 markers = [

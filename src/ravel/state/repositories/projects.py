@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session
 from ravel.domain.enums import ProjectStatus
 from ravel.domain.events import ActorType, ProjectEventType
 from ravel.domain.project import Project, RoadmapPhase
+from ravel.domain.roles import AgentRole
 from ravel.state.mapping import build_row, from_row
 from ravel.state.outbox import emit
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
+from ravel.state.repositories.dag import require_master
 from ravel.state.tables import ProjectRow, RoadmapPhaseRow
 
 
@@ -119,7 +121,14 @@ class ProjectRegistry:
 
 
 class RoadmapRepository(ProjectScopedRepository[RoadmapPhase]):
-    """The coarse phases above the executable DAG."""
+    """The coarse phases above the executable DAG.
+
+    The roadmap is the coarse half of the plan and is written by Master, like
+    the DAG it sits above. What it does *not* carry is any record of which
+    phases have been expanded into nodes: that is a fact about the DAG, derived
+    by `ravel.domain.planning`, and storing it here would be a second copy that
+    could disagree with the first.
+    """
 
     row_type = RoadmapPhaseRow
     record_type = RoadmapPhase
@@ -131,6 +140,39 @@ class RoadmapRepository(ProjectScopedRepository[RoadmapPhase]):
         """Every phase, in the order Master put them."""
         return self.all()
 
-    def expanded(self) -> list[RoadmapPhase]:
-        """The phases Master has committed to concrete nodes."""
-        return self.all(expanded=True)
+    def register(self, phase: RoadmapPhase, *, role: AgentRole) -> RoadmapPhase:
+        """Add a phase to the roadmap.
+
+        A phase carries no `DecisionRecord` of its own. A decision records what
+        changed among the *nodes* — the concrete commitments — and a phase on
+        its own commits none; the decision requirement attaches to the nodes
+        that expand it, in `ravel.state.services.dag`.
+
+        Raises:
+            PermissionError: The actor is not Master.
+            ProjectScopeError: The phase belongs to another project.
+        """
+        require_master(role)
+        self.add(phase)
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.DAG_MUTATED,
+            actor_type=ActorType.AGENT,
+            actor_id=role.value,
+            payload={
+                "change": "REGISTER_PHASE",
+                "phase_id": phase.phase_id,
+                "name": phase.name,
+                "order": phase.order,
+            },
+        )
+        return phase
+
+    def phase(self, name: str) -> RoadmapPhase:
+        """One phase by name.
+
+        Raises:
+            NotFound: This project has no such phase.
+        """
+        return self.get(name=name)

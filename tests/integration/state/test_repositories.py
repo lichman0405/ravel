@@ -62,11 +62,24 @@ def _a_node(project_id: str, **overrides) -> DagNode:
         node_type=NodeType.COMPUTATION,
         objective="Measure conductivity across the dopant series.",
         created_by="master",
-        dependencies=("node-a", "node-b"),
-        join_policy=JoinPolicy.ALL,
         roadmap_phase="phase-2",
     )
     return node.model_copy(update=overrides) if overrides else node
+
+
+def _two_nodes_to_depend_on(session, project_id: str) -> tuple[str, str]:
+    """Two real nodes, for a node that is going to declare a fan-in.
+
+    A dependency has to name a node that exists — the DAG refuses to record a
+    plan that waits on something nobody created — so a round trip that wants a
+    non-empty `dependencies` has to build the nodes it cites first.
+    """
+    repository = DagRepository(session, project_id)
+    created = [
+        repository.add_node(_a_node(project_id), role=AgentRole.MASTER, decision_ref="dec-1")
+        for _ in range(2)
+    ]
+    return created[0].node_id, created[1].node_id
 
 
 def _a_source(project_id: str, url: str, title: str) -> EvidenceSource:
@@ -250,9 +263,11 @@ def test_a_dag_mutation_must_cite_a_decision(database: Database, project) -> Non
 
 def test_every_field_of_a_node_survives_the_round_trip(database: Database, project) -> None:
     """Including the value objects, which are stored as JSONB and re-validated."""
-    original = _a_node(project.project_id)
-
     with database.transaction() as session:
+        first, second = _two_nodes_to_depend_on(session, project.project_id)
+        original = _a_node(
+            project.project_id, dependencies=(first, second), join_policy=JoinPolicy.ALL
+        )
         DagRepository(session, project.project_id).add_node(
             original, role=AgentRole.MASTER, decision_ref="dec-1"
         )
@@ -263,7 +278,7 @@ def test_every_field_of_a_node_survives_the_round_trip(database: Database, proje
     assert stored == original
     assert stored.created_at.tzinfo is not None, "timestamps come back timezone-aware"
     assert stored.join_policy is JoinPolicy.ALL
-    assert stored.dependencies == ("node-a", "node-b")
+    assert stored.dependencies == (first, second)
 
 
 def test_a_fully_populated_node_survives_the_round_trip(database: Database, project) -> None:

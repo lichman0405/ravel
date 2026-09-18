@@ -306,11 +306,11 @@ def upgrade() -> None:
     sa.Column('name', sa.Text(), nullable=False),
     sa.Column('intent', sa.Text(), nullable=False),
     sa.Column('order', sa.Integer(), nullable=False),
-    sa.Column('expanded', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['project_id'], ['projects.project_id'], name=op.f('fk_roadmap_phases_project_id_projects'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('phase_id', name=op.f('pk_roadmap_phases')),
-    sa.UniqueConstraint('project_id', 'order', name='uq_roadmap_phases_order')
+    sa.UniqueConstraint('project_id', 'order', name='uq_roadmap_phases_order'),
+    sa.UniqueConstraint('project_id', 'name', name='uq_roadmap_phases_name')
     )
     op.create_table('acceptance_contracts',
     sa.Column('contract_id', sa.String(length=32), nullable=False),

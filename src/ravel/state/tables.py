@@ -259,11 +259,17 @@ class ApprovalRequestRow(Base):
 
 
 class RoadmapPhaseRow(Base):
-    """A broad future phase. Only the near ones become executable nodes."""
+    """A broad future phase. Only the near ones become executable nodes.
+
+    `order` and `name` are both unique per project. Order is how the roadmap is
+    read; the name is how a node refers to its phase, so a duplicate name would
+    make `DagNode.roadmap_phase` ambiguous and the planning horizon undefined.
+    """
 
     __tablename__ = "roadmap_phases"
     __table_args__ = (
         UniqueConstraint("project_id", "order", name="uq_roadmap_phases_order"),
+        UniqueConstraint("project_id", "name", name="uq_roadmap_phases_name"),
     )
 
     phase_id: Mapped[str] = mapped_column(ID, primary_key=True)
@@ -273,7 +279,6 @@ class RoadmapPhaseRow(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     intent: Mapped[str] = mapped_column(Text, nullable=False, default="")
     order: Mapped[int] = mapped_column(Integer, nullable=False)
-    expanded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

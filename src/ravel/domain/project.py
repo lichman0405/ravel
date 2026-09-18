@@ -61,6 +61,16 @@ class RoadmapPhase(Record):
     The roadmap says where the project is going; the DAG says what to do next.
     Only the near part of the roadmap is expanded into executable nodes, which
     is what keeps planning honest when early results change the plan.
+
+    There is no `expanded` flag. Whether a phase has been committed to concrete
+    nodes is a fact about the DAG — the nodes that name this phase — and a flag
+    here would be a second copy of it that could drift out of agreement with the
+    first. `ravel.domain.planning` derives the horizon from the nodes instead.
+
+    The name is the phase's identity as far as the DAG is concerned: a node
+    names its phase by name, and the schema's `roadmap_phase` field is a string.
+    Names are therefore unique per project, enforced by a constraint on the
+    table rather than by convention here.
     """
 
     phase_id: str = Field(default_factory=new_id)
@@ -68,7 +78,6 @@ class RoadmapPhase(Record):
     name: str = Field(min_length=1)
     intent: str = ""
     order: int = Field(ge=0)
-    expanded: bool = False
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -87,8 +96,13 @@ class Roadmap(Record):
             raise ValueError("roadmap phases must be ordered by their `order` field")
         if len(set(orders)) != len(orders):
             raise ValueError("two roadmap phases share an `order` value")
+        names = [phase.name for phase in self.phases]
+        if len(set(names)) != len(names):
+            # A node names its phase by name, so two phases sharing one would
+            # make every node that names it ambiguous.
+            raise ValueError("two roadmap phases share a `name` value")
         return self
 
-    def expanded_phases(self) -> tuple[RoadmapPhase, ...]:
-        """The phases Master has committed to concrete nodes."""
-        return tuple(phase for phase in self.phases if phase.expanded)
+    def phase(self, name: str) -> RoadmapPhase | None:
+        """The phase with this name, if the roadmap has one."""
+        return next((phase for phase in self.phases if phase.name == name), None)
