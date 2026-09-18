@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import pytest
 
-from ravel.domain.enums import JoinPolicy, NodeStatus, NodeType, ProjectStatus
+from ravel.domain.enums import (
+    TERMINAL_JOB_STATES,
+    FailureClass,
+    JobState,
+    JoinPolicy,
+    NodeStatus,
+    NodeType,
+    ProjectStatus,
+)
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import (
     ACTIVE_NODE_STATUSES,
+    JOB_TRANSITIONS,
     NODE_TRANSITIONS,
     PROJECT_TRANSITIONS,
     TERMINAL_NODE_STATUSES,
     TERMINAL_PROJECT_STATUSES,
     TransitionError,
+    can_transition_job,
     can_transition_node,
     can_transition_project,
     executor_for,
@@ -207,3 +217,79 @@ def test_an_unreachable_threshold_is_a_fault_not_an_eternal_wait() -> None:
 
 def test_a_node_with_no_dependencies_is_always_ready() -> None:
     assert is_join_satisfied(None, None, 0, 0)
+
+
+# --------------------------------------------------------------------------
+# The job life cycle
+# --------------------------------------------------------------------------
+
+
+def test_the_job_table_covers_every_state() -> None:
+    """A state missing from the table would have no defined behavior."""
+    assert set(JOB_TRANSITIONS) == set(JobState)
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        (JobState.SUBMITTED, JobState.RUNNING),
+        (JobState.SUBMITTED, JobState.COMPLETED),
+        (JobState.RUNNING, JobState.WAITING_EXTERNAL),
+        (JobState.RUNNING, JobState.COMPLETED),
+        (JobState.RUNNING, JobState.FAILED),
+        (JobState.RUNNING, JobState.TIMED_OUT),
+        (JobState.WAITING_EXTERNAL, JobState.RUNNING),
+        (JobState.WAITING_EXTERNAL, JobState.COMPLETED),
+        (JobState.WAITING_EXTERNAL, JobState.FAILED),
+    ],
+)
+def test_a_legal_job_move_is_allowed(source: JobState, target: JobState) -> None:
+    assert can_transition_job(source, target).allowed
+
+
+@pytest.mark.parametrize("state", sorted(TERMINAL_JOB_STATES))
+def test_a_job_that_ended_did_not_end_another_way(state: JobState) -> None:
+    """The reason the retry policy can trust the state it reads.
+
+    A job reported COMPLETED and later FAILED would leave the durable layer
+    unable to decide whether the work was done, and the answer it picked would
+    be whichever report arrived last.
+    """
+    for target in JobState:
+        if target is state:
+            continue
+        check = can_transition_job(state, target)
+        assert not check.allowed
+        assert "contradicts a recorded ending" in check.reason
+
+
+@pytest.mark.parametrize("state", list(JobState))
+def test_reasserting_a_jobs_state_is_allowed(state: JobState) -> None:
+    """A poll that reports the same state twice is the normal case."""
+    assert can_transition_job(state, state).allowed
+
+
+def test_a_running_job_cannot_go_back_to_submitted() -> None:
+    """The backend does not un-accept work, so a report that says it did is a bug."""
+    assert not can_transition_job(JobState.RUNNING, JobState.SUBMITTED).allowed
+
+
+def test_the_terminal_job_states_are_the_expected_ones() -> None:
+    assert {
+        JobState.COMPLETED,
+        JobState.FAILED,
+        JobState.CANCELLED,
+        JobState.TIMED_OUT,
+    } == TERMINAL_JOB_STATES
+
+
+def test_a_failure_class_is_only_two_things() -> None:
+    """`acceptance/MOCK_SCENARIOS.yaml` fixes this list, and there is no "unknown".
+
+    A backend that cannot classify its failure reports none, and RAVEL reads
+    that as non-retryable rather than inventing a third value for it.
+    """
+    assert {member.value for member in FailureClass} == {
+        "INFRA_RETRYABLE",
+        "NON_RETRYABLE",
+    }

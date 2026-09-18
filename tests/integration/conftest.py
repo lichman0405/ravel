@@ -10,6 +10,13 @@ rejecting.
 every table, so pointing these tests at a developer's working database would
 destroy real projects. `_test_settings` refuses to run if the configured
 database name does not end in `_test`.
+
+**And it is checked for staleness.** `create_all` creates missing tables and
+leaves existing ones exactly as they are, so a rule added to a model after its
+table was first created never reaches this database. The symptom is ugly: a
+test that asserts the database refuses something instead watches it succeed,
+which reads as an unguarded column rather than as an old table.
+`_assert_schema_is_current` turns that into a sentence naming the table.
 """
 
 from __future__ import annotations
@@ -17,7 +24,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import CheckConstraint, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from ravel.config import Settings
@@ -70,8 +78,49 @@ def database(integration_settings: Settings) -> Iterator[Database]:
     # an existing schema must still be guarded.
     with engine.begin() as connection:
         guards.install(connection)
+    _assert_schema_is_current(engine)
     yield db
     db.dispose()
+
+
+def _assert_schema_is_current(engine: Engine) -> None:
+    """Refuse to run against tables older than the models that describe them.
+
+    Only check constraints are compared, and by name: they are where RAVEL puts
+    the rules that matter, and a name is enough to tell "this table predates the
+    rule" from "the rule is there". Worth the one catalog query per session,
+    because the failure it prevents is otherwise read as a missing guard.
+
+    Raises:
+        RuntimeError: A constraint the models declare is absent from the
+            database, which means the table was created before the rule was
+            added and `create_all` did not rewrite it.
+    """
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT relname, conname FROM pg_constraint "
+                "JOIN pg_class ON pg_class.oid = pg_constraint.conrelid "
+                "WHERE contype = 'c'"
+            )
+        ).all()
+    present = {(relname, conname) for relname, conname in rows}
+    stale = sorted(
+        f"{table.name}.{constraint.name}"
+        for table in Base.metadata.tables.values()
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+        and constraint.name is not None
+        and (table.name, constraint.name) not in present
+    )
+    if stale:
+        raise RuntimeError(
+            "the test database is older than the models, so these rules are not "
+            "in force: "
+            + ", ".join(stale)
+            + ". `create_all` does not alter a table that already exists; drop "
+            "the tables named above (DROP TABLE ... CASCADE) and run again."
+        )
 
 
 @pytest.fixture

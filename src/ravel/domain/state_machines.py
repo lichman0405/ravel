@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ravel.domain.enums import JoinPolicy, NodeStatus, NodeType, ProjectStatus
+from ravel.domain.enums import JobState, JoinPolicy, NodeStatus, NodeType, ProjectStatus
 from ravel.domain.roles import AgentRole
 
 #: Node status -> the statuses it may move to.
@@ -125,6 +125,51 @@ FROZEN_CRITERIA_NODE_TYPES: frozenset[NodeType] = frozenset(
     {NodeType.COMPUTATION, NodeType.EXPERIMENT}
 )
 
+#: Job state -> the states it may move to.
+#:
+#: The four terminal states have no outgoing edges, for the same reason the
+#: node's do not: a job that ended one way did not end another, and a later
+#: report that contradicts an earlier one is a new job, not an edit.
+#:
+#: `WAITING_EXTERNAL` exists as its own state rather than as a flavour of
+#: `RUNNING` because the two are bounded by different things. A running job is
+#: bounded by the machine it runs on; a job waiting on a laboratory is bounded
+#: by a person, which is why it is the one state a signal can end.
+JOB_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
+    JobState.SUBMITTED: frozenset(
+        {
+            JobState.RUNNING,
+            JobState.WAITING_EXTERNAL,
+            JobState.COMPLETED,
+            JobState.FAILED,
+            JobState.CANCELLED,
+            JobState.TIMED_OUT,
+        }
+    ),
+    JobState.RUNNING: frozenset(
+        {
+            JobState.WAITING_EXTERNAL,
+            JobState.COMPLETED,
+            JobState.FAILED,
+            JobState.CANCELLED,
+            JobState.TIMED_OUT,
+        }
+    ),
+    JobState.WAITING_EXTERNAL: frozenset(
+        {
+            JobState.RUNNING,
+            JobState.COMPLETED,
+            JobState.FAILED,
+            JobState.CANCELLED,
+            JobState.TIMED_OUT,
+        }
+    ),
+    JobState.COMPLETED: frozenset(),
+    JobState.FAILED: frozenset(),
+    JobState.CANCELLED: frozenset(),
+    JobState.TIMED_OUT: frozenset(),
+}
+
 
 class TransitionError(ValueError):
     """A requested state change is not legal."""
@@ -179,6 +224,29 @@ def can_transition_project(current: ProjectStatus, target: ProjectStatus) -> Tra
         if not allowed:
             return TransitionCheck(
                 False, f"{current.value} is terminal; the project cannot become {target.value}"
+            )
+        reachable = ", ".join(sorted(s.value for s in allowed))
+        return TransitionCheck(
+            False, f"{current.value} may not become {target.value}; allowed: {reachable}"
+        )
+    return TransitionCheck(True, f"{current.value} -> {target.value}")
+
+
+def can_transition_job(current: JobState, target: JobState) -> TransitionCheck:
+    """Whether a backend job may move from `current` to `target`."""
+    if current == target:
+        # Same reason as the node's: a poll that reports the state the job is
+        # already in is the normal case, not an error.
+        return TransitionCheck(True, f"{current.value} is already the job's state")
+
+    allowed = JOB_TRANSITIONS[current]
+    if target not in allowed:
+        if not allowed:
+            return TransitionCheck(
+                False,
+                f"the job ended as {current.value}; a later report of {target.value} "
+                "contradicts a recorded ending, which needs a new job rather than an "
+                "amendment",
             )
         reachable = ", ".join(sorted(s.value for s in allowed))
         return TransitionCheck(

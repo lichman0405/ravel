@@ -25,6 +25,8 @@ from ravel.domain.enums import (
     CompletenessVerdict,
     Confidence,
     DecisionType,
+    FailureClass,
+    JobState,
     NodeStatus,
     NodeType,
     ProjectStatus,
@@ -35,6 +37,7 @@ from ravel.domain.enums import (
 )
 from ravel.domain.events import ActorType, ProjectEvent, ProjectEventType
 from ravel.domain.execution import (
+    BackendJob,
     CompletenessCheck,
     DeviationRecord,
     ExecutionAttempt,
@@ -392,6 +395,119 @@ def test_attempts_are_counted() -> None:
 
 def test_delivery_completeness_is_a_separate_question_from_acceptance() -> None:
     assert _execution().delivery_is_complete
+
+
+def _job(**overrides: object) -> BackendJob:
+    defaults: dict[str, object] = {
+        "project_id": "proj-a",
+        "node_id": "n1",
+        "attempt": 1,
+        "execution_contract_ref": "ctr-1",
+        "execution_contract_version": 1,
+        "backend": "mock-compute",
+    }
+    defaults.update(overrides)
+    return BackendJob(**defaults)  # type: ignore[arg-type]
+
+
+def test_a_job_starts_submitted_and_unfinished() -> None:
+    job = _job()
+
+    assert job.state is JobState.SUBMITTED
+    assert not job.is_terminal
+    assert job.ended_at is None
+
+
+def test_a_job_that_ended_records_when() -> None:
+    """Without both halves, a reader cannot tell a finished job from a stuck one."""
+    with pytest.raises(ValidationError, match="records no end time"):
+        _job(state=JobState.COMPLETED)
+
+
+def test_a_job_that_is_still_running_records_no_end() -> None:
+    with pytest.raises(ValidationError, match="records an end time"):
+        _job(state=JobState.RUNNING, ended_at=utcnow())
+
+
+def test_a_reason_for_failing_only_belongs_to_a_failure() -> None:
+    """The class is what decides whether work is retried.
+
+    Left on a job that succeeded, it is a reason to repeat an experiment that
+    already produced a result.
+    """
+    with pytest.raises(ValidationError, match="only a job that failed has a reason"):
+        _job(state=JobState.COMPLETED, ended_at=utcnow(), failure_class=FailureClass.NON_RETRYABLE)
+
+
+def test_a_failed_job_may_say_why() -> None:
+    job = _job(
+        state=JobState.FAILED, ended_at=utcnow(), failure_class=FailureClass.INFRA_RETRYABLE
+    )
+
+    assert job.failure_class is FailureClass.INFRA_RETRYABLE
+    assert job.is_terminal
+
+
+def test_moving_a_job_returns_a_new_one() -> None:
+    job = _job()
+    moved = job.moved_to(JobState.RUNNING, backend_state="RUNNING")
+
+    assert job.state is JobState.SUBMITTED, "the original is unchanged"
+    assert moved.state is JobState.RUNNING
+    assert moved.backend_state == "RUNNING"
+
+
+def test_moving_into_a_terminal_state_sets_the_end_time() -> None:
+    moved = _job().moved_to(JobState.COMPLETED)
+
+    assert moved.ended_at is not None
+    assert moved.ended_at == moved.updated_at
+
+
+def test_a_job_that_ended_cannot_be_moved_again() -> None:
+    """The retry policy reads this state to decide whether to run the work again."""
+    ended = _job().moved_to(JobState.COMPLETED)
+
+    with pytest.raises(TransitionError, match="contradicts a recorded ending"):
+        ended.moved_to(JobState.FAILED, failure_class=FailureClass.NON_RETRYABLE)
+
+
+def test_restating_a_jobs_state_is_not_a_move() -> None:
+    """A poll that reports the same thing twice must not look like a change."""
+    job = _job(state=JobState.RUNNING)
+
+    assert job.moved_to(JobState.RUNNING) is job
+
+
+def test_a_free_text_state_is_kept_beside_ravels_own_word() -> None:
+    """The backend's vocabulary and RAVEL's answer different questions.
+
+    The compute contract says RUNNING and the experiment contract says ACTIVE
+    for the same thing; neither is an error, and a reader comparing the two
+    needs both.
+    """
+    moved = _job(backend="mock-lab").moved_to(JobState.RUNNING, backend_state="ACTIVE")
+
+    assert moved.state is JobState.RUNNING
+    assert moved.backend_state == "ACTIVE"
+
+
+def test_two_records_describe_the_same_work_when_they_name_the_same_work() -> None:
+    """`job_id` cannot answer this: a retried activity proposes the same work
+    under a new identifier."""
+    first = _job()
+    retry = _job()
+
+    assert first.job_id != retry.job_id
+    assert first.same_work_as(retry)
+
+
+def test_a_different_contract_version_is_different_work() -> None:
+    assert not _job().same_work_as(_job(execution_contract_version=2))
+
+
+def test_a_different_backend_is_different_work() -> None:
+    assert not _job().same_work_as(_job(backend="mock-lab"))
 
 
 def test_a_deviation_stays_open_until_a_decision_resolves_it() -> None:

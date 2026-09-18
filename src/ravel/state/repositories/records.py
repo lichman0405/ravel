@@ -14,21 +14,30 @@ All four are append-only. A deviation is the one exception in spirit: it is
 *resolved* by writing a decision reference onto it, which is a single
 permitted UPDATE, guarded by a check constraint that the reference and the
 timestamp appear together or not at all.
+
+`BackendJobRepository` sits here for the same reason the rest do: it is the
+record of work in flight, and the durable layer needs it to be a database fact
+rather than something a workflow remembers.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from ravel.domain.clock import utcnow
 from ravel.domain.decisions import DecisionRecord, ReviewRecord
-from ravel.domain.enums import Confidence, DecisionType
+from ravel.domain.enums import Confidence, DecisionType, FailureClass, JobState
 from ravel.domain.events import ActorType, ProjectEventType
-from ravel.domain.execution import DeviationRecord, ExecutionRecord
+from ravel.domain.execution import BackendJob, DeviationRecord, ExecutionRecord
 from ravel.domain.roles import AgentRole
+from ravel.state.mapping import to_row_data
 from ravel.state.outbox import emit
-from ravel.state.repositories.base import ProjectScopedRepository
+from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.tables import (
+    BackendJobRow,
     DecisionRecordRow,
     DeviationRecordRow,
     ExecutionRecordRow,
@@ -159,6 +168,159 @@ class ExecutionRepository(ProjectScopedRepository[ExecutionRecord]):
         return self.all(node_id=node_id)
 
 
+class BackendJobRepository(ProjectScopedRepository[BackendJob]):
+    """The job a backend is running for one attempt at one node.
+
+    `start` is the method the durable layer depends on, and it is the only
+    reason this repository exists in the shape it does. A worker that dies
+    between handing work to a backend and recording the result is retried, and
+    the retry must not hand the work over a second time. So starting is an
+    insert that conflicts rather than a check followed by an insert: the
+    database decides, and two activities racing produce one job rather than
+    two.
+    """
+
+    row_type = BackendJobRow
+    record_type = BackendJob
+
+    def _order_by(self) -> Any:
+        """Journey order, which for a job is attempt order.
+
+        The base repository sorts by `created_at`, and a job has none: a job's
+        clock starts when it is submitted, and its `updated_at` moves every
+        time a backend reports — so ordering by either would put the second
+        attempt before the first as soon as the first was polled.
+        """
+        return self.row_type.attempt
+
+    def for_attempt(self, node_id: str, attempt: int) -> BackendJob | None:
+        """The job already recorded for one attempt, if there is one."""
+        return self._one(node_id=node_id, attempt=attempt)
+
+    def for_node(self, node_id: str) -> list[BackendJob]:
+        """Every job this node has had, oldest attempt first."""
+        return sorted(self.all(node_id=node_id), key=lambda job: job.attempt)
+
+    def latest_for_node(self, node_id: str) -> BackendJob | None:
+        """The most recent attempt's job, if the node has one."""
+        jobs = self.for_node(node_id)
+        return jobs[-1] if jobs else None
+
+    def start(self, job: BackendJob) -> BackendJob:
+        """Record that a backend is taking on this attempt.
+
+        Idempotent by primary key of the work rather than by anything the
+        caller does: the row is keyed by `(project_id, node_id, attempt)`, so a
+        retried call finds the first one and returns it.
+
+        Raises:
+            ValueError: A job is already recorded for this attempt and it is
+                not the same job. That is not a retry; it means two different
+                pieces of work were proposed for one attempt, and returning
+                either one would hide it.
+        """
+        statement = (
+            pg_insert(BackendJobRow)
+            .values(**to_row_data(job))
+            .on_conflict_do_nothing(index_elements=["project_id", "node_id", "attempt"])
+            .returning(BackendJobRow.job_id)
+        )
+        inserted = self.session.execute(statement).scalar_one_or_none()
+        stored = self.for_attempt(job.node_id, job.attempt)
+        if stored is None:  # pragma: no cover - the insert cannot vanish
+            raise NotFound(
+                f"job for attempt {job.attempt} of node {job.node_id} was neither "
+                "inserted nor found, which means the row was removed"
+            )
+        if stored.job_id != job.job_id and not stored.same_work_as(job):
+            raise ValueError(
+                f"attempt {job.attempt} of node {job.node_id} is already recorded as "
+                f"job {stored.job_id} on backend {stored.backend!r} under contract "
+                f"version {stored.execution_contract_version}, which is not the job "
+                "now being started"
+            )
+        if inserted is not None:
+            self._emit(stored, change="STARTED")
+        return stored
+
+    def record_state(
+        self,
+        job_id: str,
+        state: JobState,
+        *,
+        backend_state: str = "",
+        backend_job_ref: str | None = None,
+        failure_class: FailureClass | None = None,
+        detail: str = "",
+    ) -> BackendJob:
+        """Move a job to a new state and record the change.
+
+        Re-asserting the state a job is already in writes nothing and emits
+        nothing, so a poll that reports the same thing twice does not fill the
+        event stream with it.
+
+        Raises:
+            TransitionError: The move is not legal, or the job has ended.
+        """
+        job = self.get(job_id=job_id)
+        reference = backend_job_ref or job.backend_job_ref
+        if job.state is state and reference == job.backend_job_ref:
+            return job
+        moved = job.moved_to(
+            state,
+            backend_state=backend_state,
+            failure_class=failure_class,
+            detail=detail,
+        )
+        moved = moved.model_validate({**moved.model_dump(), "backend_job_ref": reference})
+        row = self.session.get(BackendJobRow, job_id)
+        assert row is not None
+        row.state = moved.state.value
+        row.backend_state = moved.backend_state
+        row.failure_class = (
+            moved.failure_class.value if moved.failure_class is not None else None
+        )
+        row.detail = moved.detail
+        row.backend_job_ref = moved.backend_job_ref
+        row.updated_at = moved.updated_at
+        row.ended_at = moved.ended_at
+        self._emit(moved, change="STATE")
+        return moved
+
+    def _emit(self, job: BackendJob, *, change: str) -> None:
+        """Record the change in the project's stream.
+
+        `BACKEND_STATUS_CHANGED` is the event the vocabulary already had for
+        this, and it is emitted with the backend as the actor: RAVEL did not
+        decide the job was running, it was told.
+
+        The backend's own state word travels in the payload beside RAVEL's, so
+        a reader can see the two disagree without opening the table — and
+        `backend_job_ref` travels with it, because the moment RAVEL learns
+        which job on the backend this is, is a moment worth being able to find
+        again.
+        """
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.BACKEND_STATUS_CHANGED,
+            actor_type=ActorType.BACKEND,
+            actor_id=job.backend,
+            payload={
+                "change": change,
+                "job_id": job.job_id,
+                "node_id": job.node_id,
+                "attempt": job.attempt,
+                "backend_job_ref": job.backend_job_ref,
+                "backend_state": job.backend_state,
+                "state": job.state.value,
+                "failure_class": (
+                    job.failure_class.value if job.failure_class is not None else None
+                ),
+            },
+        )
+
+
 class DeviationRepository(ProjectScopedRepository[DeviationRecord]):
     """Requests a contract did not permit, waiting on Master."""
 
@@ -215,6 +377,7 @@ class RecordRepositories:
         self.reviews = ReviewRepository(session, project_id)
         self.executions = ExecutionRepository(session, project_id)
         self.deviations = DeviationRepository(session, project_id)
+        self.jobs = BackendJobRepository(session, project_id)
 
     def latest_execution(self, node_id: str) -> ExecutionRecord | None:
         """The most recent execution of a node, if any."""

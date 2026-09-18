@@ -51,7 +51,9 @@ from ravel.domain.enums import (
     Confidence,
     DecisionType,
     EvidenceSourceTier,
+    FailureClass,
     FailurePolicy,
+    JobState,
     JoinPolicy,
     NodeStatus,
     NodeType,
@@ -873,6 +875,83 @@ class DeviationRecordRow(Base):
     raised_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolved_by_decision_ref: Mapped[str | None] = mapped_column(REF)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+#: The terminal job states, as SQL literals, derived from the enum so a state
+#: added there cannot leave this constraint behind.
+_TERMINAL_JOB_STATES_SQL = ", ".join(
+    f"'{state.value}'" for state in JobState if state.is_terminal
+)
+
+#: The states a failure class may appear in. Deliberately narrower than the
+#: terminal set: a job that was cancelled, or that succeeded, did not fail, and
+#: the class is what decides whether work runs again.
+_FAILED_JOB_STATES_SQL = ", ".join(
+    f"'{state.value}'" for state in (JobState.FAILED, JobState.TIMED_OUT)
+)
+
+
+class BackendJobRow(Base):
+    """A job handed to a compute or experiment backend, while it is in flight.
+
+    Two constraints here are doing load-bearing work rather than describing the
+    data.
+
+    `one_job_per_attempt` is what makes starting a job idempotent. A worker
+    that dies between the backend accepting the work and the result being
+    recorded is retried, and the retry must find the job it already started
+    rather than start a second one. Because the uniqueness is enforced by the
+    database, the guarantee holds for a retry that races the original — two
+    activities that both try to insert get one row and one conflict, never two
+    rows.
+
+    `failure_class_only_on_failure` is what keeps the retry policy honest. The
+    class is what decides whether work runs again, so a class left on a job
+    that succeeded is a reason to repeat an experiment that already produced a
+    result.
+    """
+
+    __tablename__ = "backend_jobs"
+    __table_args__ = (
+        _enum_constraint("state", JobState),
+        _enum_constraint("failure_class", FailureClass),
+        CheckConstraint("attempt >= 1", name="attempt_is_positive"),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        CheckConstraint(
+            f"(state IN ({_TERMINAL_JOB_STATES_SQL})) = (ended_at IS NOT NULL)",
+            name="ending_is_all_or_nothing",
+        ),
+        CheckConstraint(
+            f"failure_class IS NULL OR state IN ({_FAILED_JOB_STATES_SQL})",
+            name="failure_class_only_on_failure",
+        ),
+        UniqueConstraint(
+            "project_id", "node_id", "attempt", name="one_job_per_attempt"
+        ),
+        Index("ix_backend_jobs_node_state", "node_id", "state"),
+    )
+
+    job_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    backend: Mapped[str] = mapped_column(String(64), nullable=False)
+    backend_job_ref: Mapped[str | None] = mapped_column(REF)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    backend_state: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    failure_class: Mapped[str | None] = mapped_column(String(32))
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class WorkerMessageRow(Base):

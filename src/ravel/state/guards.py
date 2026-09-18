@@ -35,17 +35,23 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: The tables where `UPDATE` is a legitimate operation. Everything else in
 #: RAVEL is append-only.
 #:
-#: Five of these carry a life cycle — a project's status, a node's status, an
-#: agent's last-seen time, an approval's resolution, a contract's freeze — and
-#: each is moved by a domain method with a state machine behind it. The sixth is
-#: the event counter, which is infrastructure rather than a record: it holds one
-#: integer and is advanced by `UPDATE ... RETURNING`.
+#: Seven of these carry a life cycle — a project's status, a node's status, an
+#: agent's last-seen time, an approval's resolution, a contract's freeze, a
+#: backend job's state — and each is moved by a domain method with a state
+#: machine behind it. The eighth is the event counter, which is infrastructure
+#: rather than a record: it holds one integer and is advanced by
+#: `UPDATE ... RETURNING`.
 #:
 #: The two contract tables are here for one column only. A contract's terms are
 #: fixed the moment it is written; `frozen_at` records *when* they became
 #: binding, and freezing is a one-way transition. Adding them without the
 #: accompanying trigger would open every column to rewriting, which is why
 #: `ravel_protect_contract_freeze` is attached alongside.
+#:
+#: `backend_jobs` is here for its state column, and it is the one table whose
+#: identity guard is not merely tidy: `attempt` is what makes starting a job
+#: idempotent, so a row whose attempt could be rewritten would let one job
+#: stand in for another.
 UPDATABLE_TABLES: frozenset[str] = frozenset(
     {
         "projects",
@@ -54,6 +60,7 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "approval_requests",
         "acceptance_contracts",
         "execution_contracts",
+        "backend_jobs",
         "project_event_counters",
     }
 )
@@ -61,16 +68,60 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
 #: The tables whose only mutable column is `frozen_at`.
 FREEZABLE_TABLES: tuple[str, ...] = ("acceptance_contracts", "execution_contracts")
 
+_IDENTITY_FUNCTION = """
+CREATE OR REPLACE FUNCTION ravel_protect_identity() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    column_name text;
+    old_row jsonb := to_jsonb(OLD);
+    new_row jsonb := to_jsonb(NEW);
+BEGIN
+    -- The immutable column list arrives as the trigger's arguments, so one
+    -- function serves every table that has identity columns and the list sits
+    -- next to the CREATE TRIGGER that uses it rather than inside a function
+    -- body. TG_ARGV[1] is the column the message names the row by.
+    FOREACH column_name IN ARRAY TG_ARGV LOOP
+        IF new_row -> column_name IS DISTINCT FROM old_row -> column_name THEN
+            RAISE EXCEPTION
+                '%.% is immutable; % % cannot be redefined in place',
+                TG_TABLE_NAME, column_name, TG_TABLE_NAME,
+                old_row ->> TG_ARGV[1]
+                USING ERRCODE = 'check_violation';
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END $$;
+"""
+
 #: Columns on `dag_nodes` that a transition may change. Anything else is
 #: part of the node's identity and is fixed for the node's lifetime.
-DAG_NODE_LIFECYCLE_COLUMNS: tuple[str, ...] = (
-    "status",
-    "started_at",
-    "completed_at",
-    "artifact_refs",
-    "acceptance_contract_ref",
+DAG_NODE_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "node_id",
+    "display_id",
+    "project_id",
+    "node_type",
+    "objective",
+    "executor_role",
+    "dependencies",
+    "join_policy",
+    "join_threshold",
+    "failure_policy",
+    "roadmap_phase",
+    "created_by",
+    "created_at",
+)
+
+#: Columns on `backend_jobs` that a state change may not touch. `job_id` is
+#: first because it is what the trigger names the row by.
+BACKEND_JOB_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "job_id",
+    "project_id",
+    "node_id",
+    "attempt",
     "execution_contract_ref",
-    "decision_ref",
+    "execution_contract_version",
+    "backend",
+    "submitted_at",
 )
 
 _TRANSITION_TABLE_DDL = """
@@ -123,31 +174,6 @@ BEGIN
             OLD.status, NEW.status, OLD.project_id
             USING ERRCODE = 'check_violation';
     END IF;
-    RETURN NEW;
-END $$;
-"""
-
-_DAG_NODE_IDENTITY_FUNCTION = """
-CREATE OR REPLACE FUNCTION ravel_protect_dag_node_identity() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-    immutable_columns text[] := ARRAY[
-        'node_id', 'display_id', 'project_id', 'node_type', 'objective',
-        'executor_role', 'dependencies', 'join_policy', 'join_threshold',
-        'failure_policy', 'roadmap_phase', 'created_by', 'created_at'
-    ];
-    column_name text;
-    old_row jsonb := to_jsonb(OLD);
-    new_row jsonb := to_jsonb(NEW);
-BEGIN
-    FOREACH column_name IN ARRAY immutable_columns LOOP
-        IF new_row -> column_name IS DISTINCT FROM old_row -> column_name THEN
-            RAISE EXCEPTION
-                'dag_nodes.% is immutable; node % cannot be redefined in place',
-                column_name, OLD.node_id
-                USING ERRCODE = 'check_violation';
-        END IF;
-    END LOOP;
     RETURN NEW;
 END $$;
 """
@@ -207,6 +233,7 @@ END $$;
 _NODE_TRANSITION_TRIGGER = "ravel_dag_nodes_transition"
 _PROJECT_TRANSITION_TRIGGER = "ravel_projects_transition"
 _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
+_BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -219,6 +246,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _NODE_TRANSITION_TRIGGER,
     _PROJECT_TRANSITION_TRIGGER,
     _DAG_NODE_IDENTITY_TRIGGER,
+    _BACKEND_JOB_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -227,11 +255,18 @@ GUARD_TRIGGERS: tuple[str, ...] = (
 GUARD_FUNCTIONS: tuple[str, ...] = (
     "ravel_enforce_node_transition",
     "ravel_enforce_project_transition",
-    "ravel_protect_dag_node_identity",
+    "ravel_protect_identity",
     "ravel_protect_contract_freeze",
     "ravel_reject_write",
     "ravel_reject_delete",
 )
+
+#: Guard functions that earlier revisions created under another name. One
+#: function now protects the identity columns of every table that has them, so
+#: the node-specific one it replaced is dropped rather than left behind: a
+#: database that has been migrated would otherwise keep a function that looks
+#: like an active guard and is called by nothing.
+_SUPERSEDED_FUNCTIONS: tuple[str, ...] = ("ravel_protect_dag_node_identity",)
 
 #: Lookup tables holding the transition rules, created outside the metadata.
 GUARD_TABLES: tuple[str, ...] = ("ravel_node_transitions", "ravel_project_transitions")
@@ -245,11 +280,19 @@ def _trigger_ddl(
     events: str,
     when: str = "BEFORE",
     for_each: str = "ROW",
+    arguments: tuple[str, ...] = (),
 ) -> str:
+    """The DDL for one trigger.
+
+    `arguments` are passed to the trigger function as `TG_ARGV`. Literal
+    quoting is safe here: every caller supplies column names from a module
+    constant, never from input.
+    """
+    passed = "".join(f", '{argument}'" for argument in arguments)
     return (
         f"DROP TRIGGER IF EXISTS {name} ON {table};\n"
         f"CREATE TRIGGER {name} {when} {events} ON {table} "
-        f"FOR EACH {for_each} EXECUTE FUNCTION {function}();"
+        f"FOR EACH {for_each} EXECUTE FUNCTION {function}({passed.lstrip(', ')});"
     )
 
 
@@ -285,10 +328,14 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
         _PROJECT_TRANSITION_TABLE_DDL,
         _NODE_TRIGGER_FUNCTION,
         _PROJECT_TRIGGER_FUNCTION,
-        _DAG_NODE_IDENTITY_FUNCTION,
+        _IDENTITY_FUNCTION,
         _REJECT_WRITE_FUNCTION,
         _REJECT_DELETE_FUNCTION,
         _CONTRACT_FREEZE_FUNCTION,
+        *(
+            f"DROP FUNCTION IF EXISTS {name}() CASCADE;"
+            for name in _SUPERSEDED_FUNCTIONS
+        ),
     ]
 
     existing = {name for name in table_names if name in _declared_table_names()}
@@ -306,8 +353,20 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
             _trigger_ddl(
                 name=_DAG_NODE_IDENTITY_TRIGGER,
                 table="dag_nodes",
-                function="ravel_protect_dag_node_identity",
+                function="ravel_protect_identity",
                 events="UPDATE",
+                arguments=DAG_NODE_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "backend_jobs" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_BACKEND_JOB_IDENTITY_TRIGGER,
+                table="backend_jobs",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=BACKEND_JOB_IDENTITY_COLUMNS,
             )
         )
 
@@ -437,7 +496,7 @@ def drop(bind: Any, table_names: frozenset[str] | None = None) -> None:
             bind.execute(  # type: ignore[attr-defined]
                 _text(f"DROP TRIGGER IF EXISTS {trigger} ON {table}")
             )
-    for function in GUARD_FUNCTIONS:
+    for function in (*GUARD_FUNCTIONS, *_SUPERSEDED_FUNCTIONS):
         bind.execute(_text(f"DROP FUNCTION IF EXISTS {function}()"))  # type: ignore[attr-defined]
     for table in GUARD_TABLES:
         bind.execute(_text(f"DROP TABLE IF EXISTS {table}"))  # type: ignore[attr-defined]

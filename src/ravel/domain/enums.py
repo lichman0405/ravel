@@ -193,6 +193,66 @@ class TerminationStatus(StrEnum):
     DEVIATION = "DEVIATION"
 
 
+class JobState(StrEnum):
+    """Where a job handed to a backend has got to, in RAVEL's vocabulary.
+
+    Two backend contracts describe the same journey in different words. The
+    compute contract says `SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED,
+    TIMED_OUT`; the experiment contract says `READY, ACTIVE, WAITING,
+    RESPONSE_AVAILABLE, COMPLETED, CANCELLED`. They are not the same
+    vocabulary, and merging them would lose what the two contracts were written
+    to distinguish — a lab task that is `WAITING` is not a compute job that is
+    `RUNNING`, and a result that is `RESPONSE_AVAILABLE` is not one that has
+    been collected.
+
+    So each backend maps its own states onto these, and the word the backend
+    itself used is kept beside it in `BackendJob.backend_state`. What this
+    vocabulary buys is a single question the durable layer can ask — "has it
+    ended, and how?" — without knowing which backend answered.
+    """
+
+    SUBMITTED = "SUBMITTED"
+    RUNNING = "RUNNING"
+    WAITING_EXTERNAL = "WAITING_EXTERNAL"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    TIMED_OUT = "TIMED_OUT"
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether the job has ended and nothing further will be reported."""
+        return self in TERMINAL_JOB_STATES
+
+
+#: The job states from which nothing follows.
+TERMINAL_JOB_STATES: frozenset[JobState] = frozenset(
+    {JobState.COMPLETED, JobState.FAILED, JobState.CANCELLED, JobState.TIMED_OUT}
+)
+
+
+class FailureClass(StrEnum):
+    """Why a job failed, from the closed list `acceptance/MOCK_SCENARIOS.yaml` fixes.
+
+    This is the distinction that decides whether the work is tried again, and
+    it is a fact about the machinery rather than about the science.
+
+    - `INFRA_RETRYABLE` — the machinery failed: a node went down, a queue
+      backed up, a scheduler lost the job. The result was never produced, so
+      nothing has been learned and re-running is not repeating an experiment.
+    - `NON_RETRYABLE` — the work itself failed. Retrying would produce the same
+      failure a second time, and the honest next step is a decision.
+
+    There is deliberately no third value for "unknown". A backend that cannot
+    classify its failure reports none, and RAVEL treats that as
+    `NON_RETRYABLE` — a failure nobody can explain is not one to repeat on the
+    chance that it goes away.
+    """
+
+    INFRA_RETRYABLE = "INFRA_RETRYABLE"
+    NON_RETRYABLE = "NON_RETRYABLE"
+
+
 class WorkerMessageKind(StrEnum):
     """The only four things a Worker may say to a lab."""
 
