@@ -142,12 +142,25 @@ def node_run_activities(activities: NodeRunActivities) -> list[Callable[..., Any
     ]
 
 
-def workflow_id_for(node_id: str) -> str:
-    """The workflow id one node's run is started under.
+def workflow_id_for(node_id: str, execution_contract_version: int) -> str:
+    """The workflow id one run of one node is started under.
 
-    Derived from the node rather than generated, so that starting a run twice
-    is refused by Temporal instead of producing two runs of one node. That
-    refusal is what makes "one node, one Execution Record" true without a
-    database constraint having to guess that a node cannot be re-run.
+    Derived from the node and the terms the run executes, rather than
+    generated, so that starting the same run twice is refused by Temporal
+    instead of producing two runs of one node — that refusal is what makes "one
+    node, one Execution Record" true without a database constraint having to
+    guess that a node cannot be re-run.
+
+    **The version is in the id because a contract revision is a second run.**
+    A Worker that stops because its terms refused something ends its run and
+    waits at WAITING_DECISION; Master answering by revising the contract leaves
+    the node in the plan, and the work then happens under the new terms. That
+    is a run of the same node, and a node identified by itself alone could
+    never have a second one — the first run's id would still be there, and
+    Temporal would refuse the start of the run that is the whole point of the
+    revision. Naming the terms in the id is also what the Execution Records
+    already do: `finish_node_run` finds its own earlier write by
+    `execution_contract_version`, which only means something if a node can have
+    run under more than one.
     """
-    return f"node-run:{node_id}"
+    return f"node-run:{node_id}:v{execution_contract_version}"

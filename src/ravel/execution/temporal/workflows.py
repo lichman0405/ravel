@@ -87,10 +87,14 @@ _ACTIVITY_RETRY = RetryPolicy(
 class NodeRunWorkflow:
     """A run of one node, from READY to REVIEWING.
 
-    Started with a workflow id derived from the node, so two runs of one node
-    are impossible rather than merely unlikely: Temporal refuses the second
-    start, and that refusal is what makes "one node, one Execution Record" true
-    without a database constraint guessing at it.
+    Started with a workflow id derived from the node and the version of its
+    contract, so two runs of the same work are impossible rather than merely
+    unlikely: Temporal refuses the second start, and that refusal is what makes
+    "one node, one Execution Record" true without a database constraint
+    guessing at it. A node whose terms were revised is not the same work, which
+    is why the version is in the id — answering an escalation with a revision
+    is an instruction to run again, and an id that named only the node would
+    make that instruction impossible to carry out.
     """
 
     def __init__(self) -> None:

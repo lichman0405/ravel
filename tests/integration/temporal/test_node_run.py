@@ -34,6 +34,7 @@ from sqlalchemy import text
 # to resolve against. `tests/live_research/conftest.py` reaches the integration
 # fixtures the same way.
 from tests.integration.temporal.conftest import (
+    FIRST_CONTRACT_VERSION,
     REQUIRED_OUTPUT,
     RunningWorker,
     await_state,
@@ -112,7 +113,10 @@ async def test_a_run_that_succeeds_hands_its_node_to_review(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -139,7 +143,10 @@ async def test_the_node_follows_its_job_into_an_external_wait(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         await _await(
             lambda: _node_status(database, node.node_id) == NodeStatus.WAITING_EXTERNAL.value
@@ -147,12 +154,17 @@ async def test_the_node_follows_its_job_into_an_external_wait(
 
         await client.deliver_external_result(
             node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
             result=ExternalResult(
                 summary="The lab reported the conductivity series.",
                 delivered_outputs=(REQUIRED_OUTPUT,),
             ),
         )
-        outcome = await client.result(node_id=node.node_id, timeout=timedelta(seconds=30))
+        outcome = await client.result(
+            node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+            timeout=timedelta(seconds=30),
+        )
     finally:
         await worker.stop_gracefully()
 
@@ -176,7 +188,10 @@ async def test_a_retryable_failure_runs_a_second_attempt_when_the_contract_allow
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -198,7 +213,10 @@ async def test_a_retryable_failure_is_not_retried_without_permission(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -223,7 +241,10 @@ async def test_a_scientific_failure_is_never_retried(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -268,7 +289,10 @@ async def test_killing_the_worker_mid_run_reaches_the_same_state_as_a_clean_run(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=clean_node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=clean_node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         clean = await handle.result()
     finally:
@@ -280,7 +304,10 @@ async def test_killing_the_worker_mid_run_reaches_the_same_state_as_a_clean_run(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=killed_node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=killed_node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         await _await(lambda: _job_states(database, killed_node.node_id) != [])
         await worker.kill()
@@ -313,7 +340,10 @@ async def test_a_worker_killed_while_a_run_waits_loses_nothing_authoritative(
     worker = await RunningWorker.start(client.settings, registry, database)
     try:
         await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         await _await(
             lambda: _node_status(database, node.node_id) == NodeStatus.WAITING_EXTERNAL.value
@@ -331,12 +361,17 @@ async def test_a_worker_killed_while_a_run_waits_loses_nothing_authoritative(
     try:
         await client.deliver_external_result(
             node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
             result=ExternalResult(
                 summary="The lab reported the conductivity series at last.",
                 delivered_outputs=(REQUIRED_OUTPUT,),
             ),
         )
-        outcome = await client.result(node_id=node.node_id, timeout=timedelta(seconds=30))
+        outcome = await client.result(
+            node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+            timeout=timedelta(seconds=30),
+        )
     finally:
         await replacement.stop_gracefully()
 

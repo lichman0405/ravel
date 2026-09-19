@@ -35,10 +35,16 @@ down_revision: str | None = "9e4c7b12af03"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-#: The constraint as the database knows it. Fully composed and marked with
-#: `op.f`, as the initial migration does: `NAMING_CONVENTION` would otherwise
-#: prefix the already-composed name a second time.
-CONSTRAINT = op.f("ck_decision_records_decision_type_is_known")
+def _constraint() -> str:
+    """The constraint as the database knows it.
+
+    Composed in full and marked with `op.f`, as the initial migration
+    does: `NAMING_CONVENTION` would otherwise prefix the already-composed
+    name a second time. A function rather than a module constant because
+    `op` is a proxy — calling it while the revisions are being loaded,
+    before any migration is running, raises instead of returning a name.
+    """
+    return op.f("ck_decision_records_decision_type_is_known")
 
 #: The vocabulary before this revision, without `CONCLUDE_INCONCLUSIVE`.
 BEFORE = (
@@ -58,18 +64,18 @@ AFTER = (
 
 
 def upgrade() -> None:
-    op.drop_constraint(CONSTRAINT, "decision_records", type_="check")
+    op.drop_constraint(_constraint(), "decision_records", type_="check")
     op.create_check_constraint(
-        CONSTRAINT, "decision_records", f"decision_type IN ({AFTER})"
+        _constraint(), "decision_records", f"decision_type IN ({AFTER})"
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint(CONSTRAINT, "decision_records", type_="check")
+    op.drop_constraint(_constraint(), "decision_records", type_="check")
     # Narrowing over the existing rows. A project concluded as inconclusive has
     # a decision this constraint would not admit, and the migration fails on it
     # rather than dropping the record of why the project ended. The choice
     # between the two belongs to whoever is rolling back.
     op.create_check_constraint(
-        CONSTRAINT, "decision_records", f"decision_type IN ({BEFORE})"
+        _constraint(), "decision_records", f"decision_type IN ({BEFORE})"
     )

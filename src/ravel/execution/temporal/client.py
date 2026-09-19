@@ -63,24 +63,33 @@ class NodeRunClient:
         project_id: str,
         node_id: str,
         actor_id: str,
+        execution_contract_version: int,
         attempt: int = 1,
     ) -> WorkflowHandle[NodeRunWorkflow, RunOutcome]:
-        """Begin a run of one node.
+        """Begin a run of one node under one version of its contract.
 
-        The workflow id is derived from the node, so a second start is refused
-        by Temporal rather than producing a second run of the same work.
+        The workflow id is derived from the node and the contract version, so a
+        second start of the *same* run is refused by Temporal rather than
+        producing a second run of the same work — and a node whose terms have
+        been revised can run again, which is what answering an escalation with
+        a revision means.
 
         Raises:
-            RunAlreadyStarted: A run of this node is already under way.
+            RunAlreadyStarted: A run of this node under these terms is already
+                under way.
         """
         order = RunInput(
-            project_id=project_id, node_id=node_id, actor_id=actor_id, attempt=attempt
+            project_id=project_id,
+            node_id=node_id,
+            actor_id=actor_id,
+            attempt=attempt,
+            execution_contract_version=execution_contract_version,
         )
         try:
             return await self.client.start_workflow(
                 NodeRunWorkflow.run,
                 order,
-                id=workflow_id_for(node_id),
+                id=workflow_id_for(node_id, execution_contract_version),
                 task_queue=self.settings.temporal_task_queue,
                 # Refuse rather than allow: a node that has already run must not
                 # silently run again because a caller retried a start. Running
@@ -97,24 +106,38 @@ class NodeRunClient:
             raise
 
     async def deliver_external_result(
-        self, *, node_id: str, result: ExternalResult
+        self,
+        *,
+        node_id: str,
+        execution_contract_version: int,
+        result: ExternalResult,
     ) -> None:
         """Tell a waiting run that what it was waiting for has happened.
 
         A signal, not an activity: the run is blocked in a durable wait and the
         signal is what ends it. The run then writes the result through an
         activity, which is what makes it survive the worker that received it.
+
+        Addressed by the terms the run is executing, because that is what
+        identifies the run: a node that has been revised and run again has more
+        than one, and the one waiting is the one under the newest terms.
         """
         handle = self.client.get_workflow_handle(
-            workflow_id_for(node_id), result_type=RunOutcome
+            workflow_id_for(node_id, execution_contract_version),
+            result_type=RunOutcome,
         )
         await handle.signal(NodeRunWorkflow.external_result, result)
 
     async def result(
-        self, *, node_id: str, timeout: timedelta | None = None
+        self,
+        *,
+        node_id: str,
+        execution_contract_version: int,
+        timeout: timedelta | None = None,
     ) -> RunOutcome:
         """Wait for a run to end and return how it ended."""
         handle = self.client.get_workflow_handle(
-            workflow_id_for(node_id), result_type=RunOutcome
+            workflow_id_for(node_id, execution_contract_version),
+            result_type=RunOutcome,
         )
         return await handle.result(rpc_timeout=timeout)

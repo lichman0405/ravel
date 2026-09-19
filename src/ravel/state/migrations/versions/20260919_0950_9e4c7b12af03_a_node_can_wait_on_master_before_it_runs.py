@@ -42,11 +42,16 @@ down_revision: str | None = "3d9a6f01b7c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-#: The constraint as the database knows it. Written out in full and marked with
-#: `op.f`, as the initial migration does: the name is composed from the table
-#: and the constraint through `NAMING_CONVENTION`, and passing the composed
-#: name back through that same convention would prefix it a second time.
-CONSTRAINT = op.f("ck_dag_nodes_started_nodes_have_a_start_time")
+def _constraint() -> str:
+    """The constraint as the database knows it.
+
+    Composed in full and marked with `op.f`, as the initial migration
+    does: `NAMING_CONVENTION` would otherwise prefix the already-composed
+    name a second time. A function rather than a module constant because
+    `op` is a proxy — calling it while the revisions are being loaded,
+    before any migration is running, raises instead of returning a name.
+    """
+    return op.f("ck_dag_nodes_started_nodes_have_a_start_time")
 
 #: Statuses that mean work began. `WAITING_DECISION` is not among them.
 STARTED = "'RUNNING', 'WAITING_EXTERNAL', 'REVIEWING', 'PASSED', 'FAILED', 'PARTIAL'"
@@ -56,22 +61,22 @@ BEFORE = f"{STARTED}, 'WAITING_DECISION'"
 
 
 def upgrade() -> None:
-    op.drop_constraint(CONSTRAINT, "dag_nodes", type_="check")
+    op.drop_constraint(_constraint(), "dag_nodes", type_="check")
     op.create_check_constraint(
-        CONSTRAINT,
+        _constraint(),
         "dag_nodes",
         f"status NOT IN ({STARTED}) OR started_at IS NOT NULL",
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint(CONSTRAINT, "dag_nodes", type_="check")
+    op.drop_constraint(_constraint(), "dag_nodes", type_="check")
     # Reinstating the narrower rule over the existing rows, so a node parked
     # before it ran fails the migration instead of being given a start time it
     # never had. Failing is the point: the choice between those two belongs to
     # whoever is rolling back, not to this script.
     op.create_check_constraint(
-        CONSTRAINT,
+        _constraint(),
         "dag_nodes",
         f"status NOT IN ({BEFORE}) OR started_at IS NOT NULL",
     )

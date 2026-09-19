@@ -32,6 +32,13 @@ class RunInput(BaseModel):
     project_id: str
     node_id: str
     attempt: int = Field(ge=1)
+    #: Which version of the node's execution contract this run executes, and
+    #: therefore which terms its Execution Record is written against. Carried
+    #: in the order rather than read when the run begins: `begin_node_run`
+    #: checks it against the newest version, so a run whose terms changed
+    #: between the order and the start is refused rather than quietly executed
+    #: under terms nobody asked for.
+    execution_contract_version: int = Field(ge=1)
     #: The role whose contract this run executes, recorded as the actor on
     #: every status report the workflow makes.
     actor_id: str

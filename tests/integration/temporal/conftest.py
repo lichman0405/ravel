@@ -73,6 +73,12 @@ from ravel.state.repositories.dag import DagRepository
 #: run that delivers nothing is visibly incomplete rather than ambiguously so.
 REQUIRED_OUTPUT = "conductivity.csv"
 
+#: The version of the first contract a node is bound to, which is what
+#: `runnable_node` freezes. A run is started under the terms it executes — that
+#: is what its workflow id is made of — so a test that starts one says which,
+#: and every node built here has had exactly one contract written for it.
+FIRST_CONTRACT_VERSION = 1
+
 
 @dataclass
 class ScriptedBackend:

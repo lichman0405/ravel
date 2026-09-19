@@ -208,9 +208,20 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         """
         return self.row_type.attempt
 
-    def for_attempt(self, node_id: str, attempt: int) -> BackendJob | None:
-        """The job already recorded for one attempt, if there is one."""
-        return self._one(node_id=node_id, attempt=attempt)
+    def for_attempt(
+        self, node_id: str, attempt: int, execution_contract_version: int
+    ) -> BackendJob | None:
+        """The job already recorded for one attempt at one version, if there is one.
+
+        All three parts are needed to name an attempt. A node whose contract was
+        revised runs again under the new version, and that run's first attempt is
+        attempt one — not the next number after the run that raised the question.
+        """
+        return self._one(
+            node_id=node_id,
+            attempt=attempt,
+            execution_contract_version=execution_contract_version,
+        )
 
     def for_node(self, node_id: str) -> list[BackendJob]:
         """Every job this node has had, oldest attempt first."""
@@ -225,7 +236,8 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         """Record that a backend is taking on this attempt.
 
         Idempotent by primary key of the work rather than by anything the
-        caller does: the row is keyed by `(project_id, node_id, attempt)`, so a
+        caller does: the row is keyed by
+        `(project_id, node_id, execution_contract_version, attempt)`, so a
         retried call finds the first one and returns it.
 
         Raises:
@@ -244,21 +256,31 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         statement = (
             pg_insert(BackendJobRow)
             .values(**to_row_data(job, BackendJobRow))
-            .on_conflict_do_nothing(index_elements=["project_id", "node_id", "attempt"])
+            .on_conflict_do_nothing(
+                index_elements=[
+                    "project_id",
+                    "node_id",
+                    "execution_contract_version",
+                    "attempt",
+                ]
+            )
             .returning(BackendJobRow.job_id)
         )
         inserted = self.session.execute(statement).scalar_one_or_none()
-        stored = self.for_attempt(job.node_id, job.attempt)
+        stored = self.for_attempt(
+            job.node_id, job.attempt, job.execution_contract_version
+        )
         if stored is None:  # pragma: no cover - the insert cannot vanish
             raise NotFound(
-                f"job for attempt {job.attempt} of node {job.node_id} was neither "
-                "inserted nor found, which means the row was removed"
+                f"job for attempt {job.attempt} of node {job.node_id} under contract "
+                f"version {job.execution_contract_version} was neither inserted nor "
+                "found, which means the row was removed"
             )
         if stored.job_id != job.job_id and not stored.same_work_as(job):
             raise ValueError(
-                f"attempt {job.attempt} of node {job.node_id} is already recorded as "
-                f"job {stored.job_id} on backend {stored.backend!r} under contract "
-                f"version {stored.execution_contract_version}, which is not the job "
+                f"attempt {job.attempt} of node {job.node_id} under contract version "
+                f"{job.execution_contract_version} is already recorded as job "
+                f"{stored.job_id} on backend {stored.backend!r}, which is not the job "
                 "now being started"
             )
         if inserted is not None:

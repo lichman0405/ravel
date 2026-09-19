@@ -46,6 +46,7 @@ from ravel.domain.execution import (
     WorkerMessage,
 )
 from ravel.domain.ids import new_id
+from ravel.domain.roles import AgentRole
 from ravel.execution.backends import (
     BackendRegistry,
     ExternalDelivery,
@@ -125,6 +126,16 @@ class NodeRunActivities:
             contract = ExecutionContractRepository(session, order.project_id).for_node(
                 order.node_id
             )
+            if contract.version != order.execution_contract_version:
+                raise ApplicationError(
+                    f"this run was ordered under version "
+                    f"{order.execution_contract_version} of {node.display_id}'s "
+                    f"contract and the newest is version {contract.version}; the "
+                    "terms changed between the order and the start, and a run "
+                    "that executed terms it was not ordered under would be "
+                    "measured against a contract nobody chose",
+                    non_retryable=True,
+                )
             if not contract.is_frozen:
                 raise ApplicationError(
                     f"node {node.display_id}'s execution contract is not frozen; a "
@@ -432,6 +443,26 @@ class NodeRunActivities:
         The Execution Record is still written, because the work that did happen
         is a fact about the project.
 
+        **Where a deviated node goes is read now, not inferred from the
+        ending.** Master may have answered the deviation while this run was
+        finishing: the deviation is visible to the loop the moment it is
+        recorded, and the loop asks Master about it immediately, so an answer
+        can arrive in the window between a Worker raising the question and this
+        activity writing the node's fate. Recording the question's own
+        destination then would park the node at WAITING_DECISION for an answer
+        already given — and nothing in RAVEL moves a node out of that state
+        except Master answering the deviation, which is no longer open, so
+        nobody is asked and the work stops forever. A run that finds its terms
+        revised carries the answer out instead, which `_ending_steps` spells as
+        the two transitions it is: the parking, and Master's revision resuming
+        the work under the new version.
+
+        A node something else has already retired stays retired. If Master
+        answered by replacing the work or ending the project, the node is
+        CANCELLED by the time this runs; the Execution Record is still written,
+        because the cancellation is a statement about the plan and the execution
+        is a statement about what happened.
+
         The node must be RUNNING, not WAITING_EXTERNAL: a run that was blocked on
         something outside RAVEL has already been brought back by whichever
         activity ended the wait, because the DAG's rule is that a wait ends by
@@ -467,11 +498,16 @@ class NodeRunActivities:
                 ]
                 if written:
                     return _outcome(written[-1], retry_reason)
-                raise ApplicationError(
-                    f"node {node.display_id} is {node.status.value} but the run that "
-                    "started it has only just ended; something else has moved it",
-                    non_retryable=True,
-                )
+                if not node.is_terminal:
+                    raise ApplicationError(
+                        f"node {node.display_id} is {node.status.value} but the run "
+                        "that started it has only just ended; something else has "
+                        "moved it",
+                        non_retryable=True,
+                    )
+                # Retired while its run was ending. The run still happened and
+                # the record below is what says so; the cancellation was
+                # somebody else's statement and stays theirs.
 
         backend = self.registry.named(plan.backend)
         outputs = (
@@ -491,9 +527,25 @@ class NodeRunActivities:
                 # the artifacts are the execution's, and Review reads them from
                 # the node it was handed.
                 dag.record_artifact(plan.node_id, artifact_id)
-            dag.transition_node(
-                plan.node_id, _ending_node(record), actor_id=plan.actor_id
-            )
+            if dag.node(plan.node_id).status is NodeStatus.RUNNING:
+                answer = _answer_to(records, deviation_id)
+                for step in _ending_steps(
+                    record,
+                    actor_id=plan.actor_id,
+                    deviation=answer,
+                    terms_revised=(
+                        ExecutionContractRepository(session, plan.project_id)
+                        .for_node(plan.node_id)
+                        .version
+                        > plan.execution_contract_version
+                    ),
+                ):
+                    dag.transition_node(
+                        plan.node_id,
+                        step.status,
+                        actor_id=step.actor_id,
+                        decision_ref=step.decision_ref,
+                    )
         return _outcome(record, retry_reason)
 
 
@@ -663,18 +715,86 @@ def _execution_record(
     )
 
 
-def _ending_node(record: ExecutionRecord) -> NodeStatus:
-    """Where the node goes once the run is over.
+def _answer_to(
+    records: RecordRepositories, deviation_id: str | None
+) -> DeviationRecord | None:
+    """The question this run raised, as it now stands.
 
-    Two destinations, and the difference is what the next role is being asked.
-    Review is asked what a result means; Master is asked what to do about a run
-    that stopped because nobody had said it was allowed. A deviation has no
-    result to review, so sending it to Review would be asking a question with no
-    material to answer it from.
+    Read from the repository rather than carried in the run's own state,
+    because whether it has been answered is a fact about the project and not
+    about this execution: Master may have answered while the run was still
+    ending. `None` means the run raised no question at all.
     """
-    if record.termination_status is TerminationStatus.DEVIATION:
-        return NodeStatus.WAITING_DECISION
-    return NodeStatus.REVIEWING
+    if deviation_id is None:
+        return None
+    return records.deviations.get(deviation_id=deviation_id)
+
+
+@dataclass(frozen=True, slots=True)
+class EndingStep:
+    """One status change the end of a run makes, and whose statement it is."""
+
+    #: Where the node goes.
+    status: NodeStatus
+    #: Who is saying so. The run for its own ending, Master for a revision.
+    actor_id: str
+    #: The Decision Record behind a step that carries out a decision.
+    decision_ref: str | None = None
+
+
+def _ending_steps(
+    record: ExecutionRecord,
+    *,
+    actor_id: str,
+    deviation: DeviationRecord | None,
+    terms_revised: bool,
+) -> tuple[EndingStep, ...]:
+    """Where the node goes once the run is over, as the steps that get it there.
+
+    Two destinations for an ordinary ending, and the difference is what the
+    next role is being asked. Review is asked what a result means; Master is
+    asked what to do about a run that stopped because nobody had said it was
+    allowed. A deviation has no result to review, so sending it to Review would
+    be asking a question with no material to answer it from.
+
+    **A deviation is read as it stands now.** A question that is still open
+    parks the node where Master will find it. A question Master has already
+    answered — which can happen while the run is still ending — does not, and
+    the answer decides instead: terms revised means the work runs again under
+    them, and anything else means the answer dealt with the node itself, which
+    leaves this transition nothing to say.
+
+    The revised case is **two steps rather than one**, because it is two
+    statements and the DAG records transitions one at a time. The run's own
+    statement is that it stopped to ask, and where that puts a node is
+    WAITING_DECISION; the revision's statement is that the work runs again under
+    the new terms, and where *that* puts a node is READY, under Master's
+    authority and against Master's Decision Record — not the Worker's. Written
+    as one transition it would be the Worker moving a node on the strength of a
+    decision it did not make, and there is no status for the pair of statements
+    taken together: a node whose run is over and whose terms have changed is
+    ready to run again, and RUNNING has no edge to READY because a run that is
+    still going is not.
+
+    A deviated node still in RUNNING with its question answered and no revision
+    is not reachable through the services (`ReplaceWork` and `Terminate` both
+    cancel the node), and REVIEWING is what this returns for it: Review is the
+    role that says a run produced nothing.
+    """
+    if record.termination_status is not TerminationStatus.DEVIATION:
+        return (EndingStep(NodeStatus.REVIEWING, actor_id),)
+    if deviation is None or deviation.is_open:
+        return (EndingStep(NodeStatus.WAITING_DECISION, actor_id),)
+    if not terms_revised:
+        return (EndingStep(NodeStatus.REVIEWING, actor_id),)
+    return (
+        EndingStep(NodeStatus.WAITING_DECISION, actor_id),
+        EndingStep(
+            NodeStatus.READY,
+            AgentRole.MASTER.value,
+            deviation.resolved_by_decision_ref,
+        ),
+    )
 
 
 def _delivery_message(plan: RunPlan, record: ExecutionRecord) -> WorkerMessage | None:

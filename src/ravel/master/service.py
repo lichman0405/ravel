@@ -37,6 +37,7 @@ from ravel.domain.dag import DagNode
 from ravel.domain.decisions import AffectedNodes, DecisionRecord
 from ravel.domain.enums import (
     DecisionType,
+    NodeStatus,
     ProjectOutcome,
     ProjectStatus,
 )
@@ -59,6 +60,7 @@ from ravel.state.repositories.records import DecisionRepository, DeviationReposi
 from ravel.state.services.dag import DecisionDraft
 
 __all__ = [
+    "ENDING_DECISION",
     "DeviationResolution",
     "MasterService",
     "ProjectConclusion",
@@ -72,7 +74,7 @@ __all__ = [
 #: vocabulary a reader searches the Decision Records with — so "why did this
 #: project stop" is answered by a query rather than by reading the DAG and
 #: reconstructing what Master must have meant.
-_ENDING_DECISION: dict[ProjectOutcome, DecisionType] = {
+ENDING_DECISION: dict[ProjectOutcome, DecisionType] = {
     ProjectOutcome.SUCCESS: DecisionType.ACCEPT_RESULT,
     ProjectOutcome.FAILED: DecisionType.REJECT_RESULT,
     ProjectOutcome.INCONCLUSIVE: DecisionType.CONCLUDE_INCONCLUSIVE,
@@ -127,6 +129,11 @@ class ResolvedDeviation:
     decision: DecisionRecord
     #: The node whose contract was revised, when that was the answer.
     revised: ExecutionContract | None = None
+    #: The node as the revision left it — READY, so that the work goes on. The
+    #: caller is shown the node rather than told it moved, because whether it
+    #: moved depends on where it was: a revision answers the node that asked,
+    #: and a node something else has already moved on from is left alone.
+    resumed: DagNode | None = None
     created: tuple[DagNode, ...] = ()
     cancelled: tuple[str, ...] = ()
     #: The project this resolution ended, when it ended one.
@@ -256,6 +263,16 @@ class MasterService:
         exactly as blocked as it was — the deviation would be closed, the
         decision would say the question was settled, and the next run would
         stop in the same place with nothing recording why.
+
+        **And the node is returned to READY**, which is the other half of
+        answering. A Worker that stopped is waiting at WAITING_DECISION, and
+        nothing else in RAVEL moves a node out of it: the loop starts what is
+        READY and touches nothing else, so a revision that left the node where
+        it was would close the escalation while leaving the work stopped
+        forever. It goes to READY rather than straight to RUNNING because
+        starting a run is the scheduler's, and a node that is ready is one the
+        scheduler will start — under the new version, which is what the run is
+        identified by.
         """
         if terms.node_id != deviation.node_id:
             raise ValueError(
@@ -284,11 +301,21 @@ class MasterService:
             affected=AffectedNodes(modified=(node.node_id,)),
         )
         written = self.executions.freeze(self.executions.add(terms).contract_id)
+        resumed = (
+            self.dag.transition_node(
+                node.node_id,
+                NodeStatus.READY,
+                actor_id=role.value,
+                decision_ref=record.decision_id,
+            )
+            if node.status is NodeStatus.WAITING_DECISION
+            else node
+        )
         resolved = self.deviations.resolve(
             deviation.deviation_id, decision_ref=record.decision_id
         )
         return ResolvedDeviation(
-            deviation=resolved, decision=record, revised=written
+            deviation=resolved, decision=record, revised=written, resumed=resumed
         )
 
     def _replace_work(
@@ -422,7 +449,7 @@ class MasterService:
                 nothing that passed.
         """
         require_master(role)
-        expected = _ENDING_DECISION[outcome]
+        expected = ENDING_DECISION[outcome]
         if decision.decision_type is not expected:
             raise ValueError(
                 f"concluding a project as {outcome.value} records a "

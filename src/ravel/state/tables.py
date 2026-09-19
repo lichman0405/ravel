@@ -913,6 +913,17 @@ class BackendJobRow(Base):
     activities that both try to insert get one row and one conflict, never two
     rows.
 
+    **An attempt belongs to a contract version, and the key says so.** The
+    version is part of what the work *is*, so it is part of what an attempt
+    counts: attempt two under version one and attempt one under version two are
+    two different pieces of work that happen to be the second and first tries
+    of their own terms. Numbering attempts by the node alone would make a
+    revised contract's run start at whatever number the previous run reached,
+    which contradicts the Execution Record — a record holds one run's attempts
+    and numbers them from one, because "attempt 3 of 2" is not a thing a reader
+    can interpret. With the version in the key, the attempt number means the
+    same thing in the job row, in the record, and in the workflow.
+
     `failure_class_only_on_failure` is what keeps the retry policy honest. The
     class is what decides whether work runs again, so a class left on a job
     that succeeded is a reason to repeat an experiment that already produced a
@@ -936,7 +947,11 @@ class BackendJobRow(Base):
             name="failure_class_only_on_failure",
         ),
         UniqueConstraint(
-            "project_id", "node_id", "attempt", name="one_job_per_attempt"
+            "project_id",
+            "node_id",
+            "execution_contract_version",
+            "attempt",
+            name="one_job_per_attempt",
         ),
         Index("ix_backend_jobs_node_state", "node_id", "state"),
     )

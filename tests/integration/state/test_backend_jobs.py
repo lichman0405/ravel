@@ -130,9 +130,9 @@ def test_a_second_attempt_is_a_second_job(
 ) -> None:
     """Retrying scientifically is a new attempt, and the row says so.
 
-    The whole reason the key is `(project, node, attempt)` rather than the node
-    alone: an infrastructure failure that is retried must leave both jobs
-    visible, so a reader can see that the work ran twice and why.
+    The whole reason the key names the attempt rather than the node alone: an
+    infrastructure failure that is retried must leave both jobs visible, so a
+    reader can see that the work ran twice and why.
     """
     with database.transaction() as session:
         repository = BackendJobRepository(session, project.project_id)
@@ -141,6 +141,45 @@ def test_a_second_attempt_is_a_second_job(
 
         assert first.job_id != second.job_id
         assert [job.attempt for job in repository.for_node(node.node_id)] == [1, 2]
+
+
+def test_a_revised_contracts_run_counts_its_attempts_from_one(
+    database: Database, project: Project, node: DagNode
+) -> None:
+    """The version is part of what an attempt counts.
+
+    Answering a Worker's escalation with a revised contract runs the node
+    again, and that run's first attempt is the first attempt of the work the
+    new contract describes. Numbering it after the run that raised the question
+    would produce an Execution Record the domain refuses — a record holds one
+    run's attempts and numbers them from one — so the key has to carry the
+    version, and the two jobs coexist rather than colliding.
+    """
+    with database.transaction() as session:
+        repository = BackendJobRepository(session, project.project_id)
+        first = repository.start(_job(project.project_id, node.node_id))
+        revised = repository.start(
+            _job(
+                project.project_id,
+                node.node_id,
+                execution_contract_ref="ctr-2",
+                execution_contract_version=2,
+            )
+        )
+
+        assert first.job_id != revised.job_id
+        assert revised.attempt == 1, (
+            "the run under the revised terms is the first attempt at that work"
+        )
+        assert [job.attempt for job in repository.for_node(node.node_id)] == [1, 1]
+
+    with database.read_only() as session:
+        stored = BackendJobRepository(session, project.project_id).for_attempt(
+            node.node_id, 1, 2
+        )
+    assert stored is not None and stored.job_id == revised.job_id, (
+        "an attempt is named by the node, the attempt number, and the version"
+    )
 
 
 def test_the_same_attempt_cannot_become_different_work(

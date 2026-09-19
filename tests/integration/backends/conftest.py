@@ -42,7 +42,9 @@ from tests.integration.conftest import (  # noqa: F401
     project,
 )
 from tests.integration.temporal.conftest import (  # noqa: F401
+    backend,
     execution_settings,
+    registry,
     temporal_unreachable,
 )
 

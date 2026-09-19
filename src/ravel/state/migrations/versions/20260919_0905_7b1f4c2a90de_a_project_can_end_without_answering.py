@@ -45,16 +45,21 @@ AFTER = (
     "'INCONCLUSIVE', 'CANCELLED'"
 )
 
-#: The constraint as the database knows it. Written out in full and marked with
-#: `op.f`, as the initial migration does: the name is composed from the table
-#: and the constraint through `NAMING_CONVENTION`, and passing the composed
-#: name back through that same convention would prefix it a second time.
-CONSTRAINT = op.f("ck_projects_status_is_known")
+def _constraint() -> str:
+    """The constraint as the database knows it.
+
+    Composed in full and marked with `op.f`, as the initial migration
+    does: `NAMING_CONVENTION` would otherwise prefix the already-composed
+    name a second time. A function rather than a module constant because
+    `op` is a proxy — calling it while the revisions are being loaded,
+    before any migration is running, raises instead of returning a name.
+    """
+    return op.f("ck_projects_status_is_known")
 
 
 def upgrade() -> None:
-    op.drop_constraint(CONSTRAINT, "projects", type_="check")
-    op.create_check_constraint(CONSTRAINT, "projects", f"status IN ({AFTER})")
+    op.drop_constraint(_constraint(), "projects", type_="check")
+    op.create_check_constraint(_constraint(), "projects", f"status IN ({AFTER})")
 
 
 def downgrade() -> None:
@@ -67,5 +72,5 @@ def downgrade() -> None:
     `ALTER` fails, naming the rows, if any of them hold the value. An operator
     who genuinely wants to go back has to decide what those projects concluded.
     """
-    op.drop_constraint(CONSTRAINT, "projects", type_="check")
-    op.create_check_constraint(CONSTRAINT, "projects", f"status IN ({BEFORE})")
+    op.drop_constraint(_constraint(), "projects", type_="check")
+    op.create_check_constraint(_constraint(), "projects", f"status IN ({BEFORE})")

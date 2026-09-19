@@ -7,6 +7,7 @@ and a caller wanting to know how a project ends is reading this one.
 
 from ravel.master.audit import ProjectAudit
 from ravel.master.service import (
+    ENDING_DECISION,
     DeviationResolution,
     MasterService,
     ProjectConclusion,
@@ -17,6 +18,7 @@ from ravel.master.service import (
 )
 
 __all__ = [
+    "ENDING_DECISION",
     "DeviationResolution",
     "MasterService",
     "ProjectAudit",

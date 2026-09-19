@@ -18,29 +18,58 @@ can move it.
 `WAITING_DECISION` would keep passing if the acceptance file changed its mind
 about what A11 requires, which is the drift this whole arrangement exists to
 prevent.
+
+The last group of tests is the other reading of the same report: what happens
+when Master has *answered* before the run has finished ending. That window is
+real — the deviation is visible to the loop the moment it is written, and the
+loop asks Master about it immediately — and it is too narrow to race on
+purpose, so those tests set the state up and call the activity that writes the
+ending.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
+from tests.integration.conftest import Prepared
 from tests.integration.temporal.conftest import (
+    FIRST_CONTRACT_VERSION,
     RunningWorker,
     await_state,
 )
 
 from ravel.backends import catalogue
+from ravel.config import Settings
+from ravel.domain.contracts import ExecutionContract
+from ravel.domain.dag import DagNode
 from ravel.domain.enums import (
     CompletenessVerdict,
+    Confidence,
+    DecisionType,
+    JobState,
     NodeStatus,
     NodeType,
     TerminationStatus,
     WorkerMessageKind,
 )
-from ravel.execution.temporal.contracts import ExternalResult
+from ravel.domain.execution import BackendJob, DeviationRecord
+from ravel.domain.roles import AgentRole
+from ravel.execution.backends import BackendRegistry
+from ravel.execution.temporal.activities import NodeRunActivities
+from ravel.execution.temporal.contracts import (
+    AttemptSummary,
+    ExternalResult,
+    RunOutcome,
+    RunPlan,
+)
+from ravel.master import MasterService, ReplaceWork, ReviseContract
 from ravel.state.database import Database
+from ravel.state.repositories.dag import DagRepository
+from ravel.state.repositories.records import RecordRepositories
+from ravel.state.services.dag import DecisionDraft
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]
 
@@ -68,6 +97,33 @@ def _node_status(database: Database, node_id: str) -> str:
         return session.execute(
             text("SELECT status FROM dag_nodes WHERE node_id = :n"), {"n": node_id}
         ).scalar_one()
+
+
+def _status_changes(
+    database: Database, project_id: str
+) -> list[tuple[str, str, str, str | None]]:
+    """Every node status change this project announced, in order.
+
+    Read from the event stream rather than from the node's current status,
+    because the question these tests ask of a race is not only *where the node
+    ended up* but *who said so* — and a project whose last writer is the only
+    one on the record cannot answer it.
+    """
+    with database.read_only() as session:
+        rows = session.execute(
+            text(
+                "SELECT actor_id, payload FROM project_events "
+                "WHERE project_id = :p "
+                "AND payload ->> 'from' IN ('RUNNING', 'WAITING_DECISION') "
+                "AND payload ->> 'status' IN ('WAITING_DECISION', 'READY') "
+                "ORDER BY seq"
+            ),
+            {"p": project_id},
+        ).all()
+    return [
+        (payload["from"], payload["status"], actor_id, payload["decision_ref"])
+        for actor_id, payload in rows
+    ]
 
 
 def _messages(database: Database, node_id: str) -> list[tuple[str, str]]:
@@ -166,7 +222,10 @@ async def test_a_lab_report_the_contract_does_not_permit_parks_the_node_for_mast
     )
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -233,7 +292,10 @@ async def test_a_deviation_does_not_consume_a_retry(
     )
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -276,7 +338,10 @@ async def test_a_partial_delivery_sends_the_node_to_review_with_a_message(
     )
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -324,7 +389,10 @@ async def test_a_complete_lab_delivery_sends_the_node_to_review_in_silence(
     )
     try:
         handle = await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         outcome = await handle.result()
     finally:
@@ -359,7 +427,10 @@ async def test_a_lab_that_waits_resumes_from_the_signal_and_finishes(
     )
     try:
         await client.start_node_run(
-            project_id=project.project_id, node_id=node.node_id, actor_id=ACTOR
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
         )
         await await_state(
             lambda: _node_status(database, node.node_id) == NodeStatus.WAITING_EXTERNAL.value
@@ -368,15 +439,298 @@ async def test_a_lab_that_waits_resumes_from_the_signal_and_finishes(
 
         await client.deliver_external_result(
             node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
             result=ExternalResult(
                 summary="The operator confirmed the run.",
                 delivered_outputs=("experiment_log", "raw_data"),
             ),
         )
-        outcome = await client.result(node_id=node.node_id, timeout=RESULT_TIMEOUT)
+        outcome = await client.result(
+            node_id=node.node_id,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+            timeout=RESULT_TIMEOUT,
+        )
     finally:
         await worker.stop_gracefully()
 
     assert outcome.termination_status is TerminationStatus.COMPLETED
     assert outcome.completeness is CompletenessVerdict.COMPLETE
     assert _node_status(database, node.node_id) == NodeStatus.REVIEWING.value
+
+
+# ── A report Master answers before the run has finished ending ──────────────
+
+
+@dataclass(frozen=True, slots=True)
+class Stopped:
+    """A run a report has stopped, with the node not yet moved."""
+
+    plan: RunPlan
+    job_id: str
+    deviation: DeviationRecord
+
+
+def _stopped_by_a_report(
+    database: Database, project_id: str, prepared: Prepared, action: str
+) -> Stopped:
+    """Leave the project exactly where `check_job` leaves it after a report.
+
+    Three writes, in the order the activity makes them: the node runs, the job
+    is stopped, and the deviation is recorded — the node itself is not moved,
+    because where it goes is `finish_node_run`'s to decide and that is the
+    decision under test.
+
+    Written directly rather than by driving a worker, because the moment is a
+    *window*: the deviation exists, the run has not finished ending, and Master
+    answers in between. A test that raced a real run for that window would be
+    asserting that the machine was not busy.
+    """
+    with database.transaction() as session:
+        dag = DagRepository(session, project_id)
+        dag.transition_node(
+            prepared.node_id, NodeStatus.RUNNING, actor_id="experimental-worker"
+        )
+        records = RecordRepositories(session, project_id)
+        job = records.jobs.start(
+            BackendJob(
+                project_id=project_id,
+                node_id=prepared.node_id,
+                attempt=1,
+                execution_contract_ref=prepared.contract.contract_id,
+                execution_contract_version=prepared.contract.version,
+                backend="scripted-test-backend",
+                backend_job_ref="scripted-test-backend-job-1",
+            )
+        )
+        stopped = records.jobs.record_state(
+            job.job_id, JobState.CANCELLED, detail="the contract did not permit it"
+        )
+        deviation = records.deviations.raise_(
+            DeviationRecord(
+                project_id=project_id,
+                node_id=prepared.node_id,
+                execution_contract_ref=prepared.contract.contract_id,
+                requested_action=action,
+                description=f"the contract does not list the action {action!r}",
+                raised_by="backend:scripted-test-backend",
+            )
+        )
+    return Stopped(
+        plan=RunPlan(
+            project_id=project_id,
+            node_id=prepared.node_id,
+            display_id=prepared.node.display_id,
+            attempt=1,
+            actor_id="experimental-worker",
+            backend="scripted-test-backend",
+            execution_contract_ref=prepared.contract.contract_id,
+            execution_contract_version=prepared.contract.version,
+            objective=prepared.contract.objective,
+            required_outputs=prepared.contract.required_outputs,
+        ),
+        job_id=stopped.job_id,
+        deviation=deviation,
+    )
+
+
+async def _end_the_run(
+    database: Database,
+    settings: Settings,
+    registry: BackendRegistry,
+    stopped: Stopped,
+    deviation_id: str | None,
+) -> RunOutcome:
+    """End the run through the activity that writes the ending.
+
+    Called directly rather than through a worker: the state under test is one a
+    workflow would have to be interrupted at the right instant to reach, and the
+    activity is the thing whose behaviour is in question.
+    """
+    return await NodeRunActivities(
+        settings=settings, database=database, registry=registry
+    ).finish_node_run(
+        stopped.plan,
+        stopped.job_id,
+        [
+            AttemptSummary(
+                attempt=1,
+                started_at=stopped.deviation.raised_at,
+                ended_at=stopped.deviation.raised_at,
+                backend_job_ref="scripted-test-backend-job-1",
+                outcome=TerminationStatus.CANCELLED,
+                note="stopped for a deviation",
+            )
+        ],
+        "the run was stopped by a deviation",
+        deviation_id,
+    )
+
+
+def _answer_with_a_revision(
+    database: Database, project_id: str, stopped: Stopped, action: str
+) -> ExecutionContract:
+    """Master permits what the Worker asked for, under a second version."""
+    terms = ExecutionContract(
+        project_id=project_id,
+        node_id=stopped.plan.node_id,
+        version=stopped.plan.execution_contract_version + 1,
+        objective=stopped.plan.objective,
+        allowed_actions=(action,),
+        required_outputs=stopped.plan.required_outputs,
+    )
+    with database.transaction() as session:
+        MasterService(session, project_id).resolve_deviation(
+            stopped.deviation.deviation_id,
+            ReviseContract(terms=terms),
+            role=AgentRole.MASTER,
+            decision=DecisionDraft(
+                decision_type=DecisionType.REVISE_EXECUTION_CONTRACT,
+                rationale=(
+                    f"The worker asked for {action!r} and the contract did not "
+                    "name it. The action is sound here, so the contract is "
+                    "widened rather than the work abandoned."
+                ),
+                confidence=Confidence.MEDIUM,
+            ),
+        )
+    return terms
+
+
+async def test_a_report_master_has_already_answered_does_not_park_the_node(
+    database: Database,
+    project,
+    prepare,
+    registry,
+    execution_settings: Settings,
+) -> None:
+    """The answer must not be undone by the run ending after it.
+
+    The loop reads the deviation as soon as it is written and asks Master about
+    it, so an answer can land in the window between a Worker raising the
+    question and the run writing where the node goes. Parking the node at
+    WAITING_DECISION then would wait for an answer already given — and since
+    nothing but answering a *open* deviation moves a node out of that state,
+    the work would stop forever with everyone believing it was answered.
+
+    The revised terms are the answer: the node goes back to READY, and the
+    scheduler starts it under version two.
+    """
+    action = "run_at_pressure"
+    prepared = prepare(node_type=NodeType.EXPERIMENT, required_outputs=("experiment_log",))
+    stopped = _stopped_by_a_report(database, project.project_id, prepared, action)
+
+    revised = _answer_with_a_revision(database, project.project_id, stopped, action)
+    assert _node_status(database, prepared.node_id) == NodeStatus.RUNNING.value, (
+        "the node was still running when Master answered, which is the whole "
+        "reason the ending has to be written from the state it finds"
+    )
+
+    outcome = await _end_the_run(
+        database, execution_settings, registry, stopped, stopped.deviation.deviation_id
+    )
+
+    assert outcome.termination_status is TerminationStatus.DEVIATION
+    assert _node_status(database, prepared.node_id) == NodeStatus.READY.value, (
+        "the node is ready to run again under the revised terms, rather than "
+        "waiting for an answer it has already been given"
+    )
+    with database.read_only() as session:
+        records = RecordRepositories(session, project.project_id)
+        written = records.executions.for_node(prepared.node_id)
+        open_now = records.deviations.open()
+        answer = records.deviations.get(deviation_id=stopped.deviation.deviation_id)
+    assert len(written) == 1, "the run that happened is recorded whatever the answer"
+    assert written[0].execution_contract_version == stopped.plan.execution_contract_version
+    assert open_now == [], "the deviation Master answered is closed"
+    assert revised.version == stopped.plan.execution_contract_version + 1
+
+    assert _status_changes(database, project.project_id) == [
+        ("RUNNING", "WAITING_DECISION", "experimental-worker", None),
+        ("WAITING_DECISION", "READY", "master", answer.resolved_by_decision_ref),
+    ], (
+        "two statements, recorded as two: the run stopped to ask, and Master's "
+        "revision resumed the work — under Master's name and against the "
+        "Decision Record, not the Worker's"
+    )
+
+
+async def test_a_node_master_retired_while_its_run_ended_keeps_its_status(
+    database: Database,
+    project,
+    prepare,
+    registry,
+    execution_settings: Settings,
+) -> None:
+    """The other answer, and the run is recorded either way.
+
+    Master can answer an escalation by doing something else instead, and that
+    cancels the node — while its run is still finishing. The execution is a fact
+    about what happened and is written; the cancellation is a statement about
+    the plan, and the run ending does not get to contradict it.
+    """
+    action = "run_at_pressure"
+    prepared = prepare(node_type=NodeType.EXPERIMENT, required_outputs=("experiment_log",))
+    stopped = _stopped_by_a_report(database, project.project_id, prepared, action)
+
+    replacement = DagNode.create(
+        project_id=project.project_id,
+        node_type=NodeType.EXPERIMENT,
+        objective="Ask the same question on the bench instead.",
+        created_by=AgentRole.MASTER.value,
+    )
+    with database.transaction() as session:
+        MasterService(session, project.project_id).resolve_deviation(
+            stopped.deviation.deviation_id,
+            ReplaceWork(replacements=(replacement,)),
+            role=AgentRole.MASTER,
+            decision=DecisionDraft(
+                decision_type=DecisionType.REPLACE_NODE,
+                rationale="The question is asked a different way.",
+                confidence=Confidence.MEDIUM,
+            ),
+        )
+
+    outcome = await _end_the_run(
+        database, execution_settings, registry, stopped, stopped.deviation.deviation_id
+    )
+
+    assert outcome.termination_status is TerminationStatus.DEVIATION
+    assert _node_status(database, prepared.node_id) == NodeStatus.CANCELLED.value
+    with database.read_only() as session:
+        written = RecordRepositories(session, project.project_id).executions.for_node(
+            prepared.node_id
+        )
+    assert len(written) == 1, (
+        "the run happened even though the node was retired while it ended, and "
+        "a project that did not record it would have an execution nobody can "
+        "explain"
+    )
+
+
+async def test_an_unanswered_report_still_parks_the_node(
+    database: Database,
+    project,
+    prepare,
+    registry,
+    execution_settings: Settings,
+) -> None:
+    """The control: nothing about the ending changed for the ordinary case.
+
+    Without this, "the node was moved on" and "the node is never parked at all"
+    would look the same from the tests above — and parking it is what makes
+    A11's escalation reach Master in the first place.
+    """
+    prepared = prepare(node_type=NodeType.EXPERIMENT, required_outputs=("experiment_log",))
+    stopped = _stopped_by_a_report(
+        database, project.project_id, prepared, "run_at_pressure"
+    )
+
+    outcome = await _end_the_run(
+        database, execution_settings, registry, stopped, stopped.deviation.deviation_id
+    )
+
+    assert outcome.termination_status is TerminationStatus.DEVIATION
+    assert _node_status(database, prepared.node_id) == NodeStatus.WAITING_DECISION.value
+    with database.read_only() as session:
+        still_open = RecordRepositories(session, project.project_id).deviations.open()
+    assert [item.deviation_id for item in still_open] == [stopped.deviation.deviation_id]
