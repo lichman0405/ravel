@@ -22,12 +22,18 @@ chosen afterwards. Wanting a different dependency means opening a new node.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from sqlalchemy import func, select
 
 from ravel.domain.dag import DagEdge, DagNode
-from ravel.domain.enums import NodeStatus, NodeType, ReviewCheckpoint, ReviewOutcome
+from ravel.domain.enums import (
+    FailurePolicy,
+    NodeStatus,
+    NodeType,
+    ReviewCheckpoint,
+    ReviewOutcome,
+)
 from ravel.domain.events import ActorType, ProjectEventType
 from ravel.domain.roles import AgentRole, require_role
 from ravel.domain.state_machines import (
@@ -152,6 +158,46 @@ class DagRepository(ProjectScopedRepository[DagNode]):
             .all()
         )
         return [from_row(DagEdge, row) for row in rows]
+
+    def descendants(self, node_id: str) -> list[DagNode]:
+        """Every node that depends on this one, directly or through others.
+
+        Breadth-first over the dependency edges, so the order is by distance
+        from the node asked about. That ordering is load-bearing for the caller
+        this exists for: retiring what a failure stranded has to reach the
+        immediate dependants before their own dependants, because cancelling one
+        is what makes the next unsatisfiable. A depth-first walk would reach a
+        distant node before a near one and judge its fan-in against a graph
+        that had not been settled yet.
+
+        The node itself is not included. A node is not its own descendant, and
+        a method whose name says "descendants" that returned the node you asked
+        about is how a retirement loop eats the thing it was called for.
+
+        Edges are read from `dag_edges` rather than from each node's
+        `dependencies` list. The two are written together when a node is created
+        and the edges are the ones PostgreSQL holds a foreign key for, so the
+        graph walk is over the copy the database can vouch for.
+        """
+        dependents: dict[str, list[str]] = {}
+        for edge in self.edges():
+            dependents.setdefault(edge.from_node, []).append(edge.to_node)
+
+        by_id = {node.node_id: node for node in self.nodes()}
+        found: list[DagNode] = []
+        seen = {node_id}
+        frontier = [node_id]
+        while frontier:
+            following: list[str] = []
+            for current in frontier:
+                for dependent_id in dependents.get(current, ()):
+                    if dependent_id in seen:
+                        continue
+                    seen.add(dependent_id)
+                    following.append(dependent_id)
+                    found.append(by_id[dependent_id])
+            frontier = following
+        return found
 
     # ── Mutation ────────────────────────────────────────────────────────────
 
@@ -562,10 +608,23 @@ class DagRepository(ProjectScopedRepository[DagNode]):
 
     # ── Scheduling ──────────────────────────────────────────────────────────
 
-    def dependency_states(self, node: DagNode) -> tuple[int, int, int]:
-        """`(succeeded, still_running, failed)` among a node's dependencies."""
+    def dependency_states(
+        self, node: DagNode, *, doomed: Collection[str] = frozenset()
+    ) -> tuple[int, int, int]:
+        """`(succeeded, still_running, failed)` among a node's dependencies.
+
+        `doomed` names nodes a caller is about to cancel, and they are counted
+        as failed rather than as still running. That is what makes it possible
+        to ask what a retirement *would* strand before performing it — a
+        question that has to be answerable in advance, because the decision
+        authorizing a replan has to name the nodes it retires and is written
+        before the DAG changes.
+        """
         succeeded = still_running = failed = 0
         for dependency_id in node.dependencies:
+            if dependency_id in doomed:
+                failed += 1
+                continue
             dependency = self.node(dependency_id)
             if dependency.succeeded:
                 succeeded += 1
@@ -575,22 +634,72 @@ class DagRepository(ProjectScopedRepository[DagNode]):
                 still_running += 1
         return succeeded, still_running, failed
 
-    def join_state(self, node: DagNode) -> str:
-        """Whether a node's fan-in is `satisfied`, `waiting`, or `unsatisfiable`."""
-        succeeded, still_running, _ = self.dependency_states(node)
+    def join_state(
+        self, node: DagNode, *, doomed: Collection[str] = frozenset()
+    ) -> str:
+        """Whether a node's fan-in is `satisfied`, `waiting`, or `unsatisfiable`.
+
+        **`failure_policy` is read here, and this is the only place it is
+        read.** `CONTINUE` says the node accepts a branch that ended badly, so a
+        failed dependency counts as one that has *answered* — which is what
+        makes a failure-tolerant branch runnable instead of blocked. `BLOCK` and
+        `MASTER_DECIDES` count it as it is, so the node blocks and waits for a
+        decision. The three policies differ in exactly this: what a settled
+        branch that did not succeed is worth to the fan-in.
+
+        The counting is `dependency_states`; how the counts are judged is
+        `is_join_satisfied` and `is_join_unsatisfiable`. This function is the
+        join between them, and the policy has to be applied at the join because
+        neither of the other two knows what the node is.
+
+        `doomed` is passed through to `dependency_states`; see there.
+        """
+        succeeded, still_running, failed = self.dependency_states(node, doomed=doomed)
+        settled = succeeded
+        if node.failure_policy is FailurePolicy.CONTINUE:
+            settled += failed
         if is_join_satisfied(
-            node.join_policy, node.join_threshold, len(node.dependencies), succeeded
+            node.join_policy, node.join_threshold, len(node.dependencies), settled
         ):
             return "satisfied"
         if is_join_unsatisfiable(
             node.join_policy,
             node.join_threshold,
             len(node.dependencies),
-            succeeded,
+            settled,
             still_running,
         ):
             return "unsatisfiable"
         return "waiting"
+
+    def stranded_by(self, node_id: str) -> list[DagNode]:
+        """The descendants of a node whose fan-in can no longer be satisfied.
+
+        The read half of A09's replanning: this answers *what a failure
+        stranded* without changing anything, which is what a caller needs
+        before it can write the decision that authorizes retiring it.
+
+        Depth is carried in the walk, not assumed from the failure. A node one
+        step away is stranded by the failure itself; one two steps away may be
+        stranded only by the cancellation of the first, because a node that is
+        doomed counts as failed to its own dependants. Each node judged
+        stranded joins the doomed set before the next is considered, and the
+        breadth-first order `descendants` returns is what makes that reach the
+        whole second layer rather than stopping at the first.
+
+        Terminal descendants are skipped: a node that already passed is not
+        waiting for anything, and one already failed or cancelled has had its
+        ending recorded and is not retired twice.
+        """
+        doomed: set[str] = set()
+        stranded: list[DagNode] = []
+        for descendant in self.descendants(node_id):
+            if descendant.status in TERMINAL_NODE_STATUSES:
+                continue
+            if self.join_state(descendant, doomed=doomed) == "unsatisfiable":
+                doomed.add(descendant.node_id)
+                stranded.append(descendant)
+        return stranded
 
     def refresh_readiness(self) -> list[DagNode]:
         """Promote planned nodes whose fan-in is settled.

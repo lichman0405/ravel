@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import AffectedNodes, AuthorityCheck, DecisionRecord
-from ravel.domain.enums import Confidence, DecisionType
+from ravel.domain.enums import Confidence, DecisionType, NodeStatus
 from ravel.domain.planning import PhaseWork, PlanningHorizon, planning_horizon
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import TERMINAL_NODE_STATUSES
@@ -106,6 +106,24 @@ class PhaseExpansion:
     phase: str
     decision: DecisionRecord
     nodes: tuple[DagNode, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Replan:
+    """What Master put in place of the work a failure stranded.
+
+    `retired` is computed rather than accepted from the caller, and that is the
+    point of the record: it names the nodes whose fan-in could no longer be
+    satisfied *because of this failure*, which is a fact about the graph and not
+    a list someone chose. A caller able to supply it could leave a stranded node
+    in the plan, and the plan would then contain work that can never run with
+    nothing in the DAG saying so.
+    """
+
+    failed_node: str
+    decision: DecisionRecord
+    retired: tuple[str, ...] = ()
+    created: tuple[DagNode, ...] = ()
 
 
 class DagMutationService:
@@ -214,6 +232,115 @@ class DagMutationService:
             self._apply_nodes(attached, role=role, decision_ref=record.decision_id)
         )
         return PhaseExpansion(phase=phase, decision=record, nodes=written)
+
+    def replan_after_failure(
+        self,
+        failed_node_id: str,
+        replacements: Sequence[DagNode],
+        *,
+        role: AgentRole,
+        decision: DecisionDraft,
+    ) -> Replan:
+        """Put new work in place of what a failure stranded, and record why.
+
+        This is A09. A node that failed stays failed — the DAG is history as
+        well as a plan, and the *only* thing that may be done to a FAILED node
+        is to read it. What changes is the future: the descendants whose fan-in
+        can no longer be satisfied are cancelled, and the replacements take
+        their place, all under one Decision Record.
+
+        **What is retired is computed, not chosen.** A descendant is stranded
+        when its *join policy* says its fan-in can never be satisfied, which is
+        a property of the graph — so a node behind an `ANY` join with a sibling
+        that passed is not stranded and is left alone, and one behind an `ALL`
+        join is. `DagRepository.stranded_by` answers that by asking the joins,
+        and the answer is read *before* the decision is written, because the
+        decision has to name the nodes it retires and a decision written after
+        the fact would be a comment rather than an authorization.
+
+        Args:
+            failed_node_id: The node whose failure this answers.
+            replacements: The nodes that take the stranded work's place.
+            role: The caller's role, checked against Master.
+            decision: The decision that justifies the change.
+
+        Raises:
+            PermissionError: The actor is not Master.
+            NotFound: This project has no such node.
+            ValueError: The node did not fail, the decision is of the wrong
+                type, no replacement was offered, or a replacement depends on
+                a node this replanning is retiring.
+            HorizonError: A replacement is claimed for a stage beyond the
+                planning horizon.
+        """
+        require_master(role)
+        failed = self.dag.node(failed_node_id)
+        if failed.status is not NodeStatus.FAILED:
+            raise ValueError(
+                f"{failed.display_id} is {failed.status.value}, not FAILED; "
+                "replanning answers a failure, and a plan that is being changed "
+                "for any other reason is changed by expanding the stage"
+            )
+        if decision.decision_type is not DecisionType.REPLACE_NODE:
+            raise ValueError(
+                f"replanning records a {DecisionType.REPLACE_NODE.value} decision, "
+                f"not {decision.decision_type.value}; a reader looking for what "
+                "replaced a failed node finds it by type"
+            )
+        if not replacements:
+            raise ValueError(
+                f"replanning after {failed.display_id} commits no nodes; a failure "
+                "is answered by different work, and cancelling what it stranded "
+                "without putting anything in its place is `cancel_node`"
+            )
+        for replacement in replacements:
+            self.horizon().require(replacement.roadmap_phase)
+
+        stranded = self.dag.stranded_by(failed_node_id)
+        self._refuse_depending_on_retired(replacements, stranded)
+
+        affected = AffectedNodes(
+            created=tuple(node.node_id for node in replacements),
+            cancelled=tuple(node.node_id for node in stranded),
+        )
+        record = self._record(decision, role=role, affected=affected)
+        created = tuple(
+            self._apply_nodes(replacements, role=role, decision_ref=record.decision_id)
+        )
+        for node in stranded:
+            self.dag.cancel_node(node.node_id, role=role, decision_ref=record.decision_id)
+        return Replan(
+            failed_node=failed_node_id,
+            decision=record,
+            retired=tuple(node.node_id for node in stranded),
+            created=created,
+        )
+
+    def _refuse_depending_on_retired(
+        self, replacements: Sequence[DagNode], stranded: Sequence[DagNode]
+    ) -> None:
+        """Refuse a plan that waits on work this replanning is retiring.
+
+        A replacement may depend on the node that *failed* — an analysis that
+        reads what came out of it, or a second attempt under a policy that
+        tolerates the failure. Depending on something being cancelled is
+        different in kind: the new node would be waiting for a node that will
+        never run, and the DAG would carry work that cannot start with nothing
+        in it saying why.
+
+        Raises:
+            ValueError: A replacement depends on a node being retired.
+        """
+        retired = {node.node_id for node in stranded}
+        for replacement in replacements:
+            waiting = sorted(retired.intersection(replacement.dependencies))
+            if waiting:
+                raise ValueError(
+                    f"{replacement.display_id} depends on "
+                    f"{', '.join(waiting)}, which this replanning is retiring; a "
+                    "replacement may depend on the node that failed, but not on "
+                    "work that is being cancelled"
+                )
 
     def cancel_node(
         self, node_id: str, *, role: AgentRole, decision: DecisionDraft

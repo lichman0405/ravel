@@ -26,7 +26,10 @@ from ravel.domain.contracts import (
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import ReviewRecord
 from ravel.domain.enums import (
+    Confidence,
+    DecisionType,
     JoinPolicy,
+    NodeStatus,
     NodeType,
     ReviewCheckpoint,
     ReviewOutcome,
@@ -40,7 +43,7 @@ from ravel.state.repositories.contracts import (
     ExecutionContractRepository,
 )
 from ravel.state.repositories.projects import RoadmapRepository
-from ravel.state.services.dag import DagMutationService
+from ravel.state.services.dag import DagMutationService, DecisionDraft
 
 #: Four stages, so that "the current stage plus two more" has a stage beyond it.
 STAGES = ("Stage 1", "Stage 2", "Stage 3", "Stage 4")
@@ -78,29 +81,12 @@ def service(database: Database, project: Project) -> Iterator[DagMutationService
 
 
 @pytest.fixture
-def a_node(project: Project) -> Callable[..., DagNode]:
-    """Build a node in this project, the way production builds one."""
-
-    def build(
-        node_type: NodeType = NodeType.RESEARCH,
-        *,
-        objective: str = "Survey the literature on the dopant series.",
-        **overrides: object,
-    ) -> DagNode:
-        node = DagNode.create(
-            project_id=project.project_id,
-            node_type=node_type,
-            objective=objective,
-            created_by="master",
-        )
-        return node.model_copy(update=overrides) if overrides else node
-
-    return build
-
-
-@pytest.fixture
-def a_join_node(project: Project, a_node: Callable[..., DagNode]) -> Callable[..., DagNode]:
+def a_join_node(a_node: Callable[..., DagNode]) -> Callable[..., DagNode]:
     """Build a node that waits on others.
+
+    `a_node` is the shared one from `tests.integration.conftest`; what is added
+    here is the join, which is DAG vocabulary — a node whose fan-in the tests
+    are about rather than the node itself.
 
     A HYPOTHESIS node, because the join is a decision about results rather than
     a piece of work, and its executor is Master, who is the role that decides.
@@ -109,7 +95,9 @@ def a_join_node(project: Project, a_node: Callable[..., DagNode]) -> Callable[..
     def build(dependencies: tuple[str, ...], **overrides: object) -> DagNode:
         return a_node(
             NodeType.HYPOTHESIS,
-            objective="Decide whether the dopant series is worth a second round.",
+            objective=overrides.pop(
+                "objective", "Decide whether the dopant series is worth a second round."
+            ),
             dependencies=dependencies,
             join_policy=overrides.pop("join_policy", JoinPolicy.ALL),
             **overrides,
@@ -154,6 +142,33 @@ def freeze_criteria(
 
 
 @pytest.fixture
+def plan(service: DagMutationService) -> Callable[..., list[DagNode]]:
+    """Commit nodes to the first stage under one decision.
+
+    A batch rather than one node at a time, so a node in the batch may depend
+    on another node in it whatever order they are listed — which is what lets a
+    test build `measurement -> analysis -> conclusion` in three calls without
+    knowing the identifiers in advance.
+    """
+
+    def commit(*nodes: DagNode) -> list[DagNode]:
+        return list(
+            service.expand_phase(
+                STAGES[0],
+                list(nodes),
+                role=AgentRole.MASTER,
+                decision=DecisionDraft(
+                    decision_type=DecisionType.CREATE_NODE,
+                    rationale="The stage needs these nodes to make progress.",
+                    confidence=Confidence.MEDIUM,
+                ),
+            ).nodes
+        )
+
+    return commit
+
+
+@pytest.fixture
 def clear_to_run(service: DagMutationService) -> Callable[[str], None]:
     """Submit the pre-flight PASS that lets a COMPUTATION or EXPERIMENT node run.
 
@@ -192,6 +207,41 @@ def clear_to_run(service: DagMutationService) -> Callable[[str], None]:
         )
 
     return clear
+
+
+@pytest.fixture
+def finish(
+    service: DagMutationService,
+    freeze_criteria: Callable[[str], str],
+    execution_contract: Callable[[str], str],
+    clear_to_run: Callable[[str], None],
+) -> Callable[..., DagNode]:
+    """Drive a node to a terminal status the way the runtime would.
+
+    Shared because more than one file needs a node that has *ended*: the join
+    tests need a fan-in with something to fan in on, and the replanning tests
+    need a FAILED node to answer. Both would otherwise reach into the table and
+    write a status, which is the thing the DAG's transition rules exist to
+    prevent — and a fixture that did it would be asserting against a state
+    production cannot produce.
+
+    A node cannot start without its two contracts and a pre-flight PASS, so this
+    supplies all three in the order a worker would meet them. `REVIEWING` is on
+    the path to PASSED because a result is reviewed before it is accepted, not
+    because the DAG requires it.
+    """
+
+    def drive(node_id: str, outcome: NodeStatus = NodeStatus.PASSED) -> DagNode:
+        service.dag.bind_acceptance_contract(node_id, freeze_criteria(node_id))
+        service.dag.bind_execution_contract(node_id, execution_contract(node_id))
+        service.dag.transition_node(node_id, NodeStatus.READY, actor_id="scheduler")
+        clear_to_run(node_id)
+        service.dag.transition_node(node_id, NodeStatus.RUNNING, actor_id="compute-worker")
+        if outcome is NodeStatus.PASSED:
+            service.dag.transition_node(node_id, NodeStatus.REVIEWING, actor_id="compute-worker")
+        return service.dag.transition_node(node_id, outcome, actor_id="review")
+
+    return drive
 
 
 @pytest.fixture

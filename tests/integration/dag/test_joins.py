@@ -18,66 +18,14 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
-from tests.integration.dag.conftest import STAGES
 
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import Confidence, DecisionType, JoinPolicy, NodeStatus, NodeType
-from ravel.domain.roles import AgentRole
-from ravel.state.services.dag import DagMutationService, DecisionDraft
+from ravel.domain.enums import FailurePolicy, JoinPolicy, NodeStatus, NodeType
+from ravel.state.services.dag import DagMutationService
 
 pytestmark = pytest.mark.integration
 
 NodeFactory = Callable[..., DagNode]
-
-
-def _draft() -> DecisionDraft:
-    return DecisionDraft(
-        decision_type=DecisionType.CREATE_NODE,
-        rationale="The stage needs a fan-in to compare the series.",
-        confidence=Confidence.MEDIUM,
-    )
-
-
-@pytest.fixture
-def finish(
-    service: DagMutationService,
-    freeze_criteria: Callable[[str], str],
-    execution_contract: Callable[[str], str],
-    clear_to_run: Callable[[str], None],
-) -> Callable[..., DagNode]:
-    """Drive a node to a terminal status the way the runtime would.
-
-    A node cannot start without its two contracts and a pre-flight PASS, so this
-    supplies all three in the order a worker would meet them. `REVIEWING` is on
-    the path to PASSED because a result is reviewed before it is accepted, not
-    because the DAG requires it.
-    """
-
-    def drive(node_id: str, outcome: NodeStatus = NodeStatus.PASSED) -> DagNode:
-        service.dag.bind_acceptance_contract(node_id, freeze_criteria(node_id))
-        service.dag.bind_execution_contract(node_id, execution_contract(node_id))
-        service.dag.transition_node(node_id, NodeStatus.READY, actor_id="scheduler")
-        clear_to_run(node_id)
-        service.dag.transition_node(node_id, NodeStatus.RUNNING, actor_id="compute-worker")
-        if outcome is NodeStatus.PASSED:
-            service.dag.transition_node(node_id, NodeStatus.REVIEWING, actor_id="compute-worker")
-        return service.dag.transition_node(node_id, outcome, actor_id="review")
-
-    return drive
-
-
-@pytest.fixture
-def plan(service: DagMutationService) -> Callable[..., list[DagNode]]:
-    """Commit nodes to the current stage under one decision."""
-
-    def commit(*nodes: DagNode) -> list[DagNode]:
-        return list(
-            service.expand_phase(
-                STAGES[0], list(nodes), role=AgentRole.MASTER, decision=_draft()
-            ).nodes
-        )
-
-    return commit
 
 
 @pytest.fixture
@@ -284,6 +232,71 @@ def test_a_blocked_node_is_re_promoted_once_its_fan_in_is_satisfied(
 
     assert comparison.node_id in [node.node_id for node in moved]
     assert _status(service, comparison) is NodeStatus.READY
+
+
+# ── What a failed branch is worth ───────────────────────────────────────────
+
+
+def test_a_failure_tolerant_branch_runs_after_its_dependency_fails(
+    service: DagMutationService,
+    plan: Callable[..., list[DagNode]],
+    dependencies: list[DagNode],
+    a_join_node: NodeFactory,
+    finish: Callable[..., DagNode],
+) -> None:
+    """`failure_policy` is a field on the schema, and this is what it decides.
+
+    `CONTINUE` says the node accepts a branch that ended badly: a failed
+    dependency has *answered*, so an ALL join over it is met and the tolerant
+    node runs. The spec lists failure-tolerant branches as something the DAG
+    supports natively, and without this the field would be declared in the
+    schema, written by Master, and read by nobody — a plan saying how a failure
+    should be handled, silently handled the same way either way.
+    """
+    comparison = plan(
+        a_join_node(
+            tuple(node.node_id for node in dependencies),
+            join_policy=JoinPolicy.ALL,
+            failure_policy=FailurePolicy.CONTINUE,
+        )
+    )[0]
+    for dependency in dependencies:
+        finish(dependency.node_id, NodeStatus.FAILED)
+
+    service.dag.refresh_readiness()
+
+    assert service.dag.join_state(service.dag.node(comparison.node_id)) == "satisfied"
+    assert _status(service, comparison) is NodeStatus.READY
+
+
+def test_a_branch_that_does_not_tolerate_failure_is_blocked_by_it(
+    service: DagMutationService,
+    plan: Callable[..., list[DagNode]],
+    dependencies: list[DagNode],
+    a_join_node: NodeFactory,
+    finish: Callable[..., DagNode],
+) -> None:
+    """The same graph under the default policy, for the contrast.
+
+    `BLOCK` and `MASTER_DECIDES` differ in who is expected to act — nobody, or
+    Master — but not in what the fan-in is worth: neither accepts the branch, so
+    the node blocks and stays blocked until somebody replans. Asserting only the
+    tolerant case would pass just as well if the policy were ignored entirely.
+    """
+    comparison = plan(
+        a_join_node(
+            tuple(node.node_id for node in dependencies),
+            join_policy=JoinPolicy.ALL,
+            failure_policy=FailurePolicy.MASTER_DECIDES,
+        )
+    )[0]
+    for dependency in dependencies:
+        finish(dependency.node_id, NodeStatus.FAILED)
+
+    service.dag.refresh_readiness()
+
+    assert service.dag.join_state(service.dag.node(comparison.node_id)) == "unsatisfiable"
+    assert _status(service, comparison) is NodeStatus.BLOCKED
 
 
 # ── The cases with nothing to join ──────────────────────────────────────────
