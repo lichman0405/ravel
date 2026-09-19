@@ -20,6 +20,17 @@ every difference in how PostgreSQL echoes a definition back — `integer` versus
 `INTEGER`, `::character varying` inserted where a cast is implied. The
 comparison is by what the schema *does*.
 
+**The guards are compared too, and that is a second gap this file closed.** They
+are not part of the metadata: `guards.install()` attaches them, and which
+triggers it attaches depends on which tables exist *at the moment it is called*.
+The initial migration calls it before the tables of later revisions exist, so
+each of those revisions has to install again. Nothing checked that they did —
+the tables, columns, and constraints all matched while a deployed database could
+have been missing every append-only and transition guard on the newest table.
+The comparison is against the test database rather than against a recomputation,
+because "the deployment enforces what the suite has been asserting against" is
+the claim worth making.
+
 Not covered, and named so that it is not mistaken for covered: index
 definitions beyond their existence, foreign key actions, and column defaults.
 An autogenerate diff would catch those, and running one here would mean
@@ -39,7 +50,8 @@ import pytest
 from sqlalchemy import CheckConstraint, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 
-from ravel.state.guards import GUARD_TABLES
+from ravel.state.database import Database
+from ravel.state.guards import GUARD_FUNCTIONS, GUARD_TABLES
 from ravel.state.tables import Base
 
 pytestmark = pytest.mark.integration
@@ -149,6 +161,78 @@ def test_every_check_constraint_the_models_declare_is_in_force(migrated: Engine)
         "a deployed database would enforce a different vocabulary than the "
         "models declare: " + "; ".join(sorted(drifted))
     )
+
+
+def test_the_chain_installs_the_guards_the_suite_asserts_against(
+    migrated: Engine, database: Database
+) -> None:
+    """A deployed database carries the same guard triggers as a test one.
+
+    `guards.install()` attaches triggers to the tables PostgreSQL reports at the
+    moment it runs, and it is called from the initial migration — where the
+    tables added by later revisions do not exist yet. So the chain reaching head
+    is not by itself evidence that the newest tables are guarded, and the
+    comparison that catches that is against the schema `create_all` plus one
+    explicit `install()` produces, which is what every other test in this suite
+    has been asserting against all along.
+
+    Both directions are failures. A trigger the deployment lacks is a rule that
+    is enforced in the suite and not in production; one it has and the models do
+    not is a rule nothing in the code believes in.
+    """
+    deployed, expected = _guard_triggers(migrated), _guard_triggers(database.engine)
+    assert deployed == expected, (
+        "a deployed database is guarded differently from the test database. "
+        f"Missing: {_listed_pairs(expected - deployed)}. "
+        f"Unexpected: {_listed_pairs(deployed - expected)}. "
+        "A migration that creates a table must install the guards on it."
+    )
+
+
+def test_the_chain_installs_every_guard_function(migrated: Engine) -> None:
+    """The triggers are only half of it; the functions they call are the other.
+
+    A trigger whose function was never created fails at the first write rather
+    than at migrate time, which is the worst moment to find out.
+    """
+    with migrated.connect() as connection:
+        present = set(
+            connection.execute(
+                text(
+                    "SELECT p.proname FROM pg_proc p "
+                    "JOIN pg_namespace n ON n.oid = p.pronamespace "
+                    "WHERE n.nspname = current_schema()"
+                )
+            ).scalars()
+        )
+    assert not set(GUARD_FUNCTIONS) - present, (
+        "a deployed database is missing the functions its guard triggers call: "
+        + ", ".join(sorted(set(GUARD_FUNCTIONS) - present))
+    )
+
+
+def _guard_triggers(engine: Engine) -> set[tuple[str, str]]:
+    """Every user-defined trigger in the schema, as `(table, trigger)`.
+
+    Internal triggers are excluded: PostgreSQL creates them for foreign keys and
+    constraints, they are not ours, and their names are not stable across
+    versions.
+    """
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT c.relname, t.tgname FROM pg_trigger t "
+                "JOIN pg_class c ON c.oid = t.tgrelid "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE NOT t.tgisinternal AND n.nspname = current_schema()"
+            )
+        ).all()
+    return {(table, trigger) for table, trigger in rows}
+
+
+def _listed_pairs(pairs: set[tuple[str, str]]) -> str:
+    """A set of `(table, trigger)` as readable text for an error message."""
+    return ", ".join(f"{table}.{trigger}" for table, trigger in sorted(pairs)) or "none"
 
 
 def _check_constraints(engine: Engine) -> dict[tuple[str, str], str]:
