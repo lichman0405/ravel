@@ -5,7 +5,7 @@
 本仓库同时装着 RAVEL V0 的**实现**和它所依据的**规格包**。两者不是同一类东西，读之前先分清：
 
 - **实现**：`src/`、`tests/`、`scripts/`、`Makefile`、`docker-compose.yml`、`alembic.ini`
-- **规格**：`docs/`、`schemas/`、`prompts/`、`acceptance/`、`RAVEL_V0_MASTER_SPEC.md`
+- **规格**：`docs/`、`schemas/`、`prompts/`、`acceptance/`
 - **交付记录**：`IMPLEMENTATION_REPORT.md`、`TEST_REPORT.md`、`KNOWN_LIMITATIONS.md`、`SECURITY_NOTES.md`、`DSH_INTEGRATION_REPORT.md`、`DEPLOYMENT.md`
 
 其中 `schemas/*.yaml`、`prompts/*.md`、`acceptance/MOCK_SCENARIOS.yaml` **由运行时代码直接读取**，不是文档 —— `src/ravel/dsh/roles.py` 读那 5 个角色预设，`src/ravel/backends/scenarios.py` 读 mock 场景表。删掉它们，功能就坏。
@@ -124,9 +124,8 @@ scripts/test_all.sh  # lint → unit → integration → DSH gate（需要 DEEPS
 ### 规格入口
 
 - `START_PROMPT.md`：唯一启动提示词（建仓时的 agent 指令，保留为档案）
-- `RAVEL_V0_MASTER_SPEC.md`：`docs/00`–`docs/15` 的合并单文件版。**与 `docs/` 是同一份内容的两种排布**，改一处不会同步另一处；以 `docs/` 为准
-- `CLAUDE.md` / `AGENTS.md`：开发 agent 强制规则（两份内容一致）
-- `PACKAGE_MANIFEST.json`：规格包交付时 38 个文件的 sha256 快照。**它没有被实现改动过，其中 `README.md` 与 `docs/IMPLEMENTATION_DEVIATIONS.md` 两条已与当前树不符** —— 它记录的是交付那一刻，不是现在。全树没有任何东西读取它。
+- `CLAUDE.md`：开发 agent 强制规则（原 `AGENTS.md` 与之内容一致，已合并删除）
+- `START_PROMPT.md`：唯一启动提示词（建仓时的 agent 指令，保留为档案）
 
 ## Source of Truth 优先级
 

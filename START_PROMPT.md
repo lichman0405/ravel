@@ -9,7 +9,6 @@
 在写任何产品代码前，完整阅读：
 
 - `README.md`
-- `AGENTS.md`
 - `CLAUDE.md`（即使你不是 Claude Code，也要读）
 - `docs/00_PRODUCT_AND_SCOPE.md`
 - `docs/01_ARCHITECTURE.md`
