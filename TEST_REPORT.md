@@ -13,14 +13,16 @@ system, and only one of them is true here.
 
 ## 1. How to reproduce all of it
 
-On Ubuntu 24.04 with the infrastructure up (`scripts/dev_up.sh`):
+On Ubuntu 24.04 with the infrastructure up (`scripts/dev_up.sh`) and the
+credentials in `.env` filled in:
 
 ```bash
 make lint          # ruff check src tests, then pyright src tests
 make test-unit     # tests/unit, no services needed
 make test-integration
 make test-e2e
-make test-live     # real-Internet research; skips without a contact address
+make test-live     # real-Internet research; needs RAVEL_RESEARCH_CONTACT_EMAIL
+make test-dsh      # real model turns; needs DEEPSEEK_API_KEY
 make acceptance    # A01-A20 plus the seven gates, printed as a matrix
 ```
 
@@ -32,25 +34,21 @@ Two warnings, both of which cost time when ignored:
   timeout in a test that did nothing wrong.
 - `make test` (`scripts/test_all.sh`) **fails without `DEEPSEEK_API_KEY`** by
   design: it sets `RAVEL_REQUIRE_DSH=1`, because a harness gate that can pass by
-  not running is not a gate. See §4.
+  not running is not a gate.
 
 ## 2. Results
+
+Run on 2026-09-19 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
+set in `.env`:
 
 | Suite | Passed | Skipped | Failed | Exit |
 |---|---:|---:|---:|---|
 | `tests/unit` | 752 | 0 | 0 | 0 |
 | `tests/integration` | 537 | 0 | 0 | 0 |
-| `tests/dsh` | 3 | 8 | 0 | 0 |
+| `tests/dsh` | 11 | 0 | 0 | 0 |
 | `tests/e2e` | 20 | 0 | 0 | 0 |
-| `tests/live_research` | 0 | 13 | 0 | 0 |
-| `tests/acceptance` (`make acceptance`) | 41 | 2 | 0 | 0 |
-
-The `tests/dsh` row is the one to read carefully: it is green because the
-model-turn tests *skip*, not because they passed. `scripts/test_all.sh` sets
-`RAVEL_REQUIRE_DSH=1`, which turns those skips into failures — see §4.
-
-`tests/live_research` is entirely skipped, and that is the largest gap in this
-report — see §4 as well.
+| `tests/live_research` | 13 | 0 | 0 | 0 |
+| `tests/acceptance` (`make acceptance`) | 43 | 0 | 0 | 0 |
 
 `make acceptance` reports by *item* rather than by test, which is a different
 question from the one a pytest summary answers — see §3.
@@ -74,8 +72,8 @@ other angle.
 
   PASS    A01  Project creation              1 passed
   PASS    A02  Master start                  1 passed
-  SKIP    A03  Real research                 1 skipped
-  SKIP    A04  Evidence provenance           1 skipped
+  PASS    A03  Real research                 1 passed
+  PASS    A04  Evidence provenance           1 passed
   PASS    A05  Initial Scientific DAG        1 passed
   PASS    A06  Compute success               1 passed
   PASS    A07  Compute failure               2 passed
@@ -103,35 +101,25 @@ other angle.
   PASS    gate 6  no direct public DSH endpoint  1 passed
   PASS    gate 7  Postgres remains authoritative after restarts  1 passed
 
-Skipped, in the suite's own words:
-  A03, A04: RAVEL_RESEARCH_CONTACT_EMAIL is unset, and RAVEL will not fetch anonymously. Crossref, OpenAlex and NCBI route identified clients to a faster pool and ask for a contact address; set it in .env to run this suite.
-  cover these by setting what they name in .env
-
-27/27 demonstrated, 0 failed, 2 skipped, 0 missing (pytest exit 0)
+27/27 demonstrated, 0 failed, 0 skipped, 0 missing (pytest exit 0)
 ```
 
-## 4. What is skipped, and why that is reported rather than hidden
+## 4. What used to be skipped, and now runs
 
-Two acceptance items and part of the harness suite do not run on this host.
-Neither is folded into the pass count.
+With both credentials present, the two previously skipped acceptance items and
+their underlying suites now execute against real external services:
 
-- **The entire live-research suite skips without
-  `RAVEL_RESEARCH_CONTACT_EMAIL`.** `pytest tests/live_research` reports 13
-  skipped and 0 passed on this host, and A03 and A04 skip with them. RAVEL
-  fetches real sources and does not fetch anonymously, and a placeholder address
-  would defeat the point of asking for one — so the suite stops instead of
-  proceeding under a name nobody owns. The matrix prints the two items as `SKIP`
-  with pytest's own sentence about what they are waiting for, so the row reads
-  as "set this and it runs". This is `KNOWN_LIMITATIONS.md` L-20, and it is the
-  largest gap in this build's repeatable evidence: a real fetch against
-  Crossref, OpenAlex and arXiv was verified once, when `d647084` rewrote the
-  connection pinning, but nothing re-runs it now.
-- **The model-turn tests in `tests/dsh` skip without `DEEPSEEK_API_KEY`.**
-  `pytest tests/dsh` reports 3 passed and 8 skipped,
-  because the tests that need a turn skip rather than substitute — but
-  `scripts/test_all.sh` sets `RAVEL_REQUIRE_DSH=1`, which turns that skip into a
-  failure. The harness gate cannot pass by not running; it can only fail loudly
-  or pass honestly. This is L-15.
+- **A03 / A04 and `tests/live_research`** now reach the real Internet. The 13
+  cases exercise Crossref, OpenAlex, arXiv, PubChem, and direct URL retrieval.
+  The connectivity probe at the start of `scripts/test_live_research.sh` reports
+  Crossref and OpenAlex as reachable; arXiv answers the probe with HTTP 400 but
+  the actual `arxiv.org/abs/1606.00335` fetch in the tests returns 200 — the
+  probe URL (`export.arxiv.org/api/query?max_results=1`) appears to be stricter
+  than the path the product uses.
+- **`tests/dsh`** now makes real DeepSeek model turns. The 11 cases verify that
+  the pinned runtime starts, runs RAVEL tools, refuses cross-role tool access,
+  and recovers Master state from PostgreSQL rather than from harness session
+  context.
 
 ## 5. The seven claims the development contract forbids declaring without evidence
 
@@ -140,7 +128,7 @@ claim must not rest on. Each is answered by a test rather than by an assurance:
 
 | Claim | What demonstrates it |
 |---|---|
-| Web research is not mocked | gate 1 asserts every connector is pointed at a real service and that research cannot be answered offline; gate 2 asserts a source nobody read cannot enter the ledger, with no network call involved. **The live suite — A03, A04 and all 13 cases of `tests/live_research` — skips on this host** (`RAVEL_RESEARCH_CONTACT_EMAIL` unset), so no real fetch is repeated by a sweep here. See §4 |
+| Web research is not mocked | gate 1 asserts every connector is pointed at a real service and that research cannot be answered offline; gate 2 asserts a source nobody read cannot enter the ledger, with no network call involved. **A03, A04 and all 13 cases of `tests/live_research` now pass against real services.** |
 | DSH is pinned and tested | gate 4 — the installed distributions match the pin, the bundled runtime self-reports `0.1.5-rc.1`, and the vendored checkout's `HEAD` is the pinned commit |
 | DSH role presets and tool scope are verified | gate 5 — every role boots with its own contract and no other role's roster; `tests/integration/roles` holds the permission matrix for all five |
 | Master recovery is tested | A15 — the project survives the Master session and is recovered from it |
@@ -152,7 +140,8 @@ claim must not rest on. Each is answered by a test rather than by an assurance:
 ## 6. What the tests found
 
 The suite is load-bearing, and the record of what it caught is the evidence for
-that. One finding is worth writing down because of how it presented.
+that. The two earlier findings are kept below; a third was found only when the
+model-turn gate could finally run.
 
 **A hang that named the wrong test.** The first full acceptance run failed at
 A15 with `Timeout (>600.0s) from pytest-timeout`. A15 was not the problem.
@@ -193,17 +182,36 @@ That test was checked against the old code before being kept: with `except
 RPCError` restored, it fails with the same `WorkflowAlreadyStartedError` seen in
 the sweep — so it tests the fix rather than merely coexisting with it.
 
-The path had no test at all before this, which is why it survived. It is a
-reminder that "the acceptance items pass" and "the suite is green" are different
-claims: the twenty items were green while this was broken.
+**The DSH gate could not run until the project existed.** When the harness gate
+finally ran with a real API key, two live DSH tests failed because
+`read_project_state` reported `no project '<id>'`. The `project_id` fixture had
+always generated a deterministic slug, but it never created the matching
+PostgreSQL row. The model did exactly the right thing: it read the tool result,
+refused to guess, and reported that the project was missing. The test expected
+the model to echo a title that had never been written.
+
+Fixed by making the fixture create the project row before starting the harness
+session, and by letting `ProjectRegistry.create` accept an optional caller-supplied
+`project_id` for deterministic test fixtures.
+
+**A timestamp serialized two ways.** Once live research ran, one test failed on
+`source["retrieved_at"] == opened["retrieved_at"]`. The `open_source` tool
+serialized the moment with `datetime.isoformat()` (`...+00:00`), while the
+registered `EvidenceSource` row was serialized through Pydantic's JSON mode
+(`...Z`). Both strings name the same UTC instant, but they are not equal.
+
+Fixed by adding `json_iso()` to `ravel.domain.clock` and using it wherever a
+timestamp is hand-serialized to match Pydantic's `model_dump(mode="json")`
+output.
 
 ## 7. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was
   exercised, and `KNOWN_LIMITATIONS.md` is the record of what was not.
-- The two skips in §4 are real gaps in coverage on this host, not
-  formalities. Both are one environment variable away from being closed.
-- The project loop has never been observed running against a live model here.
-  Its sequencing is asserted end to end with the *policy* scripted, which is
-  what those acceptance items are about; a real model in Master's and Review's
-  seats is not covered. This is L-19.
+- Every number above was measured once, on one Ubuntu 24.04 host, with one set
+  of credentials. Re-running on a different network, a different DeepSeek
+  account, or a different DSH release may surface different behavior.
+- The project loop has been observed with a real model in the DSH spike tests,
+  but a long-running autonomous project driven entirely by live Master/Review
+  turns has not been stress-tested end to end. The acceptance items verify the
+  policy and sequencing; prolonged autonomy is a separate question.
