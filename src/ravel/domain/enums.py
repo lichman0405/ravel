@@ -60,6 +60,18 @@ class ProjectStatus(StrEnum):
     enumerate the statuses, so this set is an implementation decision. It is
     deliberately coarse: a finer one would duplicate the DAG's own state and
     the two would drift.
+
+    `INCONCLUSIVE` is the fourth ending `acceptance/V0_ACCEPTANCE.md` A20 asks
+    for, beside success, failure, and termination, and it is a real one: a
+    project whose budget ran out, or whose evidence never became sufficient,
+    stopped without succeeding and without failing. Recording that as
+    `COMPLETED` would say the question was answered, and recording it as
+    `FAILED` would say the answer was no. The `ProjectSuccessContract`'s
+    `unresolved_uncertainty_policy` is what the decision is measured against.
+
+    The four endings A20 names map onto these as:
+    SUCCESS -> `COMPLETED`, FAILED -> `FAILED`, INCONCLUSIVE -> `INCONCLUSIVE`,
+    TERMINATED -> `CANCELLED`.
     """
 
     CREATED = "CREATED"
@@ -68,6 +80,7 @@ class ProjectStatus(StrEnum):
     PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
     CANCELLED = "CANCELLED"
 
 

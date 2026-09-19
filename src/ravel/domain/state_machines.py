@@ -91,14 +91,21 @@ PROJECT_TRANSITIONS: dict[ProjectStatus, frozenset[ProjectStatus]] = {
             ProjectStatus.PAUSED,
             ProjectStatus.COMPLETED,
             ProjectStatus.FAILED,
+            ProjectStatus.INCONCLUSIVE,
             ProjectStatus.CANCELLED,
         }
     ),
     ProjectStatus.PAUSED: frozenset(
-        {ProjectStatus.EXECUTING, ProjectStatus.CANCELLED, ProjectStatus.FAILED}
+        {
+            ProjectStatus.EXECUTING,
+            ProjectStatus.CANCELLED,
+            ProjectStatus.FAILED,
+            ProjectStatus.INCONCLUSIVE,
+        }
     ),
     ProjectStatus.COMPLETED: frozenset(),
     ProjectStatus.FAILED: frozenset(),
+    ProjectStatus.INCONCLUSIVE: frozenset(),
     ProjectStatus.CANCELLED: frozenset(),
 }
 

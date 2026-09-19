@@ -21,6 +21,7 @@ which reads as an unguarded column rather than as an old table.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -86,36 +87,37 @@ def database(integration_settings: Settings) -> Iterator[Database]:
 def _assert_schema_is_current(engine: Engine) -> None:
     """Refuse to run against tables older than the models that describe them.
 
-    Two things are compared, and both by name: check constraints, because they
-    are where RAVEL puts the rules that matter, and columns, because an added
-    column is the other half of the same problem. A name is enough to tell
-    "this table predates the rule" from "the rule is there". Worth the catalog
-    queries once per session, because the failure each prevents is otherwise
-    read as something else entirely — a missing guard, or a column that
-    apparently does not exist in a table that has had it for days.
+    Three things are compared, all by name and one of them by content: check
+    constraints, so that a table predating a rule is caught rather than read as
+    an unguarded one; the *literals* of those constraints, because a constraint
+    that kept its name while its vocabulary changed is exactly what adding a
+    value to an enum does; and columns, because an added column is the other
+    half of the same problem. Worth the catalog queries once per session,
+    because the failure each prevents is otherwise read as something else
+    entirely — a missing guard, a column that apparently does not exist in a
+    table that has had it for days, or a status the database refuses to store.
 
     Raises:
         RuntimeError: A constraint or column the models declare is absent from
-            the database, which means the table was created before it was added
-            and `create_all` did not rewrite it.
+            the database, or a check constraint's values differ from the
+            model's, which means the table was created before the change and
+            `create_all` did not rewrite it.
     """
     with engine.connect() as connection:
         rows = connection.execute(
             text(
-                "SELECT relname, conname FROM pg_constraint "
+                "SELECT relname, conname, pg_get_constraintdef(pg_constraint.oid) "
+                "FROM pg_constraint "
                 "JOIN pg_class ON pg_class.oid = pg_constraint.conrelid "
                 "WHERE contype = 'c'"
             )
         ).all()
-    present = {(relname, conname) for relname, conname in rows}
+    present = {(relname, conname): definition for relname, conname, definition in rows}
+    checks = _named_checks()
     stale = sorted(
-        f"{table.name}.{constraint.name}"
-        for table in Base.metadata.tables.values()
-        for constraint in table.constraints
-        if isinstance(constraint, CheckConstraint)
-        and constraint.name is not None
-        and (table.name, constraint.name) not in present
+        f"{table}.{name}" for table, name, _ in checks if (table, name) not in present
     )
+    stale.extend(_drifted_constraints(checks, present))
     stale.extend(_missing_columns(engine))
     if stale:
         raise RuntimeError(
@@ -125,6 +127,63 @@ def _assert_schema_is_current(engine: Engine) -> None:
             + ". `create_all` does not alter a table that already exists; drop "
             "the tables named above (DROP TABLE ... CASCADE) and run again."
         )
+
+
+def _named_checks() -> list[tuple[str, str, CheckConstraint]]:
+    """Every named `CHECK` the models declare, as `(table, name, constraint)`."""
+    named: list[tuple[str, str, CheckConstraint]] = []
+    for table in Base.metadata.tables.values():
+        for constraint in table.constraints:
+            if isinstance(constraint, CheckConstraint) and isinstance(constraint.name, str):
+                named.append((table.name, constraint.name, constraint))
+    return named
+
+
+def _drifted_constraints(
+    checks: list[tuple[str, str, CheckConstraint]],
+    present: dict[tuple[str, str], str],
+) -> list[str]:
+    """Check constraints whose vocabulary the database does not match.
+
+    Compared by the string literals each one mentions rather than by its whole
+    text, because the two sides are written in different dialects: the model
+    holds `status IN ('CREATED', 'EXECUTING')` and PostgreSQL returns
+    `((status)::text = ANY ((ARRAY['CREATED'::character varying, ...])::text[]))`.
+    Same vocabulary, two spellings.
+
+    What this catches is a closed vocabulary that gained or lost a member —
+    which is what adding a value to an enum does, and what leaves a database
+    refusing a value the code believes it can store. What it does not catch is
+    a changed threshold or comparison, where the literals are unchanged; that
+    is a narrower miss than comparing nothing at all.
+    """
+    drifted = []
+    for table, name, constraint in checks:
+        found = present.get((table, name))
+        if found is None:
+            continue  # already reported as missing
+        declared, actual = _literals(str(constraint.sqltext)), _literals(found)
+        if declared != actual:
+            drifted.append(
+                f"{table}.{name} (models: {_listed(declared)}; "
+                f"database: {_listed(actual)})"
+            )
+    return sorted(drifted)
+
+
+#: A single-quoted SQL string literal, which is how a closed vocabulary is
+#: written on both sides of the comparison.
+_LITERAL = re.compile(r"'([^']*)'")
+
+
+def _literals(definition: str) -> frozenset[str]:
+    """Every string literal a constraint's definition mentions."""
+    return frozenset(_LITERAL.findall(definition))
+
+
+def _listed(values: frozenset[str]) -> str:
+    """A literal set as readable text for an error message."""
+    return ", ".join(sorted(values)) if values else "none"
 
 
 def _missing_columns(engine: Engine) -> list[str]:

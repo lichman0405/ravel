@@ -145,8 +145,33 @@ def test_project_terminal_statuses_are_final() -> None:
     assert {
         ProjectStatus.COMPLETED,
         ProjectStatus.FAILED,
+        ProjectStatus.INCONCLUSIVE,
         ProjectStatus.CANCELLED,
     } == TERMINAL_PROJECT_STATUSES
+
+
+def test_a_project_may_end_inconclusively_from_executing_or_paused() -> None:
+    """The fourth ending A20 names, and the only two statuses it can be reached from.
+
+    A project concludes nothing while it is still executing or while it is
+    paused mid-run; from CREATED or CONTRACT_DEFINED there is no work to have
+    been inconclusive about, so the ending is not reachable from them.
+    """
+    assert can_transition_project(ProjectStatus.EXECUTING, ProjectStatus.INCONCLUSIVE).allowed
+    assert can_transition_project(ProjectStatus.PAUSED, ProjectStatus.INCONCLUSIVE).allowed
+    assert not can_transition_project(
+        ProjectStatus.CREATED, ProjectStatus.INCONCLUSIVE
+    ).allowed
+    assert not can_transition_project(
+        ProjectStatus.CONTRACT_DEFINED, ProjectStatus.INCONCLUSIVE
+    ).allowed
+
+
+def test_concluding_nothing_is_an_ending() -> None:
+    """A project that concluded nothing does not later conclude something."""
+    check = can_transition_project(ProjectStatus.INCONCLUSIVE, ProjectStatus.EXECUTING)
+    assert not check.allowed
+    assert "terminal" in check.reason
 
 
 def test_pause_is_reversible_but_completion_is_not() -> None:
