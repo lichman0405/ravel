@@ -216,3 +216,32 @@ hexadecimal characters of a SHA-256 of the work, because a reference is a
 identifier paths is seventy-six. The work it stands for is a row RAVEL already
 has, so nothing is lost; a person reading a bare reference cannot tell which
 node it belongs to, and has to look it up.
+
+---
+
+## L-14 — The browser resolves names itself, so its connections cannot be pinned
+
+- **Since:** Phase 8
+- **Where:** `BrowserNavigator` and `_Session` in `src/ravel/research/browser.py`
+
+RAVEL's fetcher connects to the address `addressing.address_for` validated
+rather than to the name, which closes the DNS-rebinding race for everything it
+reads. The browser cannot be given the same treatment: Playwright makes its own
+connections inside a Chromium process this code does not own, and there is no
+network backend to substitute. A page that navigates to, or whose subresources
+point at, a host whose DNS answers publicly for the guard's lookup and
+`169.254.169.254` for the browser's is therefore reached.
+
+What is in place: the URL handed to `open`/`links` is guarded before a browser
+starts, every request the page makes goes through a `context.route("**/*")`
+handler that guards it, service workers are blocked so there is no path around
+that handler, and an aborted navigation is re-raised as `UnsafeURL` rather than
+recorded as a source that could not be read. The metadata-service *names* are
+refused whatever they resolve to, which covers the highest-value target.
+
+**Do not conclude** that the browser is unguarded, or that the fetch path shares
+this gap — `Fetcher` is pinned and its behaviour is asserted in
+`tests/unit/test_research_addressing.py`. **And do not conclude** that this is
+unbounded: the attacker needs authoritative DNS for a host the page visits, and
+needs the browser's lookup to land differently from the guard's, in a window
+between the two. What RAVEL cannot do is rule it out.

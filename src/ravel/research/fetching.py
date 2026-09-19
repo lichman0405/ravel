@@ -22,11 +22,14 @@ Two conventions in here are not arbitrary:
 
 from __future__ import annotations
 
+import collections.abc
 import logging
+import typing
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import httpcore
 import httpx
 
 from ravel.config import Settings
@@ -71,13 +74,88 @@ class FetchError(RuntimeError):
     """
 
 
+#: The httpcore failures that mean "the request could not be made" rather
+#: than "the source said something". httpx translates these into its own
+#: hierarchy when a request goes through `httpx.HTTPTransport`; the transport
+#: here is built on httpcore directly — see `_GuardedTransport` — so the list
+#: is written out. Every one of them is a fact about RAVEL's ability to reach
+#: the network, which is the case `_request` reports as a limited retrieval.
+_UNREACHABLE = (
+    httpcore.NetworkError,
+    httpcore.TimeoutException,
+    httpcore.ProtocolError,
+    httpcore.ProxyError,
+    httpcore.UnsupportedProtocol,
+)
+
+
+class _PinnedBackend(httpcore.SyncBackend):
+    """A network backend that connects to the address RAVEL checked.
+
+    This is where the check becomes a connection rather than a prediction.
+    `addressing.address_for` resolves a name and refuses it unless every
+    address is public; the request that follows resolves the name *again*, and
+    a name whose answers change between the two reaches an address nothing
+    checked. Connecting to the validated address removes the second resolution:
+    the only DNS lookup in the path is the one whose answer was checked.
+
+    The name is not lost. httpcore still knows the host and port the request is
+    for, and uses them for the `Host` header, for the TLS server name, and for
+    certificate verification — so what is sent is identical to what would have
+    been sent, and only the address it was sent to was chosen here rather than
+    by the resolver.
+
+    Only `connect_tcp` is overridden. Reading, writing, and closing are the
+    parent's, because they are about the socket that now exists rather than
+    about which one it should be.
+    """
+
+    def __init__(self, resolver: addressing.Resolver) -> None:
+        self._resolver = resolver
+
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: typing.Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.NetworkStream:
+        """Connect to the host, at an address that was checked first."""
+        addresses = addressing.address_for(host, self._resolver)
+        if not addresses:  # pragma: no cover - connect_tcp is never given a bare name
+            raise addressing.UnsafeURL(host, "no address to connect to")
+        return super().connect_tcp(
+            addresses[0],
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+
 class _GuardedTransport(httpx.BaseTransport):
     """An HTTP transport that refuses to carry a request RAVEL may not make.
 
-    Wrapping the transport rather than checking once before the call is what
-    makes redirects safe: httpx follows a redirect by sending another request
-    through the transport, so a hop to a link-local address is checked even
-    though nobody wrote it in the original URL.
+    Built on `httpcore.ConnectionPool` directly rather than on
+    `httpx.HTTPTransport`, because that is the only way to give the pool a
+    network backend: `httpx.HTTPTransport` builds its own and does not accept
+    one. What is given up by not using it is the translation of `httpcore`
+    errors into `httpx` ones, which `_UNREACHABLE` writes out instead — the
+    same set of failures, reported the same way.
+
+    Two things are refused here, and they overlap on purpose:
+
+    - at `connect_tcp`, an address that is not public, which is the check that
+      actually binds because it is the address the socket goes to;
+    - at `handle_request`, the scheme, the host, and the metadata-service
+      names — the rules that are about the URL rather than about where it
+      leads, and that a connection-level check would not see.
+
+    Checking per request rather than once before the call is also what makes
+    redirects safe: httpx follows a redirect by sending another request through
+    the transport, so a hop to a link-local address is checked even though
+    nobody wrote it in the original URL.
 
     `addressing.UnsafeURL` propagates from here rather than being converted into
     a restricted `Retrieval`, because a refused request is a decision RAVEL made
@@ -85,16 +163,73 @@ class _GuardedTransport(httpx.BaseTransport):
     attacker's probe into the Evidence Ledger.
     """
 
-    def __init__(self, inner: httpx.BaseTransport, resolver: addressing.Resolver) -> None:
-        self._inner = inner
+    def __init__(self, resolver: addressing.Resolver) -> None:
         self._resolver = resolver
+        self._pool = httpcore.ConnectionPool(
+            ssl_context=httpx.create_ssl_context(),
+            network_backend=_PinnedBackend(resolver),
+            # No keep-alive. A pooled connection is keyed by the address it was
+            # opened to, and two hosts behind one address would then share a
+            # connection whose TLS session was established for the first of
+            # them. RAVEL fetches a handful of URLs per call, so a handshake
+            # each is a price worth paying for not having to reason about it.
+            max_connections=10,
+            max_keepalive_connections=0,
+        )
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         addressing.guard(str(request.url), resolver=self._resolver)
-        return self._inner.handle_request(request)
+        response = self._pool.handle_request(
+            httpcore.Request(
+                method=request.method,
+                url=httpcore.URL(
+                    scheme=request.url.raw_scheme,
+                    host=request.url.raw_host,
+                    port=request.url.port,
+                    target=request.url.raw_path,
+                ),
+                headers=request.headers.raw,
+                content=request.stream,
+                extensions=request.extensions,
+            )
+        )
+        stream = response.stream
+        # httpcore types this as either, because the same class serves the
+        # async pool. A synchronous pool handing back an async stream would be
+        # a fault in httpcore, and saying so is better than a type: ignore that
+        # would hide the day it happens.
+        assert isinstance(stream, collections.abc.Iterable), (
+            "a synchronous connection pool answered with an asynchronous stream"
+        )
+        return httpx.Response(
+            status_code=response.status,
+            headers=response.headers,
+            stream=_PoolStream(stream),
+            extensions=response.extensions,
+            request=request,
+        )
 
     def close(self) -> None:
-        self._inner.close()
+        self._pool.close()
+
+
+class _PoolStream(httpx.SyncByteStream):
+    """httpcore's response stream, as an httpx one.
+
+    Two lines of adaptation, and the reason `httpx.HTTPTransport` is worth not
+    using is that this is all it costs.
+    """
+
+    def __init__(self, stream: typing.Iterable[bytes]) -> None:
+        self._stream = stream
+
+    def __iter__(self) -> typing.Iterator[bytes]:
+        yield from self._stream
+
+    def close(self) -> None:
+        close = getattr(self._stream, "close", None)
+        if close is not None:
+            close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,10 +294,10 @@ class Fetcher:
                 # chose either: a public address that redirects to a link-local
                 # one is the same attack with one extra hop. Every hop goes
                 # through the transport, so every hop is checked.
-                transport=_GuardedTransport(httpx.HTTPTransport(), self.resolver),
+                transport=_GuardedTransport(self.resolver),
             ) as client, client.stream(method, url) as response:
                 return self._from_response(response, url, read_body=method == "GET")
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, *_UNREACHABLE) as exc:
             # The request never produced a response. That is RAVEL being unable
             # to reach the network, not a statement about the source, so it is
             # reported as a limited retrieval with the transport's own words.

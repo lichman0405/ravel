@@ -19,8 +19,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import httpcore
 import httpx
 import pytest
 import respx
@@ -29,7 +30,11 @@ from ravel.config import Settings
 from ravel.research import addressing
 from ravel.research.addressing import UnsafeURL
 from ravel.research.browser import BrowserNavigator
-from ravel.research.fetching import Fetcher
+
+# The backend under test is private to the fetcher, which is the point: it is
+# not something a caller chooses, and importing it by its own name is how the
+# test states that the fetcher has no other way to reach the network.
+from ravel.research.fetching import Fetcher, _PinnedBackend
 
 PUBLIC = "93.184.216.34"
 
@@ -509,3 +514,67 @@ def _context_setup() -> str:
     """The body of `_Session.__enter__`, where the context is built."""
     source = (Path(__file__).parents[2] / "src/ravel/research/browser.py").read_text()
     return source.split("def __enter__", 1)[1].split("def _guard_route", 1)[0]
+
+
+# --------------------------------------------------------------------------
+# The connection, which is where the check has to end up
+# --------------------------------------------------------------------------
+
+
+def test_the_socket_is_given_the_address_that_was_checked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The difference between predicting an address and connecting to one.
+
+    A check in front of the request resolves the name, and the request resolves
+    it again; a name whose answers differ between the two reaches somewhere
+    nothing looked. The backend below is what closes that: the address the
+    guard validated is the address handed to the socket layer, so the resolver
+    is asked once and its answer is the one that is used.
+
+    Asserted on the argument rather than on a connection, because opening a
+    socket to prove it would make the test depend on the network it is about.
+    """
+    handed: list[tuple[str, int]] = []
+
+    def record(
+        self: httpcore.SyncBackend, host: str, port: int, **_: Any
+    ) -> httpcore.NetworkStream:
+        handed.append((host, port))
+        return cast(httpcore.NetworkStream, object())
+
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", record)
+
+    _PinnedBackend(resolver_for(PUBLIC)).connect_tcp("example.org", 443)
+
+    assert handed == [(PUBLIC, 443)], (
+        "the name reached the socket layer; only the checked address may"
+    )
+
+
+def test_a_hostname_that_resolves_into_the_network_is_refused_at_connect_time() -> None:
+    """The check runs where the connection is made, not only where the URL is read.
+
+    A request can arrive at the backend without having passed the URL rules —
+    a redirect hop, a lower-level caller — and the address is the last thing
+    that can be checked before bytes leave the host.
+    """
+    backend = _PinnedBackend(resolver_for("169.254.169.254"))
+
+    with pytest.raises(UnsafeURL) as raised:
+        backend.connect_tcp("innocuous.example.org", 80)
+
+    assert "169.254.169.254" in raised.value.reason
+
+
+def test_one_private_address_among_several_refuses_the_name() -> None:
+    """A name that reaches both places is a name that reaches the private one.
+
+    Which of the addresses a connection lands on is the resolver's ordering;
+    the policy cannot be, or a hostile zone would only have to list the public
+    address first.
+    """
+    backend = _PinnedBackend(resolver_for(PUBLIC, "10.0.0.5"))
+
+    with pytest.raises(UnsafeURL) as raised:
+        backend.connect_tcp("split.example.org", 443)
+
+    assert "10.0.0.5" in raised.value.reason

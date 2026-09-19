@@ -27,13 +27,20 @@ string but resolves somewhere that is. A short list of **names** is refused
 outright as well, for hosts whose DNS answers with a placeholder for every name
 and so makes the address say nothing.
 
-What this does not stop, stated plainly: a host whose DNS answer changes between
-this check and the connection. The check resolves, the transport resolves again,
-and an authoritative server that answers differently the second time wins the
-race. Closing that would mean connecting to the address this module validated
-rather than to the name, which is a change to how the HTTP client connects
-rather than a check in front of it. It is recorded in `KNOWN_LIMITATIONS.md`
-instead of being described as solved.
+**A check in front of the request is not enough on its own**, because the
+request resolves the name a second time and an authoritative server that
+answers differently the second time reaches an address this module never saw.
+So `address_for` returns the addresses it validated, and the HTTP client
+connects to one of *them* rather than to the name — see `_PinnedBackend` in
+`ravel.research.fetching`. The name is still what the request is for: it is
+sent as `Host` and as the TLS server name, so the certificate is verified
+against the name and virtual hosts still work. What is removed is the second
+resolution, which was the only part nobody had checked.
+
+The same trick is not available for `ravel.research.browser`, which drives
+Playwright: its connections are made inside a browser process this code does
+not own. A page navigated to by a browser is guarded before and after the fact
+rather than pinned, and that gap is in `KNOWN_LIMITATIONS.md`.
 """
 
 from __future__ import annotations
@@ -185,6 +192,51 @@ def names_the_metadata_service(host: str) -> bool:
     return any(name == known or name.endswith(f".{known}") for known in _METADATA_NAMES)
 
 
+def address_for(host: str, resolver: Resolver = resolve) -> tuple[str, ...]:
+    """The addresses a host may be reached at, all of them checked first.
+
+    Returned rather than a single choice, because the caller connects to one
+    and the check is about all of them: a name with one public and one private
+    address is a name that reaches both, and which one the connection lands on
+    would otherwise be the resolver's decision.
+
+    Raises:
+        UnsafeURL: No host was given, the host names the instance metadata
+            service, or any address it resolves to is not public.
+    """
+    if not host:
+        raise UnsafeURL(host, "the URL names no host")
+
+    # By name as well as by address. On a host whose DNS is intercepted every
+    # name answers with a placeholder address, so the address check cannot tell
+    # the metadata service from a journal — and the name still can.
+    if names_the_metadata_service(host):
+        raise UnsafeURL(
+            host,
+            f"{host} is the instance metadata service; it holds the host's "
+            "credentials and is not a research source",
+        )
+
+    # Checked before resolving: a literal address needs no DNS, and asking a
+    # resolver about `127.0.0.1` is a request that does not need to be made.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        addresses: tuple[str, ...] = tuple(resolver(host))
+    else:
+        addresses = (host,)
+
+    for address in addresses:
+        if not is_public(address):
+            raise UnsafeURL(
+                host,
+                f"{host} resolves to {address}, which is not a public address; "
+                "RAVEL reads research sources and does not make requests to its "
+                "own network",
+            )
+    return addresses
+
+
 def guard(url: str, *, resolver: Resolver = resolve) -> None:
     """Refuse a URL RAVEL must not fetch.
 
@@ -202,36 +254,5 @@ def guard(url: str, *, resolver: Resolver = resolve) -> None:
             "only, because a research source is addressed by a URL and a local "
             "path is not a source",
         )
-
-    host = parts.hostname
-    if not host:
-        raise UnsafeURL(url, "the URL names no host")
-
-    # By name as well as by address. On a host whose DNS is intercepted every
-    # name answers with a placeholder address, so the address check cannot tell
-    # the metadata service from a journal — and the name still can.
-    if names_the_metadata_service(host):
-        raise UnsafeURL(
-            url,
-            f"{host} is the instance metadata service; it holds the host's "
-            "credentials and is not a research source",
-        )
-
-    # Checked before resolving: a literal address needs no DNS, and asking a
-    # resolver about `127.0.0.1` is a request that does not need to be made.
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        addresses = tuple(resolver(host))
-    else:
-        addresses = (host,)
-
-    for address in addresses:
-        if not is_public(address):
-            raise UnsafeURL(
-                url,
-                f"{host} resolves to {address}, which is not a public address; "
-                "RAVEL reads research sources and does not make requests to its "
-                "own network",
-            )
+    address_for(parts.hostname or "", resolver)
 

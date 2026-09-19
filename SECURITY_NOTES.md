@@ -45,27 +45,44 @@ an attacker probing the internal network is trying to obtain. `_Session.goto`
 re-raises the `UnsafeURL`. Refusals raise out of the gateway rather than being
 recorded as restricted sources, for the same reason.
 
-### What this does not stop: DNS rebinding
+### DNS rebinding: the connection is pinned to the validated address
 
-The guard resolves a hostname and then the HTTP client resolves it again when it
-connects. An authoritative server that answers publicly for the first query and
-`169.254.169.254` for the second wins that race. **This is not fixed.** Closing
-it means connecting to the address the guard validated rather than to the name,
-which changes how the client connects (URL rewritten to the literal address,
-`Host` header preserved, TLS SNI and certificate verification pinned to the
-hostname) rather than adding a check in front of it.
+The guard resolves a hostname, and the HTTP client used to resolve it a second
+time when it connected. An authoritative server that answered publicly for the
+first query and `169.254.169.254` for the second won that race, and the check
+had validated an address the request never went to.
 
-What bounds it today:
+**Fixed for the fetcher.** `addressing.address_for` returns the addresses it
+validated, and `_PinnedBackend` (`ravel.research.fetching`) is the network
+backend the HTTP pool is built with: it calls `address_for` and hands the
+resulting **address** to the socket layer. The name is not lost — httpcore still
+knows the host and port the request is for, and uses them for the `Host` header,
+for the TLS server name, and for certificate verification — so the request that
+goes out is identical to what it would have been, and only the address it went
+to was chosen by the guard rather than by the resolver. There is now exactly one
+DNS lookup in the path, and its answer is the one that was checked.
 
-- The name check catches the well-known metadata names regardless of what they
-  resolve to, which covers the highest-value target.
-- The attacker must control authoritative DNS for a host RAVEL fetches, and must
-  win a race between two lookups.
-- RAVEL's fetches are GETs and HEADs. A request that reaches an internal service
-  can still be a state-changing GET on a badly built one.
+Two consequences worth naming:
 
-**Follow-up:** pin the connection to the validated address, and re-verify the
-live suite against real research hosts afterwards.
+- **Keep-alive is off** (`max_keepalive_connections=0`). A pooled connection is
+  keyed by the address it was opened to, so two names behind one address would
+  share a connection whose TLS session was established for the first of them.
+  RAVEL fetches a handful of URLs per call; a handshake each is cheaper than
+  reasoning about that.
+- **`httpx.HTTPTransport` is no longer used**, because it builds its own
+  network backend and does not accept one. The transport in `fetching.py` is
+  built on `httpcore.ConnectionPool` directly and mirrors what `HTTPTransport`
+  does with the response. `tests/live_research` re-verified real Crossref,
+  OpenAlex, arXiv and publisher TLS against it.
+
+**Not fixed for the browser.** Playwright's connections are made inside a
+browser process this code does not own and cannot give a network backend to.
+`BrowserNavigator` guards the URL it is given and every request the page makes
+through a route handler, and refuses the ones it can see — but a name that
+answers differently on the browser's second lookup still reaches the second
+answer. The name check still catches the well-known metadata names regardless of
+what they resolve to, which is the highest-value target, and Chromium is given
+no proxy and no credentials. Recorded as **L-14** in `KNOWN_LIMITATIONS.md`.
 
 ### The trade-off this policy makes on hosts that intercept DNS
 
@@ -219,7 +236,7 @@ findings they produced were real:
 |---|---|
 | SSRF: the browser guarded only the URL it was given, not redirects or subresources | **Fixed.** Route handler on `**/*`; service workers blocked; aborted navigations re-raised as `UnsafeURL`. |
 | Evidence integrity: a retrieval's hash could be recorded unverified on the no-store path | **Fixed.** `register` recomputes it from the body. |
-| SSRF: DNS rebinding TOCTOU between the check and the connection | **Open, documented** in §1 and `KNOWN_LIMITATIONS.md`. |
+| SSRF: DNS rebinding TOCTOU between the check and the connection | **Fixed for the fetcher**, by pinning the connection to the validated address (§1). **Open for the browser**, which cannot be given a network backend; recorded as L-14. |
 | A fourth finding | **Not retrieved.** The review notification body arrived truncated and the full report is not on disk; what is recorded here is what could be read. |
 
 Two of the three earlier access-control findings were likewise fixed in place
@@ -233,8 +250,9 @@ project id comes from the gateway, not the caller) and is covered by
 
 Ranked by what an attacker gains, with the entry that covers each:
 
-1. **DNS rebinding to the metadata service** (§1) — needs control of
-   authoritative DNS for a fetched host and a won race. Open.
+1. **DNS rebinding inside the browser** (§1) — needs control of authoritative
+   DNS for a host a page navigates to or subresources, and a won race the route
+   handler cannot see. Open for the browser only; the fetcher is pinned.
 2. **A credential in a child process's environment** (§3) — needs local access
    to the harness process or a DSH feature that reads the environment. Bounded
    by the agent having no shell.
