@@ -308,17 +308,27 @@ def _transition_rows(
 
 
 def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
-    """Create the guard functions and attach them to the tables.
+    """Create the guard functions and attach them to the tables that exist.
 
     Idempotent: every object is created with `OR REPLACE` or dropped first, so
     this can run on an empty database, on an existing one, and in a test
     schema that already has the tables.
 
+    **Only tables that are actually present are touched.** `table_names` is the
+    set worth guarding — every table the metadata declares, unless a caller
+    knows better — and it is intersected with what PostgreSQL reports. The
+    intersection is not a refinement: `CREATE TRIGGER ... ON <table>` fails
+    outright when the table is absent, and the metadata describes the schema at
+    the end of the migration chain while an individual migration runs in the
+    middle of it. A fresh `alembic upgrade head` calls this from the initial
+    migration, where the tables added by later revisions are declared but not
+    yet created, and without the intersection the whole chain fails on the
+    first table that a later migration introduces.
+
     Args:
         bind: A SQLAlchemy `Connection` or `Engine`.
-        table_names: The tables that exist. Defaults to `MUTABLE_TABLES` plus
-            every table in the metadata that is not one of them — supplied
-            explicitly when the caller knows better.
+        table_names: The tables worth guarding. Defaults to every table the
+            metadata declares; the ones that do not exist yet are skipped.
     """
     if table_names is None:
         table_names = _declared_table_names()
@@ -338,7 +348,8 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
         ),
     ]
 
-    existing = {name for name in table_names if name in _declared_table_names()}
+    declared = _declared_table_names()
+    existing = {name for name in table_names if name in declared} & _existing_tables(bind)
 
     if "dag_nodes" in existing:
         statements.append(
