@@ -52,6 +52,14 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: identity guard is not merely tidy: `attempt` is what makes starting a job
 #: idempotent, so a row whose attempt could be rewritten would let one job
 #: stand in for another.
+#:
+#: `deviation_records` is here for its two resolution columns, and it was
+#: missing from this list while `DeviationRepository.resolve` wrote them — so
+#: every resolution would have been refused by the append-only trigger, and the
+#: mistake was invisible for exactly as long as nothing called it. What a
+#: deviation *asked for* is as fixed as any other record's contents; what may
+#: change is which decision answered it, and the identity trigger below is what
+#: keeps that the only thing.
 UPDATABLE_TABLES: frozenset[str] = frozenset(
     {
         "projects",
@@ -61,6 +69,7 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "acceptance_contracts",
         "execution_contracts",
         "backend_jobs",
+        "deviation_records",
         "project_event_counters",
     }
 )
@@ -122,6 +131,27 @@ BACKEND_JOB_IDENTITY_COLUMNS: tuple[str, ...] = (
     "execution_contract_version",
     "backend",
     "submitted_at",
+)
+
+#: Columns on `deviation_records` that its one permitted UPDATE may not touch.
+#: `deviation_id` is first because it is what the trigger names the row by.
+#:
+#: What is absent from this list is the point: `resolved_by_decision_ref` and
+#: `resolved_at` are the two columns `DeviationRepository.resolve` writes, and
+#: everything describing the escalation itself — which node raised it, what was
+#: asked for, and why the contract refused — is fixed. A deviation whose
+#: `requested_action` could be edited after Master answered it would let the
+#: record be made to agree with whatever decision was taken.
+DEVIATION_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "deviation_id",
+    "project_id",
+    "node_id",
+    "execution_contract_ref",
+    "requested_action",
+    "description",
+    "permitted",
+    "raised_by",
+    "raised_at",
 )
 
 _TRANSITION_TABLE_DDL = """
@@ -234,6 +264,7 @@ _NODE_TRANSITION_TRIGGER = "ravel_dag_nodes_transition"
 _PROJECT_TRANSITION_TRIGGER = "ravel_projects_transition"
 _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
 _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
+_DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -247,6 +278,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _PROJECT_TRANSITION_TRIGGER,
     _DAG_NODE_IDENTITY_TRIGGER,
     _BACKEND_JOB_IDENTITY_TRIGGER,
+    _DEVIATION_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -378,6 +410,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=BACKEND_JOB_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "deviation_records" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_DEVIATION_IDENTITY_TRIGGER,
+                table="deviation_records",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=DEVIATION_IDENTITY_COLUMNS,
             )
         )
 
