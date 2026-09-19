@@ -18,6 +18,7 @@ from pydantic import Field, model_validator
 from ravel.domain.base import Record
 from ravel.domain.clock import utcnow
 from ravel.domain.enums import ApprovalStatus, UserRole
+from ravel.domain.events import ActorType
 from ravel.domain.ids import DisplayPrefix, display_id, new_id
 from ravel.domain.roles import AgentRole
 
@@ -246,3 +247,38 @@ class RevokedTokenFamily(Record):
     user_id: str
     reason: str = ""
     revoked_at: datetime = Field(default_factory=utcnow)
+
+
+class MasterMessage(Record):
+    """One thing said between a person and Master, in the order it was said.
+
+    The conversation is recorded here rather than read back out of the harness,
+    for the reason a checkpoint is: a DSH session dies with its process and
+    cannot be resumed across one, so a conversation kept only there would
+    vanish at the moment somebody wants to read what was decided. `docs/04`
+    also makes the point the other way round — DSH session is not Project — and
+    a transcript stored in the harness would be exactly that confusion.
+
+    A row is one utterance, and it is append-only like everything else. Nothing
+    edits a message and nothing unsays one, which is what lets a later reader
+    treat the transcript as a record of what was actually said rather than of
+    what somebody last thought should have been said.
+
+    `turn_id` groups a question with whatever answering it produced. Master may
+    take several turns' worth of tool calls before it says anything, so the
+    reply is not necessarily one message, and a grouping that was inferred from
+    timestamps would be a guess.
+    """
+
+    message_id: str = Field(default_factory=new_id)
+    project_id: str
+    #: The exchange this belongs to: one message from a person and everything
+    #: Master said back about it.
+    turn_id: str = Field(default_factory=new_id)
+    #: A user id when a person spoke, or Master's agent identity when Master
+    #: did. Which of the two is `author_type`, and the pair is what a reader
+    #: needs to attribute the row without consulting a second table.
+    author_id: str
+    author_type: ActorType
+    body: str = Field(min_length=1)
+    created_at: datetime = Field(default_factory=utcnow)

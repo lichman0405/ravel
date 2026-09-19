@@ -318,6 +318,34 @@ class RevokedTokenFamilyRow(Base):
     revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class MasterMessageRow(Base):
+    """One utterance between a person and Master.
+
+    Append-only, like every other record: a transcript that could be edited
+    would be a record of what somebody last thought should have been said.
+    Absent from `UPDATABLE_TABLES`, so the append-only trigger applies and no
+    guard code names this table.
+    """
+
+    __tablename__ = "master_messages"
+    __table_args__ = (
+        _enum_constraint("author_type", ActorType),
+        Index("ix_master_messages_turn", "project_id", "turn_id"),
+        Index("ix_master_messages_order", "project_id", "created_at"),
+    )
+
+    message_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    #: Groups a person's question with everything Master said back about it.
+    turn_id: Mapped[str] = mapped_column(ID, nullable=False)
+    author_id: Mapped[str] = mapped_column(ID, nullable=False)
+    author_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class RoadmapPhaseRow(Base):
     """A broad future phase. Only the near ones become executable nodes.
 
