@@ -105,19 +105,31 @@ def emit(
     return recorded
 
 
-def events_since(session: Session, project_id: str, after_seq: int = 0) -> list[ProjectEvent]:
+def events_since(
+    session: Session, project_id: str, after_seq: int = 0, limit: int | None = None
+) -> list[ProjectEvent]:
     """A project's events after a sequence number, oldest first.
 
     The TUI reconnects with the last sequence it rendered; a gap between that
     and the first row returned here is how it knows it missed something.
+
+    `limit` is the caller's, and it is optional because the two callers want
+    different things. Master's recovery reads the whole stream, because it is
+    reconstructing what happened and a partial history would reconstruct a
+    different project. A client reading over the network caps it instead: the
+    stream only grows, and an unbounded read is a request whose cost depends on
+    how long the project has been running rather than on what the caller asked
+    for. A caller that wants to know whether it is behind asks for one more
+    than it will render.
     """
-    rows = (
+    statement = (
         session.query(ProjectEventRow)
         .filter(ProjectEventRow.project_id == project_id, ProjectEventRow.seq > after_seq)
         .order_by(ProjectEventRow.seq)
-        .all()
     )
-    return [from_row(ProjectEvent, row) for row in rows]
+    if limit is not None:
+        statement = statement.limit(limit)
+    return [from_row(ProjectEvent, row) for row in statement.all()]
 
 
 def last_event_seq(session: Session, project_id: str) -> int:

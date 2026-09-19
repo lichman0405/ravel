@@ -77,7 +77,7 @@ def test_a_hash_is_not_the_password_and_does_not_repeat() -> None:
 def test_a_password_verifies_only_against_itself(
     stored: str, presented: str, expected: bool
 ) -> None:
-    assert verify_password(hash_password(stored), presented) is expected
+    assert verify_password(stored_hash=hash_password(stored), password=presented) is expected
 
 
 def test_an_empty_password_is_refused_rather_than_hashed() -> None:
@@ -93,7 +93,7 @@ def test_a_hash_that_is_not_a_hash_verifies_as_false() -> None:
     whose hash is broken, which is a fact about the account that a caller has
     no business learning.
     """
-    assert verify_password("not-a-hash-at-all", "anything") is False
+    assert verify_password(stored_hash="not-a-hash-at-all", password="anything") is False
 
 
 def test_a_current_hash_does_not_ask_to_be_remade() -> None:

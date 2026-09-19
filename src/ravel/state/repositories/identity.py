@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ravel.domain.enums import ApprovalStatus, UserRole
@@ -73,6 +74,32 @@ class UserRepository:
         if row is None:
             raise NotFound(f"no user {user_id!r}")
         return from_row(User, row)
+
+
+def memberships_of(session: Session, user_id: str) -> list[ProjectMembership]:
+    """Every project this user belongs to, oldest grant first.
+
+    A module-level function rather than a `MembershipRepository` method because
+    that repository is scoped to one project and this question is deliberately
+    across all of them — it is how a client learns which projects to offer, and
+    it is the only read in the system that is not filtered by a project.
+
+    That it takes a user identifier and returns only *that* user's rows is what
+    keeps it from being a way around the scoping. There is no variant that
+    enumerates a project's members, because nothing in V0 asks who else is in a
+    project, and adding one would be a new authorization decision rather than a
+    new query.
+    """
+    rows = (
+        session.execute(
+            select(ProjectMembershipRow)
+            .where(ProjectMembershipRow.user_id == user_id)
+            .order_by(ProjectMembershipRow.granted_at)
+        )
+        .scalars()
+        .all()
+    )
+    return [from_row(ProjectMembership, row) for row in rows]
 
 
 class MembershipRepository(ProjectScopedRepository[ProjectMembership]):

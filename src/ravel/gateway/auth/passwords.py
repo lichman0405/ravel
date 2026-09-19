@@ -49,7 +49,7 @@ def hash_password(password: str) -> str:
     return _HASHER.hash(password)
 
 
-def verify_password(stored_hash: str, password: str) -> bool:
+def verify_password(*, stored_hash: str, password: str) -> bool:
     """Whether a password matches a stored hash.
 
     Returns a bool rather than raising, because every failure here means the
@@ -58,6 +58,12 @@ def verify_password(stored_hash: str, password: str) -> bool:
     programming error rather than a wrong password — but both end as `False`,
     since a login screen must not become an oracle for which accounts have
     malformed hashes.
+
+    Both arguments are keyword-only, which is unusual for a function this
+    small and is the point: the two are both strings, so swapping them
+    type-checks, runs, and returns `False` — a caller who transposed them sees
+    a correct password rejected and goes looking for the bug in the wrong
+    place. Requiring the names turns that into a `TypeError` at the call site.
     """
     try:
         return _HASHER.verify(stored_hash, password)
