@@ -40,6 +40,8 @@ from ravel.config import Settings
 from ravel.domain.enums import UserRole
 from ravel.gateway.auth.tokens import InvalidAccessToken, TokenService
 from ravel.gateway.conversation import MasterFactory
+from ravel.gateway.runtime import HarnessRuntime
+from ravel.gateway.stream import DEFAULT_CADENCE, Cadence
 from ravel.state.database import Database
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
 
@@ -78,6 +80,19 @@ class GatewayState:
     one place that decides how a message reaches a harness is the application
     factory — and so that a test can hand the Gateway a scripted Master without
     touching the runtime at all.
+
+    `runtime` is the same object `master_of` reaches Master through, held
+    separately because two different routes want two different halves of it: the
+    conversation wants a Master, and the administrator's screen wants to know
+    how the harness is doing. Keeping only the factory would leave the second
+    question unanswerable, and building a second pool to answer it would be a
+    second pool.
+
+    `cadence` is here for a narrower reason: the event stream is the only thing
+    in the Gateway that does something on a timer, and a timer is the one kind
+    of behaviour a test cannot wait for at its production rate. It is a
+    parameter so that a test can make the stream look every few milliseconds,
+    which is the difference between a suite that runs and a suite that sleeps.
     """
 
     def __init__(
@@ -87,11 +102,15 @@ class GatewayState:
         database: Database,
         tokens: TokenService,
         master_of: MasterFactory,
+        runtime: HarnessRuntime,
+        cadence: Cadence | None = None,
     ) -> None:
         self.settings = settings
         self.database = database
         self.tokens = tokens
         self.master_of = master_of
+        self.runtime = runtime
+        self.cadence = cadence or DEFAULT_CADENCE
 
 
 @dataclass(frozen=True)
@@ -165,16 +184,15 @@ def gateway_state(request: Request) -> GatewayState:
     return state
 
 
-def current_caller(
-    state: Annotated[GatewayState, Depends(gateway_state)],
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(BEARER)],
-) -> Caller:
-    """The authenticated user, or a refusal.
+def authenticate(state: GatewayState, token: str | None) -> Caller:
+    """Turn a bearer token into the user it names, or refuse.
 
-    The token says *who*, and nothing else. It carries no project and no role,
-    so a stolen token cannot be aimed at a project its owner was never a member
-    of — the membership row is consulted on every request, which also means
-    revoking one takes effect immediately rather than when a token expires.
+    The checks are written as a plain function rather than inside the
+    dependency below because the event stream is a WebSocket, and a WebSocket
+    cannot answer with a 401 — it has to close with a code. Two authorization
+    paths would be two places for the rule to drift, so the socket calls this
+    one and translates its refusal into a close, and the dependency calls it
+    and lets FastAPI translate the same refusal into a response.
 
     Raises:
         HTTPException: 401. The reason is a fixed sentence rather than the
@@ -185,10 +203,10 @@ def current_caller(
             an expired token from a forged one, and the second answer is a
             forgery being told which part of it to fix.
     """
-    if credentials is None or not credentials.credentials:
+    if not token:
         raise _unauthenticated("this route requires an access token")
     try:
-        grant = state.tokens.verify_access(credentials.credentials)
+        grant = state.tokens.verify_access(token)
     except InvalidAccessToken as refused:
         logger.info("refused an access token: %s", refused.reason)
         raise _unauthenticated("that access token was not accepted") from refused
@@ -200,17 +218,14 @@ def current_caller(
     return Caller(user_id=user.user_id, username=user.username)
 
 
-def principal(
-    project_id: str,
-    caller: Annotated[Caller, Depends(current_caller)],
-    state: Annotated[GatewayState, Depends(gateway_state)],
-) -> Principal:
-    """The caller's standing in the project this request names.
+def standing_in(state: GatewayState, project_id: str, caller: Caller) -> Principal:
+    """The caller's standing in one project, or a refusal.
 
-    `project_id` is read from the route's path. It is a dependency parameter
-    rather than an argument each route passes so that no route can forget to
-    check membership: naming `PrincipalDep` in a signature is what performs
-    the check, and a route that omitted it would not have the project at all.
+    Reads the membership row from PostgreSQL. Not from the token, and not from
+    anything the caller sent: a token carries no project and no role, so a
+    stolen one cannot be aimed at a project its owner was never a member of —
+    which also means a revocation takes effect on the next request rather than
+    whenever the token happens to expire.
 
     Raises:
         HTTPException: 404, whether the project does not exist or this caller
@@ -224,6 +239,31 @@ def principal(
             detail=f"no project {project_id!r}",
         )
     return Principal(caller=caller, project_id=project_id, role=membership.role)
+
+
+def current_caller(
+    state: Annotated[GatewayState, Depends(gateway_state)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(BEARER)],
+) -> Caller:
+    """`authenticate`, as a dependency. See it for what the check is."""
+    return authenticate(
+        state, credentials.credentials if credentials is not None else None
+    )
+
+
+def principal(
+    project_id: str,
+    caller: Annotated[Caller, Depends(current_caller)],
+    state: Annotated[GatewayState, Depends(gateway_state)],
+) -> Principal:
+    """`standing_in`, as a dependency.
+
+    `project_id` is read from the route's path. It is a dependency parameter
+    rather than an argument each route passes so that no route can forget to
+    check membership: naming `PrincipalDep` in a signature is what performs
+    the check, and a route that omitted it would not have the project at all.
+    """
+    return standing_in(state, project_id, caller)
 
 
 def require_director(standing: Annotated[Principal, Depends(principal)]) -> Principal:
@@ -288,9 +328,11 @@ __all__ = [
     "GatewayStateDep",
     "Principal",
     "PrincipalDep",
+    "authenticate",
     "current_caller",
     "gateway_state",
     "principal",
     "require_administrator",
     "require_director",
+    "standing_in",
 ]

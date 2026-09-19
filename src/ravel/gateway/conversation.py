@@ -19,12 +19,15 @@ answered". The transcript says the first; the turn's own report says the
 second.
 
 **The port is a protocol, not a runtime.** Nothing here imports the harness
-beyond the two data types the turn produces, and the factory that reaches a
-real runtime is built lazily — a Gateway that is never spoken to never starts
-one. That is also what lets the TUI's end-to-end test drive a real Gateway and
-a real database while Master is scripted, exactly as the headless loop's test
-does: what is being tested is the Gateway's half, and a test that needed a
-model in the loop would be testing the model.
+beyond the two data types the turn produces, and the adapter below is the only
+class that knows a real runtime exists. What *starts* one is
+`ravel.gateway.runtime`, on the other side of this port: a Gateway that is
+never spoken to never starts a runtime, and a test can hand the Gateway a
+scripted Master without a model being involved — which is what lets the TUI's
+end-to-end test drive a real Gateway and a real database while Master is
+scripted, exactly as the headless loop's test does. What is being tested is the
+Gateway's half, and a test that needed a model in the loop would be testing the
+model.
 """
 
 from __future__ import annotations
@@ -33,13 +36,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from ravel.config import Settings
-from ravel.domain.roles import AgentRole
 from ravel.dsh.agents import MasterConversation
-from ravel.dsh.pool import DshRuntimePool, create_pool
 from ravel.execution.loop import Situation
 
-__all__ = ["Answer", "HarnessMaster", "MasterFactory", "MasterPort", "harness_master"]
+__all__ = ["Answer", "HarnessMaster", "MasterFactory", "MasterPort"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,43 +78,3 @@ class HarnessMaster:
     async def respond(self, situation: Situation, message: str) -> Answer:
         outcome = await self.conversation.respond(situation, message)
         return Answer(text=outcome.response.strip(), completed=outcome.completed)
-
-
-def harness_master(settings: Settings) -> MasterFactory:
-    """A factory that starts one runtime pool, the first time it is needed.
-
-    The pool is created on first use rather than here, so importing the
-    application does not require a DSH home to exist and a deployment that only
-    ever serves reads never pays for one. The conversation per project is held
-    for the same reason the pool holds its runtimes: Master's turns have
-    continuity within a project for as long as the process lasts, and no longer.
-    """
-    holder: dict[str, DshRuntimePool] = {}
-    conversations: dict[str, HarnessMaster] = {}
-
-    def master_of(project_id: str) -> MasterPort:
-        existing = conversations.get(project_id)
-        if existing is not None and existing.conversation.live:
-            return existing
-
-        pool = holder.get("pool")
-        if pool is None:
-            pool = create_pool(settings)
-            holder["pool"] = pool
-
-        started = HarnessMaster(
-            conversation=MasterConversation(
-                pool=pool,
-                project_id=project_id,
-                role=AgentRole.MASTER,
-                # Written into the runtime's brief once, at start. It says which
-                # channel opened the scope, because that is a fact about the
-                # authority the process was launched under and not something a
-                # later turn may revise.
-                brief={"channel": "user conversation"},
-            )
-        )
-        conversations[project_id] = started
-        return started
-
-    return master_of

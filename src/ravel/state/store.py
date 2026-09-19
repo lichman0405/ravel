@@ -242,8 +242,13 @@ class S3ArtifactStore:
 def _buffer_and_hash(chunks: Iterable[bytes]) -> tuple[bytes, str, int]:
     """Hash a stream and keep it, for the single-shot `put_object` call.
 
-    Returns the whole payload, which is why `put` is documented for the sizes
-    RAVEL actually handles; `put_stream` covers the larger case.
+    Returns the whole payload. Hashing before uploading is what makes the
+    recorded hash describe exactly the bytes that were sent rather than the
+    bytes that were meant to be sent, and it is why a store write costs as much
+    memory as the object is large: V0 buffers, and the Gateway caps what it will
+    accept for that reason. Streaming a large upload would mean a multipart
+    upload whose parts are hashed as they are read, which is a change to this
+    function and not to its callers.
     """
     digest = hashlib.new(HASH_ALGORITHM)
     parts: list[bytes] = []

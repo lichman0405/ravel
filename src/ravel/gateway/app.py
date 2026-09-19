@@ -28,10 +28,21 @@ from fastapi import FastAPI
 
 from ravel.config import Settings, get_settings
 from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
-from ravel.gateway.conversation import MasterFactory, harness_master
+from ravel.gateway.conversation import MasterFactory
 from ravel.gateway.deps import GatewayState
 from ravel.gateway.errors import install_error_handlers
-from ravel.gateway.routes import auth, control, conversation, projects
+from ravel.gateway.routes import (
+    admin,
+    artifacts,
+    auth,
+    control,
+    conversation,
+    events,
+    lab,
+    projects,
+)
+from ravel.gateway.runtime import HarnessRuntime
+from ravel.gateway.stream import Cadence
 from ravel.state.database import Database
 
 #: What the Gateway calls itself. Versioned because a TUI written against V0
@@ -46,6 +57,7 @@ def create_app(
     database: Database | None = None,
     tokens: TokenService | None = None,
     master_of: MasterFactory | None = None,
+    cadence: Cadence | None = None,
 ) -> FastAPI:
     """Build the Gateway.
 
@@ -58,6 +70,9 @@ def create_app(
             through a factory that starts no runtime until somebody speaks to
             one — so a Gateway that only serves reads costs nothing extra, and
             a test can script Master without a model being involved.
+        cadence: How often the event stream looks for new events and how often
+            it speaks when there are none. Defaults to the production rates;
+            a test lowers them rather than sleeping through them.
 
     Raises:
         RuntimeError: In production, the configured token secret is the
@@ -84,11 +99,20 @@ def create_app(
         docs_url="/docs",
         openapi_url="/openapi.json",
     )
+    # One runtime, built here and handed to both halves of the application: the
+    # factory every route reaches Master through, and the state the
+    # administrator's screen asks how the harness is doing. Building it twice
+    # would be two pools, and the second one would start runtimes the first
+    # could not see.
+    runtime = HarnessRuntime(settings=resolved)
+
     app.state.ravel = GatewayState(
         settings=resolved,
         database=resolved_database,
         tokens=tokens,
-        master_of=master_of or harness_master(resolved),
+        master_of=master_of or runtime.master_of,
+        runtime=runtime,
+        cadence=cadence,
     )
 
     install_error_handlers(app)
@@ -97,6 +121,10 @@ def create_app(
     app.include_router(projects.router)
     app.include_router(control.router)
     app.include_router(conversation.router)
+    app.include_router(events.router)
+    app.include_router(artifacts.router)
+    app.include_router(lab.router)
+    app.include_router(admin.router)
 
     @app.get("/healthz", tags=["meta"], summary="Whether this process is answering")
     def healthz() -> dict[str, str]:
