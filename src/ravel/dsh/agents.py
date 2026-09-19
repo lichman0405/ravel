@@ -25,6 +25,16 @@ runtime lives, so Master's turns have continuity within a project. Nothing
 depends on that: the harness creates a session on first use and cannot reopen
 one in a later process, so a runtime that is reaped costs the agent its
 short-term memory and nothing else. Recovery reads the database.
+
+**Two things drive a turn, and they share everything but the input.**
+`HarnessAgent` is the loop's port: it is handed a `Situation` and decides what
+the project needs. `MasterConversation` is a person talking: it is handed the
+same `Situation` plus what somebody typed, and answers them. Both hold a
+`RoleSession` — the runtime, the session on it, and how a turn is run — because
+that part does not depend on why the turn is being run. What they do *not*
+share is a prompt, and that is deliberate: the loop's turn exists to move a
+project, and a person's turn exists to answer a person, and a single prompt
+doing both would be one that half-fits each.
 """
 
 from __future__ import annotations
@@ -43,18 +53,17 @@ from ravel.execution.loop import Situation
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["HarnessAgent"]
+__all__ = ["HarnessAgent", "MasterConversation", "RoleSession"]
 
 
 @dataclass
-class HarnessAgent:
-    """One role's turns in one project, as the loop's ports see it.
+class RoleSession:
+    """One role's session in one project, on the pool's runtime.
 
-    Implements `MasterPort` and `ReviewPort` with the same method, because the
-    difference between the two is the role the runtime booted with — its
-    behavioral contract, its tool roster, and the authority its MCP server
-    checks — rather than anything the loop does with the result. A second class
-    would be this one with a different string in it.
+    The half of an agent that has nothing to do with what the turn is *for*:
+    which runtime this scope has, which session on it is ours, and how a turn
+    is run on it. Two things drive turns — the project loop, and a person
+    talking to Master — and both need exactly this much and no more.
     """
 
     pool: DshRuntimePool
@@ -71,7 +80,7 @@ class HarnessAgent:
 
     @property
     def turns(self) -> int:
-        """How many turns this port has run, for health reporting."""
+        """How many turns this session has run, for health reporting."""
         return self._turns
 
     @property
@@ -79,42 +88,29 @@ class HarnessAgent:
         """The live session's identifier, or `None` before the first turn."""
         return self._session_id
 
-    async def act(self, situation: Situation) -> None:
-        """Run one turn, with the situation as its input.
+    @property
+    def live(self) -> bool:
+        """Whether a runtime is currently held for this scope."""
+        return self._runtime is not None and not self._runtime.is_closed
 
-        Off the event loop's thread rather than on it: the SDK's turn call
-        blocks until the session goes idle, and a project loop that could not
-        do anything else while an agent thought would be a loop that cannot
-        poll the work it already started.
+    def close(self) -> None:
+        """Shut down this scope's runtime, as a project ending does."""
+        self.pool.close_scope(self.project_id, self.role)
+        self._runtime = None
+        self._session_id = None
+
+    async def run(self, prompt: str) -> TurnOutcome:
+        """Run one turn with this text as its input, off the event loop's thread.
+
+        Off the thread rather than on it: the SDK's turn call blocks until the
+        session goes idle, and a caller that could not do anything else while
+        an agent thought would be one that cannot poll the work it already
+        started.
         """
         runtime, session_id = self._session()
-        prompt = self._prompt(situation)
-        outcome: TurnOutcome = await asyncio.to_thread(
-            runtime.run_turn, session_id, prompt
-        )
+        outcome: TurnOutcome = await asyncio.to_thread(runtime.run_turn, session_id, prompt)
         self._turns += 1
-        if not outcome.completed:
-            # Not raised: a turn that failed is a round that changed nothing,
-            # and the loop counts those. Raising here would end a project
-            # because a model timed out on one round.
-            logger.warning(
-                "harness turn did not complete: project=%s role=%s session=%s "
-                "finish_reason=%s",
-                self.project_id,
-                self.role.value,
-                session_id,
-                outcome.finish_reason,
-            )
-        logger.info(
-            "harness turn: project=%s role=%s turns=%d tool_calls=%d completed=%s",
-            self.project_id,
-            self.role.value,
-            self._turns,
-            len(outcome.tool_calls),
-            outcome.completed,
-        )
-
-    # ── The session ─────────────────────────────────────────────────────────
+        return outcome
 
     def _session(self) -> tuple[RoleRuntime, str]:
         """The live runtime and this agent's session on it.
@@ -134,11 +130,41 @@ class HarnessAgent:
             self.pool.bindings.bind(session_id, self.project_id, self.role)
         return runtime, session_id
 
-    def close(self) -> None:
-        """Shut down this scope's runtime, as a project ending does."""
-        self.pool.close_scope(self.project_id, self.role)
-        self._runtime = None
-        self._session_id = None
+
+@dataclass
+class HarnessAgent(RoleSession):
+    """One role's turns in one project, as the loop's ports see it.
+
+    Implements `MasterPort` and `ReviewPort` with the same method, because the
+    difference between the two is the role the runtime booted with — its
+    behavioral contract, its tool roster, and the authority its MCP server
+    checks — rather than anything the loop does with the result. A second class
+    would be this one with a different string in it.
+    """
+
+    async def act(self, situation: Situation) -> None:
+        """Run one turn, with the situation as its input."""
+        outcome = await self.run(self._prompt(situation))
+        if not outcome.completed:
+            # Not raised: a turn that failed is a round that changed nothing,
+            # and the loop counts those. Raising here would end a project
+            # because a model timed out on one round.
+            logger.warning(
+                "harness turn did not complete: project=%s role=%s session=%s "
+                "finish_reason=%s",
+                self.project_id,
+                self.role.value,
+                self.session_id,
+                outcome.finish_reason,
+            )
+        logger.info(
+            "harness turn: project=%s role=%s turns=%d tool_calls=%d completed=%s",
+            self.project_id,
+            self.role.value,
+            self._turns,
+            len(outcome.tool_calls),
+            outcome.completed,
+        )
 
     # ── The turn's input ────────────────────────────────────────────────────
 
@@ -309,3 +335,93 @@ class HarnessAgent:
             "the criteria."
         )
         return lines
+
+
+@dataclass
+class MasterConversation(RoleSession):
+    """A person talking to Master, with the project state in front of it.
+
+    `docs/08` gives the owner "natural-language conversation with Master", and
+    this is the whole of what that is: a turn whose input is what somebody
+    typed, preceded by the same authoritative state every other Master turn
+    begins with. The user's words are not a command and are not parsed — they
+    are the one part of the situation a person supplies, and Master decides
+    what, if anything, to do about them. A sentence asking for a node to be
+    added changes nothing unless Master writes the decision and the node, which
+    is the same bar the loop's turns are held to.
+
+    **The authority is the session's, not the message's.** Nothing here
+    elevates the turn because a human asked for it. Master's tools check the
+    same scope-bound grant they check on any other turn, so an owner who wants
+    something outside the Authority Envelope gets a conversation about it —
+    or an approval request — rather than a node.
+
+    **What comes back is text, and only text.** The reply is recorded as what
+    Master said. Anything Master *did* is already in PostgreSQL, written
+    through the tools, and is read from there rather than from a transcript: a
+    sentence describing a change that was never made is a sentence, and the
+    record is the record.
+    """
+
+    async def respond(self, situation: Situation, message: str) -> TurnOutcome:
+        """Run one turn with the person's message as its input."""
+        outcome = await self.run(self._prompt(situation, message))
+        if not outcome.completed:
+            # Not raised, for the reason `HarnessAgent.act` does not raise it:
+            # a turn that failed is a turn that produced no answer, and the
+            # transcript should show one that did not finish rather than the
+            # request failing after the question was already recorded.
+            logger.warning(
+                "master conversation turn did not complete: project=%s session=%s "
+                "finish_reason=%s",
+                self.project_id,
+                self.session_id,
+                outcome.finish_reason,
+            )
+        logger.info(
+            "master conversation: project=%s turns=%d tool_calls=%d completed=%s",
+            self.project_id,
+            self._turns,
+            len(outcome.tool_calls),
+            outcome.completed,
+        )
+        return outcome
+
+    def _prompt(self, situation: Situation, message: str) -> str:
+        """The situation, and then what the person said.
+
+        The order is the point. State first, message second, because the
+        message is the only thing here a person wrote and it must not read as
+        an instruction that outranks the record — Master answers *this project*
+        as it stands, not the project the message assumes.
+        """
+        project = situation.project
+        lines = [
+            f"Somebody is talking to you. Project {project.display_id} "
+            f"({project.status.value}).",
+            f"Objective: {project.objective}",
+            "",
+            "* What the project state holds",
+            *HarnessAgent._census(situation),
+        ]
+        waiting = HarnessAgent._waiting_on_master(situation)
+        if waiting:
+            lines.extend(["", "* What is waiting on you", *waiting])
+        if situation.open_deviations:
+            lines.extend(
+                ["", "* The escalations themselves", *HarnessAgent._deviation_lines(situation)]
+            )
+        lines.extend(
+            [
+                "",
+                "* What they said",
+                message,
+                "",
+                "Answer them. What you change, you change through your tools, and "
+                "you record a Decision Record for anything you change — a reply "
+                "that describes a change you did not make is a sentence, not a "
+                "change. If answering honestly means saying that the project state "
+                "is not what they think it is, say that.",
+            ]
+        )
+        return "\n".join(lines)

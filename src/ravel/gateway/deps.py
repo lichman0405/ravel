@@ -39,6 +39,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from ravel.config import Settings
 from ravel.domain.enums import UserRole
 from ravel.gateway.auth.tokens import InvalidAccessToken, TokenService
+from ravel.gateway.conversation import MasterFactory
 from ravel.state.database import Database
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
 
@@ -69,12 +70,28 @@ class GatewayState:
     get at the database, the settings and the tokens together — a route that
     needs the token service but not the database does not exist, and if one
     appears it should be obvious that it was deliberate.
+
+    `master_of` is the fourth, and it is the only one a route reaches a *model*
+    through. It arrives as a factory rather than as an object because a Master
+    belongs to a project and a Gateway serves several, and it is a parameter
+    with no default here rather than something this module builds, so that the
+    one place that decides how a message reaches a harness is the application
+    factory — and so that a test can hand the Gateway a scripted Master without
+    touching the runtime at all.
     """
 
-    def __init__(self, *, settings: Settings, database: Database, tokens: TokenService) -> None:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        database: Database,
+        tokens: TokenService,
+        master_of: MasterFactory,
+    ) -> None:
         self.settings = settings
         self.database = database
         self.tokens = tokens
+        self.master_of = master_of
 
 
 @dataclass(frozen=True)

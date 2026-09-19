@@ -28,9 +28,10 @@ from fastapi import FastAPI
 
 from ravel.config import Settings, get_settings
 from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
+from ravel.gateway.conversation import MasterFactory, harness_master
 from ravel.gateway.deps import GatewayState
 from ravel.gateway.errors import install_error_handlers
-from ravel.gateway.routes import auth, control, projects
+from ravel.gateway.routes import auth, control, conversation, projects
 from ravel.state.database import Database
 
 #: What the Gateway calls itself. Versioned because a TUI written against V0
@@ -44,6 +45,7 @@ def create_app(
     settings: Settings | None = None,
     database: Database | None = None,
     tokens: TokenService | None = None,
+    master_of: MasterFactory | None = None,
 ) -> FastAPI:
     """Build the Gateway.
 
@@ -52,6 +54,10 @@ def create_app(
         database: Authoritative state. Defaults to one built from `settings`.
         tokens: The access-token service. Defaults to one built from the
             configured secret.
+        master_of: How a project's Master is reached. Defaults to the harness,
+            through a factory that starts no runtime until somebody speaks to
+            one — so a Gateway that only serves reads costs nothing extra, and
+            a test can script Master without a model being involved.
 
     Raises:
         RuntimeError: In production, the configured token secret is the
@@ -79,7 +85,10 @@ def create_app(
         openapi_url="/openapi.json",
     )
     app.state.ravel = GatewayState(
-        settings=resolved, database=resolved_database, tokens=tokens
+        settings=resolved,
+        database=resolved_database,
+        tokens=tokens,
+        master_of=master_of or harness_master(resolved),
     )
 
     install_error_handlers(app)
@@ -87,6 +96,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(projects.router)
     app.include_router(control.router)
+    app.include_router(conversation.router)
 
     @app.get("/healthz", tags=["meta"], summary="Whether this process is answering")
     def healthz() -> dict[str, str]:

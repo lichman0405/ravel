@@ -60,7 +60,35 @@ __all__ = [
     "ProjectRun",
     "ReviewPort",
     "Situation",
+    "read_situation",
 ]
+
+
+def read_situation(database: Database, project_id: str) -> Situation:
+    """One project's authoritative state, as of one read.
+
+    Module-level rather than a method because it has two callers with nothing
+    else in common: the loop, once per round, and the Gateway, once per thing a
+    person says to Master. Both are asking the same question — where is this
+    project, and what is waiting on it — and a second reader written beside the
+    second caller is how the two would come to disagree about what the project
+    is doing.
+
+    Read-only, and in a transaction of its own. An agent turn can take minutes
+    and nothing may hold a write transaction across one.
+    """
+    with database.read_only() as session:
+        project = ProjectRegistry(session).get(project_id)
+        dag = DagRepository(session, project_id)
+        nodes = tuple(dag.nodes())
+        return Situation(
+            project=project,
+            nodes=nodes,
+            pre_run={
+                node.node_id: dag.latest_pre_run_outcome(node.node_id) for node in nodes
+            },
+            open_deviations=tuple(DeviationRepository(session, project_id).open()),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,25 +439,12 @@ class ProjectLoop:
     def _read(self) -> Situation:
         """Read the project's authoritative state, readiness included.
 
-        One transaction, and a read-only one: the loop must never hold a write
-        transaction open across an agent turn, which can take minutes.
+        The tick first, then a read in one transaction of its own. That order
+        is the loop's and not `read_situation`'s, because the tick is a write
+        and this is the method that knows a round begins here.
         """
         self._tick()
-        with self.database.read_only() as session:
-            project = ProjectRegistry(session).get(self.project_id)
-            dag = DagRepository(session, self.project_id)
-            nodes = tuple(dag.nodes())
-            return Situation(
-                project=project,
-                nodes=nodes,
-                pre_run={
-                    node.node_id: dag.latest_pre_run_outcome(node.node_id)
-                    for node in nodes
-                },
-                open_deviations=tuple(
-                    DeviationRepository(session, self.project_id).open()
-                ),
-            )
+        return read_situation(self.database, self.project_id)
 
     @staticmethod
     def _unchanged(before: Situation, after: Situation) -> bool:
