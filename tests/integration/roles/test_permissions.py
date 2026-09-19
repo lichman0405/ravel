@@ -472,3 +472,84 @@ async def test_master_writes_a_checkpoint_and_reads_it_back(
         latest = CheckpointRepository(session, project.project_id).latest()
     assert latest is not None
     assert latest.checkpoint_id == checkpoint["checkpoint_id"]
+
+
+# ── The project boundary, asked of a running server ─────────────────────────
+
+#: One node-taking tool per role, so the boundary is asked of a tool the role
+#: actually has. A handler that does not resolve the node would refuse for some
+#: other reason and the test would pass without testing anything.
+NODE_READERS: dict[AgentRole, tuple[str, dict[str, Any]]] = {
+    AgentRole.MASTER: (
+        "cancel_dag_node",
+        {"rationale": "It is not this project's to cancel.", "confidence": "HIGH"},
+    ),
+    AgentRole.RESEARCH: ("read_research_task", {}),
+    AgentRole.REVIEW: ("read_review_package", {}),
+    AgentRole.COMPUTE_WORKER: ("read_execution_contract", {}),
+    AgentRole.EXPERIMENTAL_WORKER: ("read_execution_contract", {}),
+}
+
+
+@pytest.mark.parametrize("role", list(AgentRole))
+async def test_a_server_cannot_reach_a_node_belonging_to_another_project(
+    role: AgentRole,
+    role_environment: RoleEnvironment,
+    project: Any,
+    other_project: Any,
+    database: Any,
+) -> None:
+    """The scope is the process's, and no argument can widen it.
+
+    Every handler takes a `node_id` from the model, and a model may supply any
+    string. What makes that safe is not a check written into each handler but
+    the shape of the repositories around them: each is constructed with the
+    project this *process* was launched for, and `ToolContext.project_id` reads
+    that rather than anything on the wire. There is no `project_id` parameter
+    on any tool to pass, which is the point — the test below is what shows the
+    absence is load-bearing rather than merely absent.
+
+    So this is not "the handler validates its input". It is that a real node,
+    really in PostgreSQL, really belonging to a second project, is unreachable
+    from a server scoped to the first. Only a running process can be asked.
+    """
+    register_roadmap(database, other_project, *STAGES)
+    # The node is committed by the *other project's own* Master session, so
+    # what the first project's server is being asked to reach is real state
+    # written the ordinary way, not a row a test inserted to have something to
+    # point at.
+    planted = await probe(
+        role_environment.for_project(other_project, AgentRole.MASTER),
+        calls=(("add_dag_node", A_NODE_CREATION),),
+    )
+    assert not planted.calls[0].failed, planted.calls[0].error
+    assert planted.calls[0].payload is not None
+    foreign_id = str(planted.calls[0].payload["node_id"])
+    with database.read_only() as session:
+        foreign = DagRepository(session, other_project.project_id).node(foreign_id)
+
+    tool, arguments = NODE_READERS[role]
+    result = await probe(
+        role_environment.for_project(project, role),
+        calls=((tool, {"node_id": foreign_id, **arguments}),),
+    )
+
+    call = result.calls[0]
+    assert call.failed, f"{role.value} reached another project's node: {call.payload}"
+    # Named in the refusal, so the caller can tell "no such node here" from
+    # "that tool is not registered" — and so this test cannot pass because the
+    # tool was missing.
+    assert foreign_id in (call.error or ""), call.error
+    # The refusal names the project the *server* serves, because that is the
+    # scope the node could not be found in. It must not name the other one:
+    # confirming that a node exists somewhere else is itself a disclosure, and
+    # "there is no such node here" is the whole of the honest answer.
+    assert project.project_id in (call.error or ""), call.error
+    assert other_project.project_id not in (call.error or ""), "the owning project leaked"
+    assert foreign.objective not in (call.error or ""), "the objective leaked"
+
+    with database.read_only() as session:
+        assert (
+            DagRepository(session, other_project.project_id).node(foreign_id).status
+            is foreign.status
+        ), "a foreign server moved this node"
