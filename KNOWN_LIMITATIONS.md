@@ -217,8 +217,6 @@ identifier paths is seventy-six. The work it stands for is a row RAVEL already
 has, so nothing is lost; a person reading a bare reference cannot tell which
 node it belongs to, and has to look it up.
 
----
-
 ## L-14 — The browser resolves names itself, so its connections cannot be pinned
 
 - **Since:** Phase 8
@@ -245,8 +243,6 @@ this gap — `Fetcher` is pinned and its behaviour is asserted in
 unbounded: the attacker needs authoritative DNS for a host the page visits, and
 needs the browser's lookup to land differently from the guard's, in a window
 between the two. What RAVEL cannot do is rule it out.
-
----
 
 ## L-15 — The DSH gate needs a model credential the repository does not carry
 
@@ -285,3 +281,166 @@ larger problem.
 **Follow-up:** an operator running `scripts/test_all.sh` must export
 `DEEPSEEK_API_KEY`, or accept that the run stops at the harness gate. Every
 other suite in that script passes without it.
+
+## L-16 — An upload is buffered whole in the Gateway's process
+
+- **Since:** Phase 8
+- **Where:** `src/ravel/gateway/routes/artifacts.py` (`MAX_UPLOAD_BYTES`)
+
+`MAX_UPLOAD_BYTES` is 256 MiB, and the body is read into memory before it is
+stored, because the object store hashes the whole object on the way in. Two
+concurrent uploads at the cap are half a gigabyte of resident memory, and the
+cap exists because of that rather than as a policy about size.
+
+The check is done twice on purpose — declared `Content-Length` when it is sent,
+and the counted length as well, because a chunked upload declares nothing.
+Checking only the header would make the cap advisory.
+
+**Do not conclude** that a large artifact is rejected by the design. 256 MiB is
+well above anything V0 research produces; what V0 does not have is a streaming
+upload path, and adding one means changing how the store hashes.
+
+## L-17 — Accounts are created at a terminal, and authority cannot be withdrawn
+
+- **Since:** Phase 8
+- **Where:** `scripts/create_account.py`; `MembershipRepository` in
+  `src/ravel/state/repositories/identity.py`
+
+The Gateway authenticates a person and cannot create one. Every `/auth` route
+reads an account, and the only writes it performs are on login chains.
+Membership is the one thing in RAVEL that manufactures authority, so it is
+deliberately unreachable over HTTP by whoever happens to be logged in, and
+provisioning is `scripts/create_account.py` on the host.
+
+**Nothing revokes a membership.** `grant` is the only write on that table: there
+is no revoke, no expiry, and no path that lowers a role. A user who should no
+longer direct a project keeps the authority until the project is over. `L-10`
+is the same shape for accounts themselves — `is_active` exists and no code path
+flips it.
+
+**Do not conclude** that the grant path is unaudited or unguarded. It is
+checked twice — a granter must hold authority at least equal to what is being
+granted, and only a project's *first* membership may be created without naming a
+granter — and the append-only guards make every grant a record. What is missing
+is the *revocation* half, which is a later concern and is recorded here because
+an operator planning a deployment needs to know that removing somebody is not a
+command they will find.
+
+## L-18 — The loop is a process, not a service
+
+- **Since:** Phase 9
+- **Where:** `src/ravel/execution/loop.py`; `scripts/run_project.py`
+
+`make project PROJECT=<id>` drives one project until it ends or stops moving.
+There is no scheduler, and nothing restarts the loop if it exits: a project that
+should keep going is a project somebody runs the loop for again.
+
+`ProjectLoop` is deterministic RAVEL software — it reads state, starts runs,
+notices endings — and the two seats that require judgement are filled by agents
+on the pinned harness. That division is deliberate and is why there is no
+agent-shaped scheduler: which projects run is an operator's decision, not a
+model's.
+
+**Do not conclude** that a project is lost when the loop stops. Everything the
+loop reads is in PostgreSQL and everything it started is in Temporal, so
+starting it again continues the project rather than restarting it — and
+`LoopHalted` is reported as "the project has not ended" rather than as a
+failure. What is missing is somebody to type the command, and in V0 that
+somebody is a person.
+
+## L-19 — Master and Review have never made a real decision on this host
+
+- **Since:** Phase 9
+- **Where:** `scripts/run_project.py`; `KNOWN_LIMITATIONS.md` L-15
+
+The acceptance items that exercise the loop — A05, A09, A12, A17, A20 — drive
+it with the *policy* scripted (`ScriptedMaster`, `ScriptedReview`), which is what
+those items are about: whether the loop sequences a project correctly, whether a
+failure replans the future and leaves the past alone, whether a deviation is
+answered by Master and by nobody else. What they do not exercise is a real model
+in those seats.
+
+Running `scripts/run_project.py` on this host reaches the turn and stops there:
+with no credential every turn returns `finish_reason=error`, the loop counts the
+round as one that changed nothing, and it halts saying the project has not ended.
+That is the intended behaviour under the condition and it has been observed —
+the wiring, the runtime start, the situation read and the halt all work — but it
+is not the same as a model deciding.
+
+**Do not conclude** that the loop is untested. Its sequencing is asserted end to
+end, and `HarnessAgent` is the same class the acceptance suite drives through
+real MCP stdio against a real harness runtime in A02 and A15. What is untested
+is the composition of the two under a live model, which is the one thing a
+credential would buy.
+
+## L-20 — The whole live-research suite skips without a contact address
+
+- **Since:** Phase 9
+- **Where:** `tests/live_research/conftest.py`; `.env`
+  (`RAVEL_RESEARCH_CONTACT_EMAIL`)
+
+`pytest tests/live_research` reports **13 skipped, 0 passed** on this host. Not
+two of the thirteen — all of them. `live_settings` skips every case when RAVEL
+has no contact address to fetch under, because fetching anonymously is the thing
+this project does not do: Crossref, OpenAlex and NCBI route identified clients
+to a faster pool and ask for a contact address, and a placeholder would defeat
+the point of asking. The refusal is deliberate and it is implemented as a stop
+rather than a warning.
+
+The consequence is the largest single gap in this build's *repeatable* evidence.
+A real fetch did happen once: `d647084` rewrote the transport's connection
+pinning and records that it was verified against the real network rather than by
+inspection — Crossref, OpenAlex, arXiv and all 11 `tests/live_research` cases
+that existed then. The suite now holds 13 cases and none of them runs here,
+because the address that run used was supplied from the environment at the time
+and is not in `.env`. So the honest statement is not "research was never
+exercised" — it was — but "**nothing re-runs it**", and a green sweep on this
+host is not evidence that the last mile still works.
+
+What does run every time is the structural half: gate 1 asserts every connector
+is pointed at a real service and that research cannot be answered offline, and
+gate 2 asserts a source resting on nothing cannot enter the ledger — with no
+network call involved in either. Those are real checks of real code and they are
+not a substitute for having fetched something.
+
+The acceptance matrix prints A03 and A04 as `SKIP` with this sentence rather
+than folding them into the pass count, which is the property that keeps this
+visible: an item that did not run is not an item that passed, and 27/27
+demonstrated is printed alongside "2 skipped" rather than instead of it.
+
+**Do not conclude** that the research implementation is therefore unexercised.
+It is exercised — `tests/unit/test_research_addressing.py` pins the fetcher's
+address policy, the connector parsing is tested against captured payloads, and
+the evidence registration path is tested against a real object store. What is
+unexercised *by the current suite* is the last mile: a socket, a real response,
+and a source recorded from it. **And do not conclude** that the fix is anything
+other than one line in `.env`: setting `RAVEL_RESEARCH_CONTACT_EMAIL` to a real
+address runs all thirteen. Nobody should set it to an address they do not own,
+which is why it is unset here rather than filled in with something plausible.
+
+## L-21 — A mock backend plays one scenario for every node it serves
+
+- **Since:** Phase 6
+- **Where:** `MockComputeBackend` / `MockLabBackend` in
+  `src/ravel/backends/mocks.py`; `--compute-scenario` in `scripts/run_worker.py`
+
+The scenario is fixed when the backend is constructed, and one backend instance
+serves every COMPUTATION node in the deployment. So a worker started with
+`--compute-scenario COMPUTE_SCIENTIFIC_FAILURE` does not make *one* node fail —
+it makes every compute node fail, for as long as that worker runs.
+
+Selecting a scenario per node would mean reading it from the node's contract,
+which is the wrong place for it: a real backend decides how the work goes, and a
+mock that let the graph dictate its own failure would be testing the graph
+against itself.
+
+The consequence is operational. The acceptance suite is unaffected, because each
+case builds its own backend for the one scenario it is about. A *deployment*
+watches failure handling by restarting the worker pointed at a failure scenario,
+and every node of that type then behaves that way. In V0 this is the intended
+way to see the loop replan — not a defect, but not obvious from the flag's name
+either.
+
+**Do not conclude** that the mock is per-node-configurable and merely defaults
+to success. It is not configurable per node at all, and `--compute-scenario` is
+a property of the process.

@@ -73,7 +73,11 @@ Two consequences worth naming:
   network backend and does not accept one. The transport in `fetching.py` is
   built on `httpcore.ConnectionPool` directly and mirrors what `HTTPTransport`
   does with the response. `tests/live_research` re-verified real Crossref,
-  OpenAlex, arXiv and publisher TLS against it.
+  OpenAlex, arXiv and publisher TLS against it — that is what `d647084` records,
+  against the 11 cases the suite held then. It **does not re-run on this host**:
+  the suite requires a contact address it does not have, and now skips in full
+  rather than fetching anonymously. `KNOWN_LIMITATIONS.md` L-20 records what
+  that costs and how little it takes to close.
 
 **Not fixed for the browser.** Playwright's connections are made inside a
 browser process this code does not own and cannot give a network backend to.
@@ -274,6 +278,33 @@ rewritable, and a deviation whose `requested_action` can be edited after Master
 answered it is a record that can be made to agree with any decision taken.
 `tests/integration/state/test_guards.py` asserts the update is refused when it
 touches anything but the two resolution columns.
+
+### The one place authority is created without a check, and why it is a terminal
+
+The rules above all assume there is already an authority to check against. Some
+path has to create the first one, and in V0 that path is
+`scripts/create_account.py` — an operator command run on the host, not a route.
+`MembershipRepository.grant` permits a project's first membership with no
+granter because the alternative is a project nobody can ever direct; every
+membership after it requires a granter holding at least what is conferred.
+
+That exception is safe for a reason worth stating rather than assuming: the
+script is not reachable over the network at all. It imports the domain
+repositories and calls them in-process, so it needs the deployment's database
+credentials to do anything — which are the same credentials that would let a
+holder write the rows directly. It grants no capability that reaching the
+database does not already grant, and the Gateway, whose credentials are the ones
+a person can obtain by logging in, has no route that creates an account or a
+membership.
+
+What the script deliberately does *not* do is bypass the domain. Every write
+goes through the same repositories the runtime uses, so the granter check, the
+active-account check, the append-only guards and the check constraints all
+apply to an operator exactly as they apply to Master. It also refuses to call
+`sys.exit()` inside a transaction: `Database.transaction()` catches `Exception`
+and not `SystemExit`, so an exit taken mid-transaction would skip the explicit
+rollback and leave the context manager to discover it in its `finally`. Every
+refusal is raised and reported after the transaction has closed.
 
 ## 5. Tool authorization
 
