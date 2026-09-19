@@ -17,6 +17,7 @@ from datetime import timedelta
 from temporalio.client import Client, WorkflowHandle
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.exceptions import TemporalError, WorkflowAlreadyStartedError
 from temporalio.service import RPCError, RPCStatusCode
 
 from ravel.config import Settings
@@ -97,8 +98,18 @@ class NodeRunClient:
                 # new contract version so that somebody has recorded it.
                 id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
             )
-        except RPCError as error:
-            if error.status is RPCStatusCode.ALREADY_EXISTS:
+        except TemporalError as error:
+            # Two exception types reach here for one condition, and only one of
+            # them is an `RPCError`. The SDK raises `WorkflowAlreadyStartedError`
+            # when it recognises ALREADY_EXISTS on a start — and that type
+            # derives from `TemporalError`, not from `RPCError`, so catching
+            # `RPCError` alone let it through and the promise below was never
+            # kept: a caller that retried a start got a crash rather than the
+            # `RunAlreadyStarted` this method documents. An RPC that failed for
+            # some other reason still surfaces as itself.
+            if isinstance(error, WorkflowAlreadyStartedError) or (
+                isinstance(error, RPCError) and error.status is RPCStatusCode.ALREADY_EXISTS
+            ):
                 raise RunAlreadyStarted(
                     f"node {node_id} already has a run; a node runs once, and "
                     "running it again is a decision that opens new work"

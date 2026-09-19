@@ -47,7 +47,7 @@ from ravel.domain.enums import (
     NodeStatus,
     TerminationStatus,
 )
-from ravel.execution.temporal.client import NodeRunClient
+from ravel.execution.temporal.client import NodeRunClient, RunAlreadyStarted
 from ravel.execution.temporal.contracts import ExternalResult, RunOutcome
 from ravel.state.database import Database
 
@@ -126,6 +126,51 @@ async def test_a_run_that_succeeds_hands_its_node_to_review(
     assert outcome.completeness is CompletenessVerdict.COMPLETE
     assert outcome.delivered_outputs == (REQUIRED_OUTPUT,)
     assert _run(database, node.node_id) == ("REVIEWING", ["COMPLETED"])
+
+
+async def test_starting_a_node_that_already_has_a_run_is_a_fact_and_not_a_crash(
+    database: Database, project, runnable_node, backend, registry, client
+) -> None:
+    """A second start of the same run raises `RunAlreadyStarted`.
+
+    Master asks whether a node is already running by starting it, so the answer
+    has to be an exception the caller can recognise rather than an SDK error it
+    has to know about — `TemporalNodeRuns.start` catches this type and returns,
+    which is what makes a retried start a no-op instead of a second run.
+
+    The two exception types are not interchangeable and the difference is
+    invisible from the call site: the SDK converts ALREADY_EXISTS into
+    `WorkflowAlreadyStartedError`, which derives from `TemporalError` and *not*
+    from `RPCError`, so a guard written against `RPCError` misses the one case
+    it was written for. This test exists because that happened — an end-to-end
+    run crashed here rather than being told the node was already under way.
+
+    The job is scripted to stay RUNNING, because the last state of a script
+    repeats: the second start then meets a live workflow rather than a finished
+    one, which is the shape the failure arrived in.
+    """
+    node = runnable_node()
+    backend.states = [JobState.RUNNING]
+
+    worker = await RunningWorker.start(client.settings, registry, database)
+    try:
+        await client.start_node_run(
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+        )
+        await _await(lambda: _node_status(database, node.node_id) == NodeStatus.RUNNING.value)
+
+        with pytest.raises(RunAlreadyStarted):
+            await client.start_node_run(
+                project_id=project.project_id,
+                node_id=node.node_id,
+                actor_id=ACTOR,
+                execution_contract_version=FIRST_CONTRACT_VERSION,
+            )
+    finally:
+        await worker.stop_gracefully()
 
 
 async def test_the_node_follows_its_job_into_an_external_wait(
