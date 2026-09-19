@@ -2,7 +2,13 @@
 
 **RAVEL = Research Autonomous Validation & Execution Loop**
 
-本包是 RAVEL V0 的**产品规格 + 系统架构 + Agent 协议 + 开发验收包**。目标不是解释概念，而是让 Claude Code / Codex 在读取本包后，可以从空仓库开始自主实施并持续开发到 V0 验收通过。
+本仓库同时装着 RAVEL V0 的**实现**和它所依据的**规格包**。两者不是同一类东西，读之前先分清：
+
+- **实现**：`src/`、`tests/`、`scripts/`、`Makefile`、`docker-compose.yml`、`alembic.ini`
+- **规格**：`docs/`、`schemas/`、`prompts/`、`acceptance/`、`RAVEL_V0_MASTER_SPEC.md`
+- **交付记录**：`IMPLEMENTATION_REPORT.md`、`TEST_REPORT.md`、`KNOWN_LIMITATIONS.md`、`SECURITY_NOTES.md`、`DSH_INTEGRATION_REPORT.md`、`DEPLOYMENT.md`
+
+其中 `schemas/*.yaml`、`prompts/*.md`、`acceptance/MOCK_SCENARIOS.yaml` **由运行时代码直接读取**，不是文档 —— `src/ravel/dsh/roles.py` 读那 5 个角色预设，`src/ravel/backends/scenarios.py` 读 mock 场景表。删掉它们，功能就坏。
 
 ## 一句话定位
 
@@ -10,6 +16,22 @@ RAVEL 是运行在云端 CVM 上、以 **DeepSeek Harness (DSH)** 为唯一底�
 
 RAVEL **不是代码开发 Agent**。代码、shell、HPC script 仅是科研执行手段。
 
+## V0 现状
+
+**实现完整，结构性验证完整；两个核心环节在本机未运行。**
+
+已经真的验证过（`make acceptance`：27 行矩阵、43 个用例，41 通过 2 skip，没有一行是空的）：Scientific DAG 的授权与验收冻结、Master 恢复、Temporal 重启与等待恢复、Postgres 的权威性、5 个角色预设与各自的工具边界、TUI 真实驱动（真 uvicorn + 真 WebSocket）。
+
+**没有验证过** —— 本机 `.env` 里 `DEEPSEEK_API_KEY` 与 `RAVEL_RESEARCH_CONTACT_EMAIL` 都是空的：
+
+| 未运行的部分 | 当前表现 |
+|---|---|
+| 真模型做 Master / Review 决策 | `tests/dsh` 8 个 model-turn 用例 skip |
+| 真实文献 / 网页抓取（A03、A04） | 13 个 live research 用例 skip |
+
+也就是说，让 RAVEL 区别于一个普通编排器的两件事 —— 模型真的做科研决策、真的读原始文献 —— 在这台机器上**一次都没有跑过**。两者都只差一个环境变量。详见 `TEST_REPORT.md` §4 与 `KNOWN_LIMITATIONS.md` L-19、L-20。
+
+**V0 不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口（L-08 DNS rebinding、L-14 浏览器路径），请先读它们再决定把它暴露到哪里。所有端口默认只绑 `127.0.0.1`。
 
 ## Canonical 开发环境
 
@@ -37,18 +59,9 @@ RAVEL V0 的唯一标准开发、验收和生产基准环境是 **Ubuntu 24.04 L
 - 用户不能直接修改 DAG
 - 只有 Master 能修改 DAG / Execution Contract / research route
 
-## 开始开发
-
-**不要从 README 自行发挥。**
-
-1. 阅读 `START_PROMPT.md`
-2. 然后按其要求读取所有 `docs/`、`schemas/`、`prompts/`、`acceptance/`
-3. 首先完成 DSH Integration Spike，拉取**开发当天真实当前版本**并 pin tag/commit
-4. 严格按 V0 acceptance matrix 开发到全部通过
-
 ## 部署与运行
 
-V0 已经实现并在单台 Ubuntu 24.04 CVM 上验证。完整说明见 `DEPLOYMENT.md`；下面是实际命令。
+在单台 Ubuntu 24.04 上实现并验证（见上面的「V0 现状」——结构性验证完整，真模型与真抓取未跑）。完整说明见 `DEPLOYMENT.md`；下面是实际命令。
 
 ```bash
 # 1. 环境（幂等；校验 DSH 是否为 vendor/DSH_PIN.json 钉住的版本）
@@ -93,14 +106,27 @@ scripts/test_all.sh  # lint → unit → integration → DSH gate（需要 DEEPS
 
 ## 目录
 
-- `START_PROMPT.md`：唯一启动提示词
-- `AGENTS.md`：Codex/通用 coding agent 强制规则
-- `CLAUDE.md`：Claude Code 强制规则
+### 实现
+
+- `src/ravel/`：运行时本体 —— `dsh/` 角色绑定与 pool、`domain/` 领域模型与状态机、`state/` Postgres 仓储与 migration、`execution/` Temporal workflow、`research/` 真实来源连接器、`master/`、`review/`、`gateway/` HTTP + WebSocket、`tui/` Textual 客户端、`backends/` mock compute/lab、`mcp/`
+- `tests/`：`unit/`、`integration/`、`dsh/`、`e2e/`、`live_research/`、`acceptance/`、`support/`
+- `scripts/`：环境引导、起停、账号、验收矩阵
+- `infra/postgres/init/`：Temporal 需要的库
+
+### 规格（运行时部分被代码读取）
+
+- `prompts/`：5 类 Agent 的行为规范 —— **运行时代码读取，即角色预设本体**
+- `schemas/`：机器可读领域 schema / event / backend contract —— **运行时代码读取**
+- `acceptance/`：V0 端到端验收矩阵与 mock 场景 —— `MOCK_SCENARIOS.yaml` 被运行时读取
 - `docs/`：完整产品和技术规格
-- `schemas/`：机器可读领域 schema / event / backend contract
-- `prompts/`：5 类 Agent 的行为规范草案
-- `acceptance/`：V0 端到端验收矩阵与 mock 场景
 - `references/`：截至 2026-09-17 的 DSH 现状与官方资料指针
+
+### 规格入口
+
+- `START_PROMPT.md`：唯一启动提示词（建仓时的 agent 指令，保留为档案）
+- `RAVEL_V0_MASTER_SPEC.md`：`docs/00`–`docs/15` 的合并单文件版。**与 `docs/` 是同一份内容的两种排布**，改一处不会同步另一处；以 `docs/` 为准
+- `CLAUDE.md` / `AGENTS.md`：开发 agent 强制规则（两份内容一致）
+- `PACKAGE_MANIFEST.json`：规格包交付时 38 个文件的 sha256 快照。**它没有被实现改动过，其中 `README.md` 与 `docs/IMPLEMENTATION_DEVIATIONS.md` 两条已与当前树不符** —— 它记录的是交付那一刻，不是现在。全树没有任何东西读取它。
 
 ## Source of Truth 优先级
 
