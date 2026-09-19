@@ -13,9 +13,13 @@ beside RAVEL's in `JobStatus.backend_state`, which is where a reader can see
 the two disagree without opening a table.
 
 The experiment-specific operations — `send_instruction`,
-`request_missing_output` — are not here. They arrive in Phase 6 with the
-scenarios that need them, because a port written ahead of its callers is a
-port shaped by guesswork.
+`request_missing_output` — are still not here, and Phase 6 is what settled
+that they should not be. A Worker asking a lab for a missing file is a
+`WorkerMessage` recorded in RAVEL, not a call into this port: the four
+permitted kinds are a closed vocabulary about what a Worker may say, and a
+port method per kind would make the vocabulary open again, one backend
+implementation at a time. What a backend does is run work and report on it;
+what a Worker says is RAVEL's record.
 """
 
 from __future__ import annotations
@@ -60,6 +64,41 @@ class JobHandle:
 
 
 @dataclass(frozen=True)
+class DeviationReport:
+    """Something a backend says it was asked to do that may be outside its terms.
+
+    A *report*, not a decision, and the distinction is the whole reason this
+    type exists. A lab asked for ten bar that can only reach five is not
+    refusing — it is telling RAVEL what happened. Whether five bar is permitted
+    is a question about the Execution Contract, and the contract belongs to
+    RAVEL: a backend that decided for itself would be a second implementation
+    of the contract's rules, free to drift from the first and impossible to
+    audit against it.
+
+    So a backend says what it was asked for, what it can do, and stops. The
+    Worker asks the contract, and the contract's answer is the answer.
+    """
+
+    #: What the backend was asked for, in the contract's vocabulary. Always
+    #: present: a report that cannot say what it is about cannot be checked.
+    requested_action: str = ""
+    #: What the backend can do instead, or what it observed. Prose, for a
+    #: reader; the checkable parts are the fields below.
+    description: str = ""
+    #: The parameter whose value is in question, when one is.
+    parameter: str = ""
+    #: The value the backend can actually reach.
+    #:
+    #: This is the value checked against the contract, not the one that was
+    #: asked for. It is what would be acted on, and a contract that permitted
+    #: the request but not the substitute has not permitted anything that
+    #: happens.
+    value: float | None = None
+    #: The substitution the backend was asked about, as `(given, instead)`.
+    substitution: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
 class JobStatus:
     """What a backend says about work when asked.
 
@@ -67,6 +106,11 @@ class JobStatus:
     cannot classify one reports `None`, and RAVEL reads that as non-retryable —
     the closed list in `acceptance/MOCK_SCENARIOS.yaml` has no "unknown", and
     inventing a third value for it would mean guessing on the backend's behalf.
+
+    `deviation` is the other thing a job can report: not that it failed, but
+    that it was asked for something it may not be permitted to do. It is
+    orthogonal to `state` — a job can be RUNNING and report one — because the
+    job is still going until somebody rules on the report.
     """
 
     state: JobState
@@ -74,6 +118,7 @@ class JobStatus:
     failure_class: FailureClass | None = None
     detail: str = ""
     progress: dict[str, object] = field(default_factory=dict)
+    deviation: DeviationReport | None = None
 
 
 @dataclass(frozen=True)

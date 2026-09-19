@@ -100,9 +100,15 @@ class WorkerMessage(Record):
 
     The list is closed because a Worker that can say anything can negotiate
     outside its contract. `ESCALATE` is how it asks for more authority.
+
+    The record exists so that "the Worker did not answer that itself" is a fact
+    about the project rather than a claim about the code. An escalation that
+    left no trace would be indistinguishable, from the outside, from a Worker
+    that quietly answered a question its contract never let it answer.
     """
 
     message_id: str = Field(default_factory=new_id)
+    project_id: str
     node_id: str
     kind: WorkerMessageKind
     body: str = Field(min_length=1)

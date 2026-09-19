@@ -21,7 +21,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ravel.domain.artifacts import Artifact, ArtifactVersion, artifact_key
+from ravel.domain.artifacts import (
+    Artifact,
+    ArtifactVersion,
+    artifact_key,
+    is_simulated,
+)
 from ravel.domain.enums import AccessStatus, ClaimClass
 from ravel.domain.events import ActorType, ProjectEventType
 from ravel.domain.evidence import (
@@ -44,6 +49,15 @@ from ravel.state.tables import (
 )
 
 
+class SimulatedEvidenceError(ValueError):
+    """Raised when a claim would rest on bytes a mock produced.
+
+    A distinct type rather than a bare `ValueError`, because this refusal is a
+    rule about what evidence *is* rather than a complaint about a malformed
+    field, and a caller that catches it is catching something specific.
+    """
+
+
 class EvidenceSourceRepository(ProjectScopedRepository[EvidenceSource]):
     """Every place a claim came from, as it was actually reached."""
 
@@ -58,13 +72,50 @@ class EvidenceSourceRepository(ProjectScopedRepository[EvidenceSource]):
         return self.all(access_status=AccessStatus.OK.value)
 
     def record(self, source: EvidenceSource) -> EvidenceSource:
-        """Store one source row.
+        """Store one source row, unless it rests on simulated bytes.
 
         No event: a source is a component of evidence, not a project event. The
         `EVIDENCE_REGISTERED` event is emitted once, when the claim resting on
         it is written.
+
+        Raises:
+            SimulatedEvidenceError: The source points at an artifact a mock
+                backend produced.
         """
+        self._refuse_simulated(source)
         return self.add(source)
+
+    def _refuse_simulated(self, source: EvidenceSource) -> None:
+        """Refuse a source whose bytes came from a mock.
+
+        This is the choke point, and it is here rather than in `Evidence`
+        because the question is about another row: whether a source rests on
+        simulated bytes can only be answered by someone holding the session.
+
+        A guard rather than a convention, because a convention is enforced by
+        whoever remembers it. `docs/06_EXECUTION_AND_REVIEW.md` §6 makes this
+        absolute — mock output must never enter the Evidence Ledger as real
+        scientific evidence — and an absolute rule that is only written down is
+        a rule that holds until someone is in a hurry.
+
+        The lookup is scoped to this project. A reference to an artifact in
+        another project resolves to nothing here, which refuses the source for
+        the ordinary reason: the bytes are not reachable from this scope.
+        """
+        if not source.artifact_ref:
+            return
+        kind = self.session.execute(
+            select(ArtifactRow.kind).where(
+                ArtifactRow.project_id == self.project_id,
+                ArtifactRow.artifact_id == source.artifact_ref,
+            )
+        ).scalar_one_or_none()
+        if kind is not None and is_simulated(kind):
+            raise SimulatedEvidenceError(
+                f"source {source.url} rests on artifact {source.artifact_ref}, which "
+                f"is marked {kind!r}; simulated output is not evidence, and admitting "
+                "it here would put it beyond every later reader's ability to tell"
+            )
 
 
 class EvidenceRepository(ProjectScopedRepository[Evidence]):

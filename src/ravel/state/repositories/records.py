@@ -31,7 +31,12 @@ from ravel.domain.clock import utcnow
 from ravel.domain.decisions import DecisionRecord, ReviewRecord
 from ravel.domain.enums import Confidence, DecisionType, FailureClass, JobState
 from ravel.domain.events import ActorType, ProjectEventType
-from ravel.domain.execution import BackendJob, DeviationRecord, ExecutionRecord
+from ravel.domain.execution import (
+    BackendJob,
+    DeviationRecord,
+    ExecutionRecord,
+    WorkerMessage,
+)
 from ravel.domain.roles import AgentRole
 from ravel.state.mapping import to_row_data
 from ravel.state.outbox import emit
@@ -42,6 +47,7 @@ from ravel.state.tables import (
     DeviationRecordRow,
     ExecutionRecordRow,
     ReviewRecordRow,
+    WorkerMessageRow,
 )
 
 
@@ -370,8 +376,37 @@ class DeviationRepository(ProjectScopedRepository[DeviationRecord]):
         return resolved
 
 
+class WorkerMessageRepository(ProjectScopedRepository[WorkerMessage]):
+    """What a Worker said, inside the four kinds it is allowed to say it in."""
+
+    row_type = WorkerMessageRow
+    record_type = WorkerMessage
+
+    def _order_by(self) -> Any:
+        """When it was said.
+
+        The base class sorts by `created_at`, which a message has not got: a
+        message is sent at a moment, and `sent_at` is that moment.
+        """
+        return self.row_type.sent_at
+
+    def record(self, message: WorkerMessage) -> WorkerMessage:
+        """Stage one message.
+
+        No event is emitted. The project event vocabulary has none for a
+        Worker's message, and inventing one here would put a type in the stream
+        that `schemas/project_events.yaml` does not define — which is a worse
+        problem than a message being found by reading the table it is in.
+        """
+        return self.add(message)
+
+    def for_node(self, node_id: str) -> list[WorkerMessage]:
+        """Everything said about one node, in the order it was said."""
+        return self.all(node_id=node_id)
+
+
 class RecordRepositories:
-    """The four record repositories for one project, sharing one session.
+    """The record repositories for one project, sharing one session.
 
     A convenience for callers that need several of them — the Gateway, a
     Temporal activity — without threading a session through each construction.
@@ -385,6 +420,7 @@ class RecordRepositories:
         self.executions = ExecutionRepository(session, project_id)
         self.deviations = DeviationRepository(session, project_id)
         self.jobs = BackendJobRepository(session, project_id)
+        self.messages = WorkerMessageRepository(session, project_id)
 
     def latest_execution(self, node_id: str) -> ExecutionRecord | None:
         """The most recent execution of a node, if any."""

@@ -89,6 +89,11 @@ class JobSnapshot(BaseModel):
     failure_class: FailureClass | None = None
     detail: str = ""
     progress: dict[str, object] = Field(default_factory=dict)
+    #: Set when this poll found the job reporting something its contract did
+    #: not permit, and the deviation has been recorded. The run stops on it:
+    #: the work has already been stopped, and what happens to the node next is
+    #: Master's decision rather than the run's.
+    deviation_id: str | None = None
 
 
 class ExternalResult(BaseModel):
@@ -136,3 +141,7 @@ class RunOutcome(BaseModel):
     output_refs: tuple[str, ...] = ()
     log_refs: tuple[str, ...] = ()
     retry_reason: str = ""
+    #: The deviation that ended this run, when one did. Present so that whoever
+    #: started the run can find what stopped it without reading the record —
+    #: and so a caller that sees `DEVIATION` knows which record to open.
+    deviation_id: str | None = None

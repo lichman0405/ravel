@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import CheckConstraint, text
+from sqlalchemy import CheckConstraint, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -86,15 +86,18 @@ def database(integration_settings: Settings) -> Iterator[Database]:
 def _assert_schema_is_current(engine: Engine) -> None:
     """Refuse to run against tables older than the models that describe them.
 
-    Only check constraints are compared, and by name: they are where RAVEL puts
-    the rules that matter, and a name is enough to tell "this table predates the
-    rule" from "the rule is there". Worth the one catalog query per session,
-    because the failure it prevents is otherwise read as a missing guard.
+    Two things are compared, and both by name: check constraints, because they
+    are where RAVEL puts the rules that matter, and columns, because an added
+    column is the other half of the same problem. A name is enough to tell
+    "this table predates the rule" from "the rule is there". Worth the catalog
+    queries once per session, because the failure each prevents is otherwise
+    read as something else entirely — a missing guard, or a column that
+    apparently does not exist in a table that has had it for days.
 
     Raises:
-        RuntimeError: A constraint the models declare is absent from the
-            database, which means the table was created before the rule was
-            added and `create_all` did not rewrite it.
+        RuntimeError: A constraint or column the models declare is absent from
+            the database, which means the table was created before it was added
+            and `create_all` did not rewrite it.
     """
     with engine.connect() as connection:
         rows = connection.execute(
@@ -113,6 +116,7 @@ def _assert_schema_is_current(engine: Engine) -> None:
         and constraint.name is not None
         and (table.name, constraint.name) not in present
     )
+    stale.extend(_missing_columns(engine))
     if stale:
         raise RuntimeError(
             "the test database is older than the models, so these rules are not "
@@ -121,6 +125,23 @@ def _assert_schema_is_current(engine: Engine) -> None:
             + ". `create_all` does not alter a table that already exists; drop "
             "the tables named above (DROP TABLE ... CASCADE) and run again."
         )
+
+
+def _missing_columns(engine: Engine) -> list[str]:
+    """Columns the models declare and the database does not have.
+
+    Only tables that already exist are considered: one that does not exist yet
+    is about to be created, with everything on it.
+    """
+    inspector = inspect(engine)
+    existing = set(inspector.get_table_names())
+    return sorted(
+        f"{table.name}.{column.name}"
+        for table in Base.metadata.tables.values()
+        if table.name in existing
+        for column in table.columns
+        if column.name not in {found["name"] for found in inspector.get_columns(table.name)}
+    )
 
 
 @pytest.fixture

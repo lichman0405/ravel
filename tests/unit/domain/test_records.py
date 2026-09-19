@@ -526,10 +526,17 @@ def test_a_deviation_stays_open_until_a_decision_resolves_it() -> None:
 def test_worker_messages_are_limited_to_the_four_permitted_kinds() -> None:
     from ravel.domain.enums import WorkerMessageKind
 
-    message = WorkerMessage(node_id="n1", kind=WorkerMessageKind.ESCALATE, body="Out of range.")
+    message = WorkerMessage(
+        project_id="proj-a", node_id="n1", kind=WorkerMessageKind.ESCALATE, body="Out of range."
+    )
     assert message.kind is WorkerMessageKind.ESCALATE
     with pytest.raises(ValidationError):
-        WorkerMessage(node_id="n1", kind="NEGOTIATE", body="Give me more scope.")  # type: ignore[arg-type]
+        WorkerMessage(
+            project_id="proj-a",
+            node_id="n1",
+            kind="NEGOTIATE",  # type: ignore[arg-type]
+            body="Give me more scope.",
+        )
 
 
 # ── Identity ────────────────────────────────────────────────────────────────

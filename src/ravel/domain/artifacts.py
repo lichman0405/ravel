@@ -19,6 +19,33 @@ from ravel.domain.ids import DisplayPrefix, display_id, new_id
 #: Where a version's bytes live: projects/{project}/{artifact}/{version}/{name}
 ARTIFACT_KEY_TEMPLATE = "projects/{project_id}/{artifact_id}/{version}/{filename}"
 
+#: The `kind` carried by every artifact a mock backend produced.
+#:
+#: Simulation is marked with a *kind* rather than with a naming convention or a
+#: sentence in the provenance, because those are free text and this has to be
+#: checkable. One value in one column means "was this simulated?" is a
+#: comparison, and a guard that asks it cannot be talked out of the answer.
+SIMULATED_KIND = "simulated"
+
+
+def simulated_provenance(backend: str, scenario: str) -> str:
+    """The provenance line for an artifact a mock produced.
+
+    Free text, deliberately: it is what a person reads when they want to know
+    which mock and which named scenario the bytes came from. `kind` remains the
+    part that is checked.
+    """
+    return f"{backend}:{scenario}"
+
+
+def is_simulated(kind: str) -> bool:
+    """Whether an artifact's kind marks its contents as simulated.
+
+    Every guard asks this rather than comparing against `SIMULATED_KIND`
+    directly, so a second such kind would be a change in one place.
+    """
+    return kind == SIMULATED_KIND
+
 
 def artifact_key(project_id: str, artifact_id: str, version: int, filename: str) -> str:
     """The storage key for one artifact version.

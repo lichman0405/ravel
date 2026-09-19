@@ -20,6 +20,7 @@ from __future__ import annotations
 # Fixtures are imported and then used as fixture parameters, which ruff reads as
 # a redefinition. That is the pytest idiom.
 # ruff: noqa: F811
+import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from uuid import uuid4
@@ -51,6 +52,7 @@ from ravel.execution.backends import (
     JobRequest,
     JobStatus,
 )
+from ravel.execution.temporal.worker import ExecutionRuntime
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
@@ -292,3 +294,70 @@ def temporal_unreachable(integration_settings: Settings) -> Iterator[None]:
     except OSError as error:
         pytest.skip(f"Temporal is not reachable; run scripts/dev_up.sh ({error})")
     yield
+
+
+# ── Running a worker inside a test ──────────────────────────────────────────
+#
+# Here rather than in one test module because two gates need it: the durable
+# layer's (in `tests/integration/temporal`) and the mock backends' (in
+# `tests/integration/backends`), whose scenarios only reach a node's status by
+# being run. A second copy of this in the other conftest would be a second place
+# for "how a worker is started and stopped" to drift.
+
+
+@dataclass
+class RunningWorker:
+    """A worker running in this process, which a test may kill on purpose."""
+
+    runtime: ExecutionRuntime
+    stop: asyncio.Event
+    task: asyncio.Task[None]
+
+    @classmethod
+    async def start(
+        cls, settings: Settings, registry: BackendRegistry, database: Database
+    ) -> RunningWorker:
+        runtime = ExecutionRuntime(
+            settings=settings,
+            # The test's own engine, so the worker and the test are looking at
+            # the same database through one pool rather than two.
+            database=Database(database.engine),
+            registry=registry,
+        )
+        stop = asyncio.Event()
+        task = asyncio.create_task(runtime.run_worker(stop=stop))
+        return cls(runtime=runtime, stop=stop, task=task)
+
+    async def stop_gracefully(self) -> None:
+        """Stop the way a deployment stops: finish what is in flight first."""
+        self.stop.set()
+        await asyncio.wait_for(self.task, timeout=30)
+
+    async def kill(self) -> None:
+        """Stop the way a machine dying stops.
+
+        Cancelling the task abandons whatever activity it was running without
+        unwinding it. Anything that activity had written and committed is in
+        PostgreSQL; anything it had written and not committed is not. Both are
+        the states the recovery path has to cope with, and this is how a test
+        gets to produce them.
+        """
+        self.task.cancel()
+        await asyncio.gather(self.task, return_exceptions=True)
+
+
+async def await_state(predicate: Callable[[], bool], *, timeout: float = 30.0) -> None:
+    """Wait for a database fact, which is the only kind worth waiting on."""
+
+    async def poll() -> None:
+        while True:
+            if predicate():
+                return
+            await asyncio.sleep(0.1)
+
+    try:
+        await asyncio.wait_for(poll(), timeout=timeout)
+    except TimeoutError:
+        raise AssertionError(
+            "the expected state did not appear before the timeout"
+        ) from None

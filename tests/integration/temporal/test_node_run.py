@@ -24,20 +24,21 @@ same script rather than of two runs of a probabilistic one.
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
 
-# Imported by its full path rather than relatively: these test directories are
-# namespace packages, so `from .conftest import ...` has no parent package to
-# resolve against. `tests/live_research/conftest.py` reaches the integration
+# Imported by their full paths rather than relatively: these test directories
+# are namespace packages, so `from .conftest import ...` has no parent package
+# to resolve against. `tests/live_research/conftest.py` reaches the integration
 # fixtures the same way.
-from tests.integration.temporal.conftest import REQUIRED_OUTPUT
+from tests.integration.temporal.conftest import (
+    REQUIRED_OUTPUT,
+    RunningWorker,
+    await_state,
+)
 
-from ravel.config import Settings
 from ravel.domain.enums import (
     CompletenessVerdict,
     FailureClass,
@@ -45,10 +46,8 @@ from ravel.domain.enums import (
     NodeStatus,
     TerminationStatus,
 )
-from ravel.execution.backends import BackendRegistry
 from ravel.execution.temporal.client import NodeRunClient
 from ravel.execution.temporal.contracts import ExternalResult, RunOutcome
-from ravel.execution.temporal.worker import ExecutionRuntime
 from ravel.state.database import Database
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]
@@ -56,61 +55,14 @@ pytestmark = [pytest.mark.integration, pytest.mark.e2e]
 ACTOR = "compute-worker"
 
 
-@dataclass
-class RunningWorker:
-    """A worker running in this process, which a test may kill on purpose."""
-
-    runtime: ExecutionRuntime
-    stop: asyncio.Event
-    task: asyncio.Task[None]
-
-    @classmethod
-    async def start(
-        cls, settings: Settings, registry: BackendRegistry, database: Database
-    ) -> RunningWorker:
-        runtime = ExecutionRuntime(
-            settings=settings,
-            # The test's own engine, so the worker and the test are looking at
-            # the same database through one pool rather than two.
-            database=Database(database.engine),
-            registry=registry,
-        )
-        stop = asyncio.Event()
-        task = asyncio.create_task(runtime.run_worker(stop=stop))
-        return cls(runtime=runtime, stop=stop, task=task)
-
-    async def stop_gracefully(self) -> None:
-        """Stop the way a deployment stops: finish what is in flight first."""
-        self.stop.set()
-        await asyncio.wait_for(self.task, timeout=30)
-
-    async def kill(self) -> None:
-        """Stop the way a machine dying stops.
-
-        Cancelling the task abandons whatever activity it was running without
-        unwinding it. Anything that activity had written and committed is in
-        PostgreSQL; anything it had written and not committed is not. Both are
-        the states the recovery path has to cope with, and this is how a test
-        gets to produce them.
-        """
-        self.task.cancel()
-        await asyncio.gather(self.task, return_exceptions=True)
-
-
 @pytest.fixture
 async def client(execution_settings, temporal_unreachable) -> NodeRunClient:
     return await NodeRunClient.connect(execution_settings)
 
 
-async def _await(predicate, *, timeout: float = 30.0, interval: float = 0.1) -> None:
-    """Wait for a database fact, which is the only kind worth waiting on."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while loop.time() < deadline:
-        if predicate():
-            return
-        await asyncio.sleep(interval)
-    raise AssertionError("the expected state did not appear before the timeout")
+async def _await(predicate, *, timeout: float = 30.0) -> None:
+    """The shared wait, under the name this module's tests were written with."""
+    await await_state(predicate, timeout=timeout)
 
 
 def _run(database: Database, node_id: str):

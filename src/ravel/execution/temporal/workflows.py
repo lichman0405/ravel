@@ -133,6 +133,19 @@ class NodeRunWorkflow:
             snapshot = await self._watch(plan, snapshot)
             attempts.append(_summary(attempt, snapshot, began, workflow.now()))
 
+            if snapshot.deviation_id is not None:
+                # A deviation ends the run. The work has already been stopped by
+                # the poll that found it, and the question it raised is one only
+                # Master can answer — so another attempt would put the same
+                # request to a backend that has already said it is outside the
+                # contract, and would be RAVEL asking twice for a permission it
+                # has been told it does not have.
+                retry_reason = (
+                    "the run was stopped by a deviation; the contract does not "
+                    "permit what was asked, and a retry would ask for it again"
+                )
+                break
+
             decision = decide_retry(
                 state=snapshot.state,
                 failure_class=snapshot.failure_class,
@@ -146,7 +159,13 @@ class NodeRunWorkflow:
 
         return await workflow.execute_activity(
             "finish_node_run",
-            args=[plan, snapshot.job_id, attempts, retry_reason],
+            args=[
+                plan,
+                snapshot.job_id,
+                attempts,
+                retry_reason,
+                snapshot.deviation_id,
+            ],
             result_type=RunOutcome,
             start_to_close_timeout=_step(plan),
             retry_policy=_ACTIVITY_RETRY,
@@ -161,11 +180,18 @@ class NodeRunWorkflow:
         its own. The external wait is restarted each time the job reports that
         it is blocked, so a lab that answers twenty minutes after a fifty-minute
         compute stage is not timed out for the compute stage's sake.
+
+        A deviation ends the loop wherever it is found, and it is checked at the
+        top rather than after the poll for a reason: a job can report one while
+        its state is `WAITING_EXTERNAL`, and a wait would otherwise be entered
+        for a job that has already been stopped.
         """
         deadline = workflow.now() + timedelta(seconds=plan.deadline_seconds)
         poll = timedelta(seconds=plan.poll_interval_seconds)
 
         while not snapshot.state.is_terminal:
+            if snapshot.deviation_id is not None:
+                return snapshot
             if workflow.now() >= deadline:
                 return await self._abandon(
                     plan, snapshot, "the run exceeded the deadline it was given"

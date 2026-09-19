@@ -15,14 +15,53 @@ Three contracts exist and they answer three different questions:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ravel.domain.base import Record
 from ravel.domain.clock import utcnow
 from ravel.domain.enums import CriterionProvenance, UserRole
 from ravel.domain.ids import new_id
+
+#: What a permitted range looks like: two decimal numbers separated by `..`,
+#: both ends included. `"8..12"` permits 8 and 12.
+#:
+#: The format is fixed here because a range that cannot be read mechanically is
+#: a range a Worker cannot check against — and the Worker's whole rule is that
+#: it *checks* rather than judges. A free-text range would push the decision
+#: back onto a model, which is the one thing the contract exists to prevent.
+_RANGE = re.compile(r"^\s*(?P<low>-?\d+(?:\.\d+)?)\s*\.\.\s*(?P<high>-?\d+(?:\.\d+)?)\s*$")
+
+#: What a permitted substitution looks like: the thing named, `->`, its
+#: replacement. `"reagent-A -> reagent-B"`.
+_SUBSTITUTION = re.compile(r"^\s*(?P<given>[^>]+?)\s*->\s*(?P<instead>[^>]+?)\s*$")
+
+
+def _range(span: str) -> tuple[float, float] | None:
+    """The two ends of a range, or `None` if it is not written as one."""
+    match = _RANGE.match(span)
+    if match is None:
+        return None
+    return float(match.group("low")), float(match.group("high"))
+
+
+def _number(value: float | int | str) -> float | None:
+    """A value as a number, or `None` if it is not one.
+
+    `bool` is refused explicitly rather than by accident: it is an `int` in
+    Python, and a `True` that compared successfully against `1..1` would let a
+    flag pass a check meant for a measurement.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    try:
+        return float(value.strip())
+    except (AttributeError, ValueError):
+        return None
 
 
 class BudgetLimits(Record):
@@ -239,6 +278,40 @@ class ExecutionContract(Record):
             return self
         return self.model_copy(update={"frozen_at": at or utcnow()})
 
+    @field_validator("allowed_ranges")
+    @classmethod
+    def _ranges_are_readable(cls, ranges: dict[str, str]) -> dict[str, str]:
+        """Refuse a range that is not written as one.
+
+        Checked when the contract is built rather than when a Worker consults
+        it. The alternative is a contract that reads as permissive and cannot be
+        checked — and since the Worker's rule is to treat what it cannot check
+        as forbidden, a typo would surface as an unexplained escalation halfway
+        through an experiment instead of as an error where it was made.
+        """
+        for parameter, span in ranges.items():
+            if _range(span) is None:
+                raise ValueError(
+                    f"allowed_ranges[{parameter!r}] is {span!r}, which is not a "
+                    "range; write it as two numbers separated by '..', for "
+                    "example '8..12'"
+                )
+        return ranges
+
+    @field_validator("allowed_substitutions")
+    @classmethod
+    def _substitutions_are_readable(
+        cls, substitutions: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """Refuse a substitution that does not say what replaces what."""
+        for entry in substitutions:
+            if _SUBSTITUTION.match(entry) is None:
+                raise ValueError(
+                    f"allowed_substitutions contains {entry!r}, which does not "
+                    "name a replacement; write it as '<given> -> <instead>'"
+                )
+        return substitutions
+
     def permits(self, action: str) -> bool:
         """Whether the contract explicitly names an action as permitted."""
         return action in self.allowed_actions
@@ -246,3 +319,47 @@ class ExecutionContract(Record):
     def retries_permitted(self) -> bool:
         """Whether a deterministic retry is allowed at all."""
         return self.allowed_retries > 0
+
+    def permitted_range(self, parameter: str) -> tuple[float, float] | None:
+        """The window this contract permits for a parameter, if it names one."""
+        span = self.allowed_ranges.get(parameter)
+        return None if span is None else _range(span)
+
+    def permits_value(self, parameter: str, value: float | int | str) -> bool:
+        """Whether the contract explicitly permits this value for a parameter.
+
+        Closed list, like `permits`, and for the same reason: a parameter the
+        contract does not mention is not permitted, and neither is a value that
+        cannot be read as a number. The Worker is never asked whether a value is
+        close enough or scientifically equivalent — only whether it falls inside
+        what was written down before the experiment started.
+        """
+        window = self.permitted_range(parameter)
+        if window is None:
+            return False
+        number = _number(value)
+        if number is None:
+            return False
+        low, high = window
+        return low <= number <= high
+
+    def permits_substitution(self, given: str, instead: str) -> bool:
+        """Whether replacing `given` with `instead` is explicitly permitted.
+
+        Exact after trimming, and case-sensitive. Chemical, biological, and
+        gene identifiers are case-significant often enough that folding case
+        would permit a substitution nobody wrote down. Being strict here fails
+        in the direction the contract is for: an unrecognised substitution
+        escalates to Master, which is recoverable, where a wrongly permitted one
+        is an experiment that ran without authority.
+        """
+        for entry in self.allowed_substitutions:
+            match = _SUBSTITUTION.match(entry)
+            if match is None:
+                continue  # construction refuses these; a bypass may not
+            if (
+                match.group("given").strip() == given.strip()
+                and match.group("instead").strip() == instead.strip()
+            ):
+                return True
+        return False

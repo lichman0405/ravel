@@ -184,3 +184,35 @@ not terminated, so a long-lived development namespace accumulates them.
 **Do not conclude** that the Temporal namespace is a record of anything.
 PostgreSQL is the record; the namespace is execution state, and the dev stack's
 `scripts/dev_down.sh` discards it.
+
+## L-13 — A mock backend forgets its jobs when its process restarts
+
+- **Since:** Phase 6
+- **Where:** `_MockBackend._jobs` in `src/ravel/backends/mocks.py`
+
+Mock compute and lab jobs live in the backend's memory. A worker that restarts
+while a mock is running loses the job, and `status` for a reference the mock no
+longer holds raises rather than guessing — deliberately, because a mock that
+answered for work it does not have would be inventing a result. The durable
+layer's own crash recovery (L-02) therefore covers a restart of the *worker*,
+but a run in flight across a restart of the *backend process* is not resumed by
+these mocks.
+
+What *is* preserved across a restart is the identity of the work: a reference is
+derived from `(project, node, attempt)` by hashing, so a `submit` after a
+restart returns the same reference the first process used, and the retried
+activity resumes rather than starting a second experiment. The retry then calls
+`status` on a job the new process never accepted, which raises.
+
+**Do not conclude** that RAVEL's crash recovery is untested, or that it depends
+on a mock's memory. `tests/integration/temporal/test_node_run.py` kills a worker
+mid-run and observes the run complete; the mocks survive that because the
+killed process is the worker, not the backend. A real backend stores its own
+jobs, which is the property `WorkBackend` is written against.
+
+**And do not conclude** that a reference is human-readable. It is sixteen
+hexadecimal characters of a SHA-256 of the work, because a reference is a
+`REF` column — 64 characters — and spelling the work out through three
+identifier paths is seventy-six. The work it stands for is a row RAVEL already
+has, so nothing is lost; a person reading a bare reference cannot tell which
+node it belongs to, and has to look it up.

@@ -958,9 +958,15 @@ class WorkerMessageRow(Base):
     """Something a Worker said, inside the four permitted kinds."""
 
     __tablename__ = "worker_messages"
-    __table_args__ = (_enum_constraint("kind", WorkerMessageKind),)
+    __table_args__ = (
+        _enum_constraint("kind", WorkerMessageKind),
+        Index("ix_worker_messages_node_sent", "node_id", "sent_at"),
+    )
 
     message_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
     node_id: Mapped[str] = mapped_column(
         ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
     )

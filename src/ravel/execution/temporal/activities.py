@@ -40,8 +40,10 @@ from ravel.domain.enums import (
 from ravel.domain.execution import (
     BackendJob,
     CompletenessCheck,
+    DeviationRecord,
     ExecutionAttempt,
     ExecutionRecord,
+    WorkerMessage,
 )
 from ravel.domain.ids import new_id
 from ravel.execution.backends import (
@@ -61,6 +63,7 @@ from ravel.execution.temporal.contracts import (
     RunOutcome,
     RunPlan,
 )
+from ravel.execution.worker_rules import adjudicate, on_incomplete_delivery
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
@@ -217,6 +220,10 @@ class NodeRunActivities:
 
         Re-asserting a state writes nothing, so a poll loop does not fill the
         project's stream with the same sentence every few seconds.
+
+        A poll is also where a job can say it was asked for something its
+        contract does not permit. That is handled before anything else, because
+        its answer decides whether there is any work left to poll.
         """
         with self.database.transaction() as session:
             job = RecordRepositories(session, project_id).jobs.get(job_id=job_id)
@@ -227,6 +234,12 @@ class NodeRunActivities:
 
         backend = self.registry.named(job.backend)
         status = backend.status(job.backend_job_ref)
+
+        if status.deviation is not None:
+            stopped = await self._stop_for_deviation(project_id, job, status, backend)
+            if stopped is not None:
+                return stopped
+
         with self.database.transaction() as session:
             stored = RecordRepositories(session, project_id).jobs.record_state(
                 job_id,
@@ -237,6 +250,90 @@ class NodeRunActivities:
             )
             _follow_node_status(session, stored)
             return _snapshot(stored, status)
+
+    async def _stop_for_deviation(
+        self,
+        project_id: str,
+        job: BackendJob,
+        status: JobStatus,
+        backend: WorkBackend,
+    ) -> JobSnapshot | None:
+        """Judge what a backend reported, and stop the work if it is not permitted.
+
+        Returns the snapshot once the run has been stopped, and `None` when the
+        contract permits what was reported — in which case the caller carries
+        on as if nothing had been said, because nothing needed to be.
+
+        Three things happen and the order is the point:
+
+        1. The **frozen contract version the job is running under** is read —
+           `job.execution_contract_version`, not whatever is current. A contract
+           revised while this job ran does not govern what this job was asked
+           to do, and reading the latest would let a later decision change the
+           verdict on an earlier request.
+        2. The **work is stopped**, outside any transaction, because a lab can
+           take seconds to answer. A bench already running cannot always be
+           un-started, so a refusal is an outcome to record rather than an
+           error to raise.
+        3. The deviation, the Worker's message, and the stopped job are written
+           **in one transaction**, so a deviation that exists always has a job
+           that was stopped because of it.
+
+        The node is deliberately not moved here. Where it ends up is decided
+        once, by `finish_node_run`, after the workflow has settled how the run
+        ended — the same rule the rest of the node's status path follows.
+        """
+        report = status.deviation
+        assert report is not None  # the caller checked
+        if job.backend_job_ref is None:
+            raise ApplicationError(
+                f"job {job.job_id} reports a deviation but has no backend reference, "
+                "so there is nothing to stop",
+                non_retryable=True,
+            )
+
+        with self.database.transaction() as session:
+            contract = ExecutionContractRepository(session, project_id).for_node(
+                job.node_id, version=job.execution_contract_version
+            )
+        verdict = adjudicate(report, contract)
+        if verdict.permitted:
+            return None
+
+        accepted = backend.cancel(job.backend_job_ref)
+        outcome = "accepted" if accepted else "did not accept"
+
+        with self.database.transaction() as session:
+            records = RecordRepositories(session, project_id)
+            deviation = records.deviations.raise_(
+                DeviationRecord(
+                    project_id=project_id,
+                    node_id=job.node_id,
+                    execution_contract_ref=job.execution_contract_ref,
+                    requested_action=verdict.requested_action,
+                    description=verdict.reason,
+                    permitted=False,
+                    raised_by=f"backend:{job.backend}",
+                )
+            )
+            records.messages.record(
+                WorkerMessage(
+                    project_id=project_id,
+                    node_id=job.node_id,
+                    kind=verdict.statement.kind,
+                    body=verdict.statement.body,
+                )
+            )
+            stored = records.jobs.record_state(
+                job.job_id,
+                JobState.CANCELLED,
+                backend_state=status.backend_state,
+                detail=(
+                    f"{verdict.reason}; the backend {outcome} the cancellation and "
+                    "the work has stopped pending Master's decision"
+                ),
+            )
+            return _snapshot(stored, deviation_id=deviation.deviation_id)
 
     @activity.defn
     async def deliver_external_result(
@@ -318,8 +415,9 @@ class NodeRunActivities:
         job_id: str,
         attempts: list[AttemptSummary],
         retry_reason: str,
+        deviation_id: str | None = None,
     ) -> RunOutcome:
-        """Write the Execution Record and hand the node to Review.
+        """Write the Execution Record and move the node on.
 
         The node goes to REVIEWING whatever the ending was, failure and
         cancellation included. That is the separation of powers rather than a
@@ -327,13 +425,20 @@ class NodeRunActivities:
         role that decides what the result means. A Worker that moved a node to
         FAILED would be judging its own work.
 
+        The one ending that goes elsewhere is a **deviation**. A run stopped
+        because the contract did not permit something is not a result to be
+        reviewed — there is nothing to measure against the acceptance criteria —
+        so the node goes to WAITING_DECISION instead, where Master can answer.
+        The Execution Record is still written, because the work that did happen
+        is a fact about the project.
+
         The node must be RUNNING, not WAITING_EXTERNAL: a run that was blocked on
         something outside RAVEL has already been brought back by whichever
         activity ended the wait, because the DAG's rule is that a wait ends by
         resuming. Reaching here with the node still waiting would mean a wait
         that nobody ended.
 
-        Idempotent: a retried call finds the node already REVIEWING and returns
+        Idempotent: a retried call finds the node already moved on and returns
         the record the first call wrote, so the run does not produce two
         Execution Records.
 
@@ -372,13 +477,22 @@ class NodeRunActivities:
         outputs = (
             backend.collect(job.backend_job_ref) if job.backend_job_ref else JobOutputs()
         )
-        record = _execution_record(plan, job, attempts, outputs)
+        record = _execution_record(plan, job, attempts, outputs, deviation_id)
+        short = _delivery_message(plan, record)
 
         with self.database.transaction() as session:
             records = RecordRepositories(session, plan.project_id)
             records.executions.record(record, actor_id=plan.actor_id)
-            DagRepository(session, plan.project_id).transition_node(
-                plan.node_id, NodeStatus.REVIEWING, actor_id=plan.actor_id
+            if short is not None:
+                records.messages.record(short)
+            dag = DagRepository(session, plan.project_id)
+            for artifact_id in record.output_refs:
+                # Attaching what the run produced is not a change to the graph:
+                # the artifacts are the execution's, and Review reads them from
+                # the node it was handed.
+                dag.record_artifact(plan.node_id, artifact_id)
+            dag.transition_node(
+                plan.node_id, _ending_node(record), actor_id=plan.actor_id
             )
         return _outcome(record, retry_reason)
 
@@ -436,8 +550,16 @@ def _pending_job(plan: RunPlan, backend: WorkBackend, attempt: int) -> BackendJo
     )
 
 
-def _snapshot(job: BackendJob, status: JobStatus | None = None) -> JobSnapshot:
-    """A job as the workflow sees it."""
+def _snapshot(
+    job: BackendJob, status: JobStatus | None = None, *, deviation_id: str | None = None
+) -> JobSnapshot:
+    """A job as the workflow sees it.
+
+    `deviation_id` is passed rather than read off the job because a deviation
+    is not a property of the job — it is a separate record that the job's report
+    caused. A snapshot carrying one is how the workflow learns that the run has
+    stopped for a reason no job state describes.
+    """
     return JobSnapshot(
         job_id=job.job_id,
         backend_job_ref=job.backend_job_ref,
@@ -446,6 +568,7 @@ def _snapshot(job: BackendJob, status: JobStatus | None = None) -> JobSnapshot:
         failure_class=job.failure_class,
         detail=job.detail,
         progress=dict(status.progress) if status is not None else {},
+        deviation_id=deviation_id,
     )
 
 
@@ -498,8 +621,16 @@ def _execution_record(
     job: BackendJob,
     attempts: list[AttemptSummary],
     outputs: JobOutputs,
+    deviation_id: str | None = None,
 ) -> ExecutionRecord:
-    """The immutable record of what this run did."""
+    """The immutable record of what this run did.
+
+    A run that raised a deviation is recorded as ending `DEVIATION` rather than
+    as whatever the job's last state happened to be. The job was cancelled to
+    stop it, and `CANCELLED` would attribute that to somebody deciding to stop —
+    which is true of a person stopping a run and false of this, where the stop
+    is a consequence of the contract being silent.
+    """
     return ExecutionRecord(
         project_id=plan.project_id,
         node_id=plan.node_id,
@@ -521,9 +652,49 @@ def _execution_record(
         output_refs=outputs.artifacts,
         log_refs=outputs.logs,
         completeness=_completeness(plan.required_outputs, outputs),
-        termination_status=_TERMINATION[job.state],
+        deviations=(deviation_id,) if deviation_id else (),
+        termination_status=(
+            TerminationStatus.DEVIATION
+            if deviation_id
+            else _TERMINATION[job.state]
+        ),
         executed_by=plan.actor_id,
         started_at=attempts[0].started_at if attempts else None,
+    )
+
+
+def _ending_node(record: ExecutionRecord) -> NodeStatus:
+    """Where the node goes once the run is over.
+
+    Two destinations, and the difference is what the next role is being asked.
+    Review is asked what a result means; Master is asked what to do about a run
+    that stopped because nobody had said it was allowed. A deviation has no
+    result to review, so sending it to Review would be asking a question with no
+    material to answer it from.
+    """
+    if record.termination_status is TerminationStatus.DEVIATION:
+        return NodeStatus.WAITING_DECISION
+    return NodeStatus.REVIEWING
+
+
+def _delivery_message(plan: RunPlan, record: ExecutionRecord) -> WorkerMessage | None:
+    """What the Worker asks for when required outputs did not arrive.
+
+    Only after a run that *completed*. A run that failed did not leave a file
+    behind to chase, and asking for one would put a request in the record for
+    something the work never got as far as producing — which reads as an
+    operator's oversight rather than as the failure it was.
+    """
+    if record.termination_status is not TerminationStatus.COMPLETED:
+        return None
+    if record.delivery_is_complete:
+        return None
+    statement = on_incomplete_delivery(record.completeness.missing_outputs)
+    return WorkerMessage(
+        project_id=plan.project_id,
+        node_id=plan.node_id,
+        kind=statement.kind,
+        body=statement.body,
     )
 
 
@@ -550,6 +721,7 @@ def _outcome(record: ExecutionRecord, retry_reason: str) -> RunOutcome:
         output_refs=record.output_refs,
         log_refs=record.log_refs,
         retry_reason=retry_reason,
+        deviation_id=record.deviations[0] if record.deviations else None,
     )
 
 
