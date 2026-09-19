@@ -214,14 +214,21 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         retried call finds the first one and returns it.
 
         Raises:
+            ProjectScopeError: The job belongs to a different project. The
+                check is explicit because this method writes its own INSERT
+                rather than going through `add`, so the guard that every other
+                write passes is not on this path by default — and a row written
+                from a caller-supplied record is exactly where a supplied
+                `project_id` would otherwise be taken at its word.
             ValueError: A job is already recorded for this attempt and it is
                 not the same job. That is not a retry; it means two different
                 pieces of work were proposed for one attempt, and returning
                 either one would hide it.
         """
+        self._authorize(job)
         statement = (
             pg_insert(BackendJobRow)
-            .values(**to_row_data(job))
+            .values(**to_row_data(job, BackendJobRow))
             .on_conflict_do_nothing(index_elements=["project_id", "node_id", "attempt"])
             .returning(BackendJobRow.job_id)
         )

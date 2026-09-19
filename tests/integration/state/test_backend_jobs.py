@@ -30,6 +30,7 @@ from ravel.domain.ids import new_id
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.state.database import Database
+from ravel.state.repositories.base import ProjectScopeError
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.records import BackendJobRepository
 
@@ -100,6 +101,28 @@ def test_starting_the_same_attempt_twice_yields_one_job(
             {"n": node.node_id},
         ).scalar_one()
     assert count == 1
+
+
+def test_a_job_cannot_be_started_into_another_project(
+    database: Database, project: Project, other_project: Project, node: DagNode
+) -> None:
+    """The repository's scope, not the record's `project_id`, decides where a row goes.
+
+    `start` writes its own INSERT rather than going through `add`, because the
+    insert is the thing that has to conflict. That also means it does not pass
+    the guard `add` applies, so it applies the guard itself: without it, a job
+    built with a foreign `project_id` would be written into a project the
+    caller has no scope over, and `ON CONFLICT DO NOTHING` would then report
+    the confusing failure of a row that exists but cannot be found.
+    """
+    with database.transaction() as session:
+        repository = BackendJobRepository(session, other_project.project_id)
+        with pytest.raises(ProjectScopeError, match="belongs to project"):
+            repository.start(_job(project.project_id, node.node_id))
+
+    with database.read_only() as session:
+        count = session.execute(text("SELECT count(*) FROM backend_jobs")).scalar_one()
+    assert count == 0
 
 
 def test_a_second_attempt_is_a_second_job(

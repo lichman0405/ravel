@@ -1,17 +1,26 @@
 """Domain record ↔ database row.
 
 This module is small on purpose. The schema was designed so that an aggregate
-root gets one column per domain field with the *same name*, which means the
-conversion is generic: `model_dump(mode="python")` produces exactly the row's
-keyword arguments, and `model_validate` on the row's columns produces exactly
-the record. There is no per-entity mapping table to fall out of date, and
-adding a field to a domain record without adding its column fails loudly at the
-first write rather than silently dropping the value.
+root gets one column per domain field with the *same* name, which means the
+conversion is generic: the record's fields are exactly the row's keyword
+arguments, and `model_validate` on the row's columns produces exactly the
+record. There is no per-entity mapping table to fall out of date, and adding a
+field to a domain record without adding its column fails loudly at the first
+write rather than silently dropping the value.
 
 Values that are not aggregates — `BudgetLimits`, `AuthorityCheck`,
 `CriterionResult`, the list of dependency identifiers — land in JSONB columns
 as plain JSON and are re-validated by the domain model on the way back out, so
 their shape is still defined in exactly one place.
+
+**One column type decides one dump mode.** A `timestamptz` column wants a
+`datetime`; a JSONB column wants something `json.dumps` accepts, and a nested
+`datetime` is not that. Since the two kinds sit side by side in the same row,
+the mapping cannot pick a mode for the whole record — it picks per column, by
+asking the table which columns are JSON. Reading `attempts` back is what proves
+the two agree: `model_validate` parses an ISO string into the same `datetime`,
+so both spellings round-trip to the same domain object, and only one of them
+can be stored.
 
 What this buys, beyond brevity: a round trip through PostgreSQL returns the
 *same* validated domain object. The invariant tests in `tests/unit/domain` and
@@ -24,20 +33,39 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import inspect
+from sqlalchemy import JSON, inspect
 
 from ravel.domain.base import Record
 
 
-def to_row_data(record: BaseModel) -> dict[str, Any]:
-    """The column values for a domain record.
+def json_columns(row_type: type[Any]) -> set[str]:
+    """The names of the columns PostgreSQL stores as JSON.
 
-    `mode="python"` rather than `mode="json"`: datetimes stay `datetime` for
-    the `timestamptz` columns, `StrEnum` members stay str subclasses that
-    psycopg adapts as text, and tuples stay tuples that the JSONB serializer
-    writes as arrays.
+    `JSON` is the dialect-independent parent of `JSONB`, and asking the parent
+    means a column declared as plain `JSON` is covered by the same rule rather
+    than quietly taking the other dump mode and failing at insert time.
     """
-    return record.model_dump(mode="python")
+    return {
+        attribute.key
+        for attribute in inspect(row_type).mapper.column_attrs
+        if isinstance(attribute.columns[0].type, JSON)
+    }
+
+
+def to_row_data(record: BaseModel, row_type: type[Any]) -> dict[str, Any]:
+    """The column values for a domain record, dumped the way its columns need.
+
+    Python mode for everything, then JSON mode for the JSON columns and only
+    those. `mode="json"` for the whole record would turn a `timestamptz` value
+    into a string that psycopg would have to be trusted to parse back.
+    """
+    data = record.model_dump(mode="python")
+    stored_as_json = json_columns(row_type) & data.keys()
+    if stored_as_json:
+        as_json = record.model_dump(mode="json")
+        for name in stored_as_json:
+            data[name] = as_json[name]
+    return data
 
 
 def from_row[RecordT: Record](record_type: type[RecordT], row: Any) -> RecordT:
@@ -67,7 +95,7 @@ def build_row(row_type: type[Any], record: BaseModel, **extra: Any) -> Any:
             the loud failure the module docstring promises; it means a domain
             field was added without a migration.
     """
-    data = to_row_data(record)
+    data = to_row_data(record, row_type)
     data.update(extra)
     try:
         return row_type(**data)

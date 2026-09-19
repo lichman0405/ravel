@@ -1,0 +1,186 @@
+# Known Limitations
+
+What RAVEL V0 does not do, cannot do under its current design, or does only
+because of a property of the machine it was built on. Written as the limits were
+found rather than reconstructed at the end, so that an entry says what was
+actually observed and not what the design intended.
+
+Each entry says what is limited, why, and what a reader should not conclude from
+it. Nothing here is a defect being hidden: a limitation that is written down is
+one a reader can plan around, and one that is not is a surprise.
+
+---
+
+## L-01 — Crash recovery depends on `WorkBackend.submit` being idempotent
+
+- **Since:** Phase 5
+- **Where:** `src/ravel/execution/backends.py` (`WorkBackend`), `start_job` in
+  `src/ravel/execution/temporal/activities.py`
+
+A worker killed after a backend has accepted work but before the reference is
+recorded leaves a row that is indistinguishable from one whose `submit` never
+arrived. RAVEL recovers by calling `submit` again, which starts the work twice
+unless the backend recognises the call as the same work.
+
+The port therefore *requires* `submit` to be idempotent in
+`(project_id, node_id, attempt)`, and carries all three fields for that reason.
+This is a requirement RAVEL places on every implementor; it is not something
+RAVEL can supply.
+
+**Do not conclude** that a duplicated experiment is impossible. It is
+impossible exactly to the extent that backends honour the port. `MockComputeBackend`
+and `MockLabBackend` do. A future Slurm or LIMS adapter must.
+
+## L-02 — Recovery after a worker dies takes up to `job_activity_timeout_seconds`
+
+- **Since:** Phase 5
+- **Where:** `job_activity_timeout_seconds` in `src/ravel/config.py`
+
+Temporal cannot distinguish a worker that died from one that is merely slow, so
+an activity belonging to a dead worker is not retried until its
+`start_to_close_timeout` expires. That expiry *is* the recovery time: with the
+deployment default of 120 s, a crashed worker's work resumes within roughly two
+minutes, not immediately.
+
+Shorter means faster recovery and less tolerance for a genuinely slow activity.
+The tests run at 5 s.
+
+**Do not conclude** that a restart is instantaneous. Nothing is lost — that is
+what the restart tests assert — but "nothing is lost" and "nothing waits" are
+different claims.
+
+## L-03 — The test database is built by `create_all`, not by migrations
+
+- **Since:** Phase 1
+- **Where:** `tests/integration/conftest.py`
+
+`create_all` never alters a table that already exists, so a test database
+created before a constraint was added silently runs without that constraint.
+This produced one genuinely mystifying failure before it was understood.
+
+`_assert_schema_is_current` now compares every `CheckConstraint` the models
+declare against `pg_constraint` and refuses to run when one is missing, naming
+it. That catches missing constraints; it does not catch a changed column type or
+a dropped index.
+
+**Do not conclude** that a green integration suite proves the migrations are
+correct. Migration correctness is a separate question, and the migration/model
+parity test that would answer it is not yet written.
+
+## L-04 — Migration upgrade/downgrade guards read the current code
+
+- **Since:** Phase 1
+- **Where:** `migrations/versions/`
+
+A migration's `upgrade()` installs the guard functions as they are defined
+*today*, not as they were when the revision was written. Replaying history from
+an empty database installs the current guards at every step.
+
+**Do not conclude** that running migrations to an old revision reproduces the
+system as it was then. It reproduces the schema as it was then with today's
+guard bodies — which is the right behaviour for a fresh deployment and the wrong
+mental model for archaeology.
+
+## L-05 — No search-provider credential is configured
+
+- **Since:** Phase 4
+- **Where:** `.env`, `docs/IMPLEMENTATION_DEVIATIONS.md` (D-003)
+
+`.env` carries no search API key. Research reaches real sources by direct HTTP
+against Crossref, arXiv, and publisher URLs whose robots rules permit it — no
+mocking, no model priors as provenance. This is a constraint on *which* sources
+are reachable, not on whether retrieved ones are real.
+
+**Do not conclude** that Research is degraded or simulated. It is real; it is
+narrower than a paid search API would make it.
+
+## L-06 — Playwright's browser cannot run on this host
+
+- **Since:** Phase 4
+- **Where:** `src/ravel/research/`
+
+Chromium is missing seven shared libraries and there is no passwordless sudo to
+install them. Browser-based retrieval is implemented and its address checks run
+before every navigation, but it cannot be exercised here.
+
+**Do not conclude** that browser retrieval is untested because it is unused. It
+is unused because it is untestable on this machine; the code path exists and is
+unverified end to end.
+
+## L-07 — The host intercepts DNS, so address-based URL policy is not authoritative
+
+- **Since:** Phase 4
+- **Where:** `src/ravel/research/addressing.py`; `SECURITY_NOTES.md` §1;
+  `docs/IMPLEMENTATION_DEVIATIONS.md` (D-004)
+
+Every hostname on this machine resolves into `198.18.56.0/15`, a benchmarking
+range answered by a local interceptor. A connection to such an address is
+answered by the interceptor, not by any internal service, so the address check
+cannot by itself distinguish a journal from the instance-metadata service; a
+name check covers that case instead.
+
+**Do not conclude** that the guard is decorative. It is doing real work, and the
+name check is what makes it sufficient here. On a host that resolves names
+honestly, the address check becomes the stronger of the two.
+
+## L-08 — Two research-gateway risks remain open
+
+- **Since:** Phase 4
+- **Where:** `SECURITY_NOTES.md` §1, §3
+
+A DNS-rebinding TOCTOU window between the address check and the connection, and
+a gap in the `RAVEL_POSTGRES_DSN` scrub for harness-launched processes.
+
+**Do not conclude** that either is exploitable by a model acting alone. Both
+require a hostile resolver or a hostile deployment environment; both are
+recorded with the deployment assumption that makes them matter.
+
+## L-09 — A renamed guard function leaves its predecessor in place
+
+- **Since:** Phase 1
+- **Where:** `_SUPERSEDED_FUNCTIONS` in `src/ravel/state/guards.py`
+
+PostgreSQL cannot be told "and no other function starting with this prefix".
+A guard renamed in a later migration is dropped by name through an explicit
+list, so a name that is never added to that list survives.
+
+**Do not conclude** that the database enforces exactly the guard set the code
+declares. It enforces that set plus anything left over from an earlier revision
+that nobody listed.
+
+## L-10 — `users` is append-only, so a user cannot be deactivated
+
+- **Since:** Phase 1
+- **Where:** `src/ravel/state/tables.py`
+
+`is_active` exists and defaults to true. No code path flips it, and the table's
+immutability guards refuse updates.
+
+**Do not conclude** that deactivation was forgotten. Revocation in V0 is by
+authority envelope, which is Master's and the User's lever; a user-level switch
+is a later concern.
+
+## L-11 — Dependencies are immutable once added
+
+- **Since:** Phase 2
+- **Where:** `src/ravel/state/repositories/dag.py`
+
+`add_edge` was removed. A dependency, once recorded, cannot be edited or
+deleted; changing the graph means opening new work.
+
+**Do not conclude** that the DAG is rigid by accident. This is the "immutable
+record > overwrite" principle applied to the graph's shape, and the cost is that
+a mistaken edge must be superseded rather than corrected.
+
+## L-12 — Test workflows accumulate in the Temporal namespace
+
+- **Since:** Phase 5
+- **Where:** `tests/integration/temporal/`
+
+Each durable-execution test uses a private task queue so that a run abandoned by
+a failing test is never picked up by the next test's worker. Abandoned runs are
+not terminated, so a long-lived development namespace accumulates them.
+
+**Do not conclude** that the Temporal namespace is a record of anything.
+PostgreSQL is the record; the namespace is execution state, and the dev stack's
+`scripts/dev_down.sh` discards it.

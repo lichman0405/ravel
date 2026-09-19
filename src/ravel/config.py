@@ -52,6 +52,30 @@ class Settings(BaseSettings):
     temporal_host: str = "127.0.0.1:7233"
     temporal_namespace: str = "default"
     temporal_task_queue: str = "ravel-v0"
+    # How often a running job's backend is asked what it is doing. Each poll is
+    # an activity, so this is also the rate at which a run writes to Postgres.
+    job_poll_seconds: float = 5.0
+    # Work the backend has not ended by now is TIMED_OUT. A ceiling, not a
+    # prediction: the contract's own resource limits are the scientific bound,
+    # and this is what stops a wedged backend from holding a node forever.
+    # Measured from the moment one attempt's work is submitted, so a retry gets
+    # its own budget rather than inheriting what the attempt before it spent.
+    job_deadline_seconds: float = 3600.0
+    # How long a run may wait on something outside RAVEL — a lab, an operator —
+    # before the absence of a response is itself treated as the run's ending.
+    external_wait_seconds: float = 900.0
+    # How long any single activity call in a run may take before Temporal
+    # treats it as lost. This is what bounds recovery after a worker dies:
+    # the server cannot tell a dead worker from a slow one, so a killed
+    # activity is not retried until this expires.
+    job_activity_timeout_seconds: float = 120.0
+    # Temporal's own retry budget for an activity that failed for infrastructure
+    # reasons is a constant in `ravel.execution.temporal.workflows`, not a
+    # setting, and deliberately so: it is part of the commands a workflow
+    # issues, so two deployments replaying one history have to agree on it.
+    # It is also separate from the contract's `allowed_retries`, which governs
+    # scientific attempts — an activity retry is the same attempt tried again
+    # and must not consume one.
 
     # ── Object storage ─────────────────────────────────────────────────────
     # Artifact bytes live here. They never enter PostgreSQL.
