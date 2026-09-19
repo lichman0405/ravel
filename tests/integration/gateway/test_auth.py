@@ -17,22 +17,27 @@ report which of the four causes it was.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import jwt
 import pytest
 from fastapi.testclient import TestClient
 from tests.integration.gateway.conftest import (
     PASSWORD,
+    SECRET,
     account,
     bearer,
     deactivated_account,
     sign_in,
 )
 
+from ravel.domain.clock import utcnow
 from ravel.domain.enums import UserRole
 from ravel.domain.ids import new_id
 from ravel.domain.project import Project
 from ravel.gateway.auth.tokens import TokenService
 from ravel.state.database import Database
+from ravel.state.repositories.tokens import RefreshTokenRepository
 
 pytestmark = pytest.mark.integration
 
@@ -247,6 +252,66 @@ def test_replaying_a_refresh_grant_is_refused_and_cuts_the_chain(
     assert replayed.status_code == 401
     assert successor.status_code == 401, "the chain outlived the detection"
     assert replayed.json() == successor.json()
+
+
+def test_a_refresh_grant_for_a_deactivated_account_is_refused(
+    client: TestClient, database: Database, tokens: TokenService
+) -> None:
+    """Both ways in check the same thing, or one of them is checking nothing.
+
+    `login` refuses an inactive account; without the same check here, a grant
+    issued before the account drifted would keep being exchanged and the
+    account would keep being handed fresh chains. The access token would still
+    be refused by `current_caller`, so what is asserted is the stronger thing:
+    no new credential is minted at all.
+
+    The grant is written directly because the state it describes — a grant that
+    outlives its account's usefulness — is one the schema permits and no V0
+    route produces. That is the same reach `deactivated_account` makes, and for
+    the same reason: the guard has to handle a state the system can be in, not
+    only one a workflow can reach.
+    """
+    user_id = new_id()
+    deactivated_account(database, user_id=user_id, username="retired")
+    secret = TokenService.new_refresh_secret()
+    with database.transaction() as session:
+        RefreshTokenRepository(session).issue(
+            user_id=user_id,
+            token_hash=tokens.refresh_hash(secret),
+            expires_at=tokens.refresh_expiry(ttl_seconds=3600),
+        )
+
+    response = client.post("/auth/refresh", json={"refresh_token": secret})
+
+    assert response.status_code == 401
+
+
+def test_an_expired_token_and_a_forged_one_read_the_same(
+    client: TestClient, database: Database, tokens: TokenService
+) -> None:
+    """The refusal does not repeat what the token library said.
+
+    PyJWT distinguishes an expired signature from a bad one, and that
+    distinction is useful to exactly one kind of caller. The reasons are kept
+    for the log; the body is one sentence for every way of failing to
+    authenticate.
+    """
+    account(database, username="ada")
+    forger = TokenService(secret="a-different-secret-of-sufficient-length", ttl_seconds=60)
+
+    # Issued in the past for long enough that it is already expired.
+    expired, _grant = TokenService(secret=SECRET, ttl_seconds=1).issue_access(
+        "some-user-id", now=utcnow() - timedelta(hours=1)
+    )
+    forged, _grant = forger.issue_access("some-user-id")
+
+    wrong = client.get("/auth/me", headers=bearer(expired))
+    bad = client.get("/auth/me", headers=bearer(forged))
+
+    assert wrong.status_code == bad.status_code == 401
+    assert wrong.json() == bad.json()
+    assert "expired" not in wrong.text.lower()
+    assert "signature" not in bad.text.lower()
 
 
 def test_logging_out_cuts_the_chain_and_is_idempotent(

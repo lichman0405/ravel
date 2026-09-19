@@ -120,9 +120,17 @@ def login(request: LoginRequest, state: GatewayStateDep) -> TokenPair:
 def refresh(request: RefreshRequest, state: GatewayStateDep) -> TokenPair:
     """Rotate a login chain.
 
+    An account that has been deactivated is refused here exactly as it is at
+    login. That check is not redundant with the one `current_caller` makes on
+    every request: without it a deactivated account would keep being handed
+    fresh chains, and the only thing standing between it and the API would be
+    the access token's own expiry. A state enforced on one way in and not the
+    other is enforced by accident.
+
     Raises:
         HTTPException: 401. The grant is unknown, expired, revoked, or has
-            already been exchanged. The four are one answer.
+            already been exchanged, or the account it belongs to is no longer
+            active. The five are one answer.
     """
     presented = state.tokens.refresh_hash(request.refresh_token)
     expires_at = state.tokens.refresh_expiry(
@@ -153,6 +161,8 @@ def refresh(request: RefreshRequest, state: GatewayStateDep) -> TokenPair:
 
     with state.database.read_only() as session:
         user = UserRepository(session).get(rotated.user_id)
+    if not user.is_active:
+        raise _refused()
     return _pair(state, user.user_id, user.username, secret)
 
 

@@ -384,12 +384,27 @@ def _results(
                 "criterion was satisfied; a verdict that leaves it out answers "
                 "nothing"
             )
+        # `isinstance` rather than truthiness, because `bool("false")` is
+        # `True`: a verdict that arrived as the string `"false"` — which is
+        # what a model writes when it is being careful in the wrong way — would
+        # be recorded as this criterion having been met. That is a scientific
+        # judgement silently inverted, and it is the one error in a review that
+        # nobody downstream can detect. The type is demanded rather than
+        # coerced; a caller that means false has a way to say so.
+        satisfied = item["satisfied"]
+        if not isinstance(satisfied, bool):
+            raise ValueError(
+                f"the result for {criterion_id!r} says satisfied={satisfied!r}, "
+                "which is not true or false; a verdict on a criterion is one or "
+                "the other, and a value that could be read either way is not a "
+                "verdict"
+            )
         frozen = known.get(criterion_id)
         built.append(
             CriterionResult(
                 criterion_id=criterion_id,
                 statement=frozen.statement if frozen is not None else "",
-                satisfied=bool(item["satisfied"]),
+                satisfied=satisfied,
                 observed=str(item.get("observed") or ""),
                 note=str(item.get("note") or ""),
                 evidence_refs=tuple(str(ref) for ref in item.get("evidence_refs") or ()),

@@ -308,6 +308,45 @@ async def test_a_final_verdict_ends_the_node_against_the_frozen_criteria(
     assert recorded.observed == "Conductivity rose 18% across the series."
 
 
+async def test_a_verdict_that_answers_with_a_string_is_refused(
+    role_environment: RoleEnvironment, project: Any, database: Any, prepare: Any
+) -> None:
+    """`"false"` is not false, and reading it as one would invert the verdict.
+
+    A non-empty string is truthy, so a reviewer that wrote
+    `"satisfied": "false"` — being careful, in the wrong way — would have its
+    judgement recorded as the criterion having been met. Nothing downstream can
+    detect that: the record would say PASS, with a statement and an observation
+    that read as consistent with it. So the type is demanded, and the refusal
+    names what arrived.
+    """
+    prepared = prepare()
+    _to_reviewing(database, project.project_id, prepared.node_id)
+    criterion = prepared.acceptance.criteria[0]
+
+    result = await probe(
+        role_environment.for_project(project, AgentRole.REVIEW),
+        calls=(
+            (
+                "submit_review",
+                {
+                    "node_id": prepared.node_id,
+                    "checkpoint": "FINAL",
+                    "outcome": "PASS",
+                    "criterion_results": [
+                        {"criterion_id": criterion.criterion_id, "satisfied": "false"}
+                    ],
+                },
+            ),
+        ),
+    )
+
+    call = result.calls[0]
+    assert call.failed
+    assert "'false'" in (call.error or "")
+    assert _verdicts(database, project.project_id, prepared.node_id, ReviewCheckpoint.FINAL) == []
+
+
 # ── What is refused ─────────────────────────────────────────────────────────
 
 

@@ -30,7 +30,7 @@ from ravel.config import Settings, get_settings
 from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
 from ravel.gateway.deps import GatewayState
 from ravel.gateway.errors import install_error_handlers
-from ravel.gateway.routes import auth, projects
+from ravel.gateway.routes import auth, control, projects
 from ravel.state.database import Database
 
 #: What the Gateway calls itself. Versioned because a TUI written against V0
@@ -86,6 +86,7 @@ def create_app(
 
     app.include_router(auth.router)
     app.include_router(projects.router)
+    app.include_router(control.router)
 
     @app.get("/healthz", tags=["meta"], summary="Whether this process is answering")
     def healthz() -> dict[str, str]:

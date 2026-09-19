@@ -29,6 +29,7 @@ to prevent.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -40,6 +41,8 @@ from ravel.domain.enums import UserRole
 from ravel.gateway.auth.tokens import InvalidAccessToken, TokenService
 from ravel.state.database import Database
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
+
+logger = logging.getLogger(__name__)
 
 #: The authority each user role carries, weakest first. The domain keeps its
 #: own copy in `ravel.domain.identity`; this one is repeated rather than
@@ -160,13 +163,18 @@ def current_caller(
         HTTPException: 401. The reason is a fixed sentence rather than the
             token library's message, because a caller who cannot authenticate
             has no business learning which part of their token was wrong.
+            `InvalidAccessToken` already says its reason is for the log and not
+            for the response; putting it in the body anyway would distinguish
+            an expired token from a forged one, and the second answer is a
+            forgery being told which part of it to fix.
     """
     if credentials is None or not credentials.credentials:
         raise _unauthenticated("this route requires an access token")
     try:
         grant = state.tokens.verify_access(credentials.credentials)
     except InvalidAccessToken as refused:
-        raise _unauthenticated(str(refused)) from refused
+        logger.info("refused an access token: %s", refused.reason)
+        raise _unauthenticated("that access token was not accepted") from refused
 
     with state.database.read_only() as session:
         user = UserRepository(session).get(grant.user_id)
@@ -201,8 +209,15 @@ def principal(
     return Principal(caller=caller, project_id=project_id, role=membership.role)
 
 
-def require_director(standing: Principal) -> Principal:
+def require_director(standing: Annotated[Principal, Depends(principal)]) -> Principal:
     """Refuse a principal who may not direct this project's research.
+
+    The parameter is spelled as a dependency rather than as a plain
+    `Principal`, and that is load-bearing rather than decoration: FastAPI reads
+    an unannotated dataclass parameter as a request *body*, so the plain form
+    asks every caller for a JSON object describing their own standing. The
+    membership check and the role check are one dependency chain, resolved once
+    per request.
 
     Raises:
         HTTPException: 403. Unlike a missing membership, this is not hidden:
@@ -217,7 +232,7 @@ def require_director(standing: Principal) -> Principal:
     return standing
 
 
-def require_administrator(standing: Principal) -> Principal:
+def require_administrator(standing: Annotated[Principal, Depends(principal)]) -> Principal:
     """Refuse a principal who may not inspect this project's runtime."""
     if not standing.administers:
         raise HTTPException(
@@ -237,15 +252,21 @@ def _unauthenticated(reason: str) -> HTTPException:
 
 
 #: Shorthands, so a route signature reads as what it needs rather than as how
-#: the dependency is spelled.
+#: the dependency is spelled. The two refusing ones are shorthands for a
+#: *pair* — membership, then the role — so a route that names one has both
+#: checks and cannot end up holding a principal nobody admitted to.
 CallerDep = Annotated[Caller, Depends(current_caller)]
 PrincipalDep = Annotated[Principal, Depends(principal)]
+DirectorDep = Annotated[Principal, Depends(require_director)]
+AdministratorDep = Annotated[Principal, Depends(require_administrator)]
 GatewayStateDep = Annotated[GatewayState, Depends(gateway_state)]
 
 __all__ = [
     "BEARER",
+    "AdministratorDep",
     "Caller",
     "CallerDep",
+    "DirectorDep",
     "GatewayState",
     "GatewayStateDep",
     "Principal",
