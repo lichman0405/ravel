@@ -8,10 +8,14 @@ SHELL := /bin/bash
 VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
+# Pyright is a Node tool, not a Python package, so it is not in the venv. It is
+# on PATH after `make bootstrap`; override it with `make lint PYRIGHT=...` if
+# this machine keeps it somewhere else.
+PYRIGHT ?= pyright
 
 .PHONY: help bootstrap env-check dev-up dev-down migrate test test-unit \
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
-        gateway tui acceptance-matrix clean
+        typecheck gateway tui acceptance-matrix clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -56,13 +60,21 @@ acceptance: ## Run A01-A20 plus the extra gates
 acceptance-matrix: ## Print the A01-A20 pass/fail matrix
 	$(PY) scripts/acceptance_matrix.py
 
+# The checks that decide whether the tree is acceptable: the linter for style
+# and likely mistakes, and the type checker for the interfaces between modules.
+# `ruff format` is deliberately not one of them — the wrapping in this codebase
+# is hand-authored so that a line break falls where the thought does, and a
+# formatter that rewrote 88 files to no semantic effect would make every later
+# diff unreadable. `ruff check` is the gate; run it before committing.
 lint: ## Static checks
 	$(VENV)/bin/ruff check src tests
-	$(VENV)/bin/ruff format --check src tests
+	$(PYRIGHT) src tests
 
-fmt: ## Auto-format
+fmt: ## Fix what the linter can fix on its own
 	$(VENV)/bin/ruff check --fix src tests
-	$(VENV)/bin/ruff format src tests
+
+typecheck: ## Type-check the source and the tests
+	$(PYRIGHT) src tests
 
 gateway: ## Run the RAVEL Gateway
 	$(VENV)/bin/uvicorn ravel.gateway.app:create_app --factory --reload
