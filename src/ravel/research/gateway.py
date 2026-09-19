@@ -428,6 +428,11 @@ class ResearchSourceGateway:
             media_type=retrieval.media_type,
             artifact_ref=artifact_ref,
             snapshot_ref=snapshot_ref,
+            # Stored as fields as well as described in `notes`: a claim's tier
+            # and access are derived from its sources, and a derivation that
+            # read them back out of a sentence would depend on the sentence.
+            tier=tier.tier,
+            declared_type=request.declared_type,
             notes=_notes(request, retrieval, tier, research_task_ref),
         )
         return Registration(

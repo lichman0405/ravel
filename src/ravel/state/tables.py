@@ -550,6 +550,10 @@ class EvidenceSourceRow(Base):
     __tablename__ = "evidence_sources"
     __table_args__ = (
         _enum_constraint("access_status", AccessStatus),
+        # Nullable, so a row written before the column existed is not a
+        # violation: `NULL IN (...)` is NULL, and a CHECK passes on anything
+        # that is not false.
+        _enum_constraint("tier", EvidenceSourceTier),
         # The check that matters: only a source that was read may carry a hash
         # or a retrieval time. A restricted source with a hash would assert
         # RAVEL read bytes it could not reach.
@@ -583,6 +587,13 @@ class EvidenceSourceRow(Base):
     #: as text to match `ArtifactVersionRow.storage_key`, which holds the same
     #: string for the same object.
     snapshot_ref: Mapped[str | None] = mapped_column(Text)
+    #: Assigned by `tiers.assign` when the source was registered, and stored
+    #: because a claim's tier is derived from its sources' rather than chosen
+    #: by whoever writes the claim. Nullable: rows written before the column
+    #: existed have no tier, and giving them one now would be classifying a
+    #: source nobody classified.
+    tier: Mapped[str | None] = mapped_column(String(4))
+    declared_type: Mapped[str | None] = mapped_column(String(128))
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 

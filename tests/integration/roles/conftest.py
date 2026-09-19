@@ -39,6 +39,11 @@ class RoleEnvironment:
         an ambient override in the developer's shell would otherwise outrank
         the test database in the child's settings, and the suite would write to
         a real project.
+
+        The research contact address travels for the same reason read the other
+        way round: a Research session that opens sources fetches under RAVEL's
+        own User-Agent, and the address it names has to be the one the suite
+        decided on rather than whatever the developer's shell happened to have.
         """
         brief = self.brief_dir / f"{role.value}.brief.json"
         brief.parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +65,7 @@ class RoleEnvironment:
             "RAVEL_POSTGRES_USER": self.settings.postgres_user,
             "RAVEL_POSTGRES_PASSWORD": self.settings.postgres_password.get_secret_value(),
             "RAVEL_POSTGRES_DSN": "",
+            "RAVEL_RESEARCH_CONTACT_EMAIL": self.settings.research_contact_email or "",
             "RAVEL_PROJECT_ID": project_id,
             "RAVEL_ROLE": role.value,
             "RAVEL_BRIEF_FILE": str(brief),

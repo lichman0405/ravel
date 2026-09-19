@@ -37,6 +37,7 @@ from ravel.domain.contracts import (
     AcceptanceCriterion,
     CriterionProvenance,
     ExecutionContract,
+    ResearchContract,
 )
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import ReviewRecord
@@ -57,6 +58,7 @@ from ravel.state.database import Database, create_db_engine, install_utc_guard
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
     ExecutionContractRepository,
+    ResearchContractRepository,
 )
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
@@ -467,6 +469,37 @@ def prepare(database: Database, project: Project) -> Callable[..., Prepared]:
             )
 
     return build
+
+
+@pytest.fixture
+def research_task(
+    database: Database, project: Project, prepare: Callable[..., Prepared]
+) -> Prepared:
+    """A RESEARCH node under the research contract that says what was asked.
+
+    Shared by the two suites that serve a research task through its tool server
+    — the integration one and the live one — because the state a session is
+    pointed at is the same state in both, and two definitions of it would be
+    two places for "what the user asked for" to drift.
+
+    A RESEARCH node has no acceptance criteria: that is what `with_acceptance`
+    is off for. What it runs under is the Execution Contract, which `prepare`
+    freezes.
+    """
+    with database.transaction() as session:
+        ResearchContractRepository(session, project.project_id).add(
+            ResearchContract(
+                project_id=project.project_id,
+                original_user_goal="Find a dopant that survives 500 hours under load.",
+                scientific_problem="Which dopant keeps conductivity above the threshold?",
+                research_hypotheses=("Niobium doping raises stability.",),
+                target_metrics=("conductivity gain >= 15%",),
+                acceptance_strategy="Measure the series and compare against the baseline.",
+                known_constraints=("Bench time is limited.",),
+                prohibited_actions=("No testing on live reactors.",),
+            )
+        )
+    return prepare(node_type=NodeType.RESEARCH, with_acceptance=False)
 
 
 def _clear_for_running(

@@ -20,6 +20,7 @@ suite reports fewer assertions rather than passing on invented data.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import Session
@@ -33,8 +34,11 @@ from tests.integration.conftest import (  # noqa: F401
     clean,
     database,
     integration_settings,
+    prepare,
     project,
+    research_task,
 )
+from tests.integration.roles.conftest import RoleEnvironment
 
 from ravel.config import Settings
 from ravel.domain.project import Project
@@ -89,3 +93,16 @@ def gateway(
 def actor_id() -> str:
     """Who is doing the research. Any identified actor will do here."""
     return "live-research-suite"
+
+
+@pytest.fixture
+def live_role_environment(live_settings: Settings, tmp_path: Path) -> RoleEnvironment:
+    """The role environment the integration suites use, on live settings.
+
+    The same builder — a tool server is launched identically here and there —
+    pointed at the settings that carry a contact address. That is the whole
+    difference between the two, and it is load-bearing: `RoleEnvironment` passes
+    the address through to the child, and a Research session launched without
+    one refuses to fetch. The refusal is correct behaviour and the wrong test.
+    """
+    return RoleEnvironment(settings=live_settings, brief_dir=tmp_path / "briefs")

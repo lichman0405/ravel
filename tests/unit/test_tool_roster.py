@@ -102,46 +102,56 @@ def test_every_dag_mutation_tool_is_granted_to_master() -> None:
         assert TOOL_ROLES[name] == frozenset({AgentRole.MASTER})
 
 
-def test_every_writing_tool_belongs_to_exactly_one_role() -> None:
-    """A writing tool is held by its author and by nobody else.
+def test_the_roster_agrees_with_the_authorship_record() -> None:
+    """Every writing tool is held by exactly the roles the table says wrote it.
 
     The write set is named explicitly so that a read tool which starts writing,
     or a writing tool handed to a second role, has to be noticed in two places
     rather than one — the roster and the table that says who the author is.
+    Editing one without the other is what this catches.
     """
     assert DAG_MUTATION_TOOLS <= WRITE_TOOLS
     assert set(WRITE_TOOLS) == set().union(*WRITE_AUTHORSHIP.values())
-    for role, authored in WRITE_AUTHORSHIP.items():
-        for name in authored:
-            assert name in TOOL_ROLES, f"{name} writes but is not part of the RAVEL roster"
-            assert TOOL_ROLES[name] == frozenset({role}), (
-                f"{name} is {role.value}'s to write, so no other role may hold it"
-            )
+    for name in WRITE_TOOLS:
+        authors = frozenset(
+            role for role, authored in WRITE_AUTHORSHIP.items() if name in authored
+        )
+        assert name in TOOL_ROLES, f"{name} writes but is not part of the RAVEL roster"
+        assert TOOL_ROLES[name] == authors, (
+            f"{name} is held by {sorted(r.value for r in TOOL_ROLES[name])} and the "
+            f"authorship record says {sorted(r.value for r in authors)}"
+        )
 
 
-def test_master_writes_the_plan_and_review_writes_verdicts() -> None:
-    """The two authorship sets are disjoint, and neither contains the other's.
+def test_the_four_execution_and_review_powers_do_not_overlap() -> None:
+    """Master, Review, Research and the Workers write four disjoint records.
 
-    Stated separately from the role loop above because this is the separation
-    of powers itself: Master cannot record a verdict on its own work, and
-    Review cannot change the plan it judges.
+    Stated separately from the loop above because this is the separation of
+    powers itself: Master cannot record a verdict on its own work or evidence
+    for it, Review cannot change the plan it judges, and Research cannot decide
+    what its evidence means for the plan.
     """
-    assert WRITE_AUTHORSHIP[AgentRole.MASTER].isdisjoint(WRITE_AUTHORSHIP[AgentRole.REVIEW])
-    assert DAG_MUTATION_TOOLS.issubset(WRITE_AUTHORSHIP[AgentRole.MASTER])
-    assert "submit_review" not in WRITE_AUTHORSHIP[AgentRole.MASTER]
+    master = WRITE_AUTHORSHIP[AgentRole.MASTER]
+    others = frozenset().union(
+        *(
+            authored
+            for role, authored in WRITE_AUTHORSHIP.items()
+            if role is not AgentRole.MASTER
+        )
+    )
+    assert master.isdisjoint(others)
+    assert DAG_MUTATION_TOOLS.issubset(master)
+    assert "submit_review" not in master
+    assert "register_source" not in master
 
 
-@pytest.mark.parametrize(
-    "role",
-    [AgentRole.RESEARCH, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER],
-)
-def test_a_role_with_no_authorship_holds_no_writing_tool_at_all(role: AgentRole) -> None:
-    """A worker's contract is "execute this and report"; it does not write state.
+@pytest.mark.parametrize("role", list(AgentRole))
+def test_a_role_writes_only_what_the_table_gives_it(role: AgentRole) -> None:
+    """A role's writing tools are exactly its authored set, or none at all.
 
-    Stated as a disjointness rather than a fixed roster: later phases give the
-    workers tools of their own, and this rule has to keep holding as they do —
-    a worker that needs to write a record is a role whose authorship has to be
-    added to the table deliberately, not a role that quietly acquired a tool.
+    Stated as an equality in both directions rather than a disjointness: a
+    role that holds a writing tool the table does not give it is a role that
+    acquired one quietly, and a role whose authored set is empty holds nothing
+    that writes.
     """
-    assert role not in WRITE_AUTHORSHIP
-    assert set(tools_for(role)).isdisjoint(WRITE_TOOLS)
+    assert set(tools_for(role)) & WRITE_TOOLS == set(WRITE_AUTHORSHIP.get(role, frozenset()))

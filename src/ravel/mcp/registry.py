@@ -52,6 +52,32 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "read_review_work": frozenset({REVIEW}),
     "read_review_package": frozenset({REVIEW}),
     "submit_review": frozenset({REVIEW}),
+    # ── Research: the one way into the Evidence Ledger ─────────────────────
+    #
+    # Reading the task and searching are separate from writing, and the writing
+    # tools are all Research's. A source row is a statement that RAVEL read
+    # something, and the role that makes it is the role whose task asked the
+    # question — which is why no other role holds any of these.
+    "read_research_task": frozenset({RESEARCH}),
+    "search_sources": frozenset({RESEARCH}),
+    "search_web": frozenset({RESEARCH}),
+    "open_source": frozenset({RESEARCH}),
+    "register_source": frozenset({RESEARCH}),
+    "record_evidence": frozenset({RESEARCH}),
+    "record_conflict": frozenset({RESEARCH}),
+    "assess_evidence": frozenset({RESEARCH}),
+    "submit_research_record": frozenset({RESEARCH}),
+    # ── Workers: what they act under, and what they may say ────────────────
+    #
+    # Both Workers hold the same three, because both act under a frozen
+    # Execution Contract and both may find that it does not name what they have
+    # been asked for. `send_message` is the Experimental Worker's alone: it is
+    # the role that talks to a lab, and the four permitted kinds are the whole
+    # of what a Worker may say to one.
+    "read_execution_contract": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
+    "read_execution_status": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
+    "request_action": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
+    "send_message": frozenset({EXPERIMENTAL_WORKER}),
 }
 
 #: The tools that change the Scientific DAG. Master is the only role that holds
@@ -66,17 +92,35 @@ DAG_MUTATION_TOOLS: frozenset[str] = frozenset(
 #: Which role may hold which writing tool — the record each is the author of.
 #:
 #: Master writes the plan and the decisions that order it; Review writes
-#: verdicts. These are different acts and neither role may perform the other's,
-#: which is why this is a table of authors rather than a single Master-only set.
+#: verdicts; Research writes the Evidence Ledger; the Workers write what they
+#: said and what they were refused. These are four different records of four
+#: different acts, and no role may write another's.
 #:
-#: `submit_review` is a write and deliberately not a DAG mutation: Review
-#: records what it found, and the one status change that follows a final
-#: verdict is RAVEL applying it, not Review changing the plan. A role absent
-#: from this table holds no writing tool at all — which is the rule the workers
-#: are held to, and the reason the table exists rather than a bare list.
+#: Two of these are writes and deliberately not DAG mutations. `submit_review`
+#: records what Review found: the one status change that follows a final
+#: verdict is RAVEL applying it, not Review changing the plan. `request_action`
+#: and `send_message` record what a Worker asked and what it was told — the
+#: deviation is a question, and answering it is Master's.
+#:
+#: A role absent from this table holds no writing tool at all, and the two
+#: Workers are the case that shows why: a Worker that needs to write a record
+#: is a role whose authorship has to be added here deliberately, rather than a
+#: role that quietly acquired a tool. The same holds in the other direction —
+#: `request_action` is held by both Workers, and this table is where that is
+#: stated rather than where it is discovered.
 WRITE_AUTHORSHIP: dict[AgentRole, frozenset[str]] = {
     MASTER: DAG_MUTATION_TOOLS | {"write_master_checkpoint"},
     REVIEW: frozenset({"submit_review"}),
+    RESEARCH: frozenset(
+        {
+            "register_source",
+            "record_evidence",
+            "record_conflict",
+            "submit_research_record",
+        }
+    ),
+    COMPUTE_WORKER: frozenset({"request_action"}),
+    EXPERIMENTAL_WORKER: frozenset({"request_action", "send_message"}),
 }
 
 #: The tools that write anything at all. Keeping the set explicit means a read
@@ -147,6 +191,85 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "becomes PASSED, FAILED or PARTIAL and stays that way. A RUNTIME verdict is advice "
         "and moves nothing. Report a final verdict on every frozen criterion one by one, "
         "with what you observed; a verdict that leaves one out is refused."
+    ),
+    "read_research_task": (
+        "Read the research task you are serving: what it is answering, the terms it runs "
+        "under, and everything already in the ledger for it. Read this first, and again "
+        "before submitting, so that a second pass adds evidence rather than re-deriving it."
+    ),
+    "search_sources": (
+        "Search the bibliographic and chemical databases for what is known about a "
+        "question. Returns leads, with their identifiers and titles — a lead is a pointer, "
+        "not evidence, and nothing is in the ledger until you open it and register it. "
+        "Reports which services could not answer, which is part of the result."
+    ),
+    "search_web": (
+        "Search the open web. Returns leads, of the weakest kind: web results become "
+        "evidence only by being opened and read. Refuses rather than returning nothing "
+        "when no search provider is configured, because 'RAVEL cannot search' and 'the web "
+        "has nothing' are different findings."
+    ),
+    "open_source": (
+        "Fetch a URL and read what actually comes back: the status, the media type, the "
+        "hash of the bytes, and the beginning of the text. Nothing is recorded in the "
+        "ledger yet — registering is a separate, deliberate act. A source RAVEL could not "
+        "read comes back saying so (PAYWALLED, AUTH_REQUIRED and so on), and that is a "
+        "finding worth registering; inventing what it says is not."
+    ),
+    "register_source": (
+        "Write a source you opened into the Evidence Ledger, with the tier RAVEL assigned "
+        "it and a stored copy of the bytes. This is the only way anything enters the "
+        "ledger: the source is registered from the bytes RAVEL read, never from a URL and "
+        "a hash you supply."
+    ),
+    "record_evidence": (
+        "Record one claim and what supports it. A FACT needs sources you actually read; "
+        "an INFERENCE says what it was inferred from and the conditions it holds under; a "
+        "HYPOTHESIS may rest on nothing yet. The claim's tier and access status are read "
+        "from its sources, so there is nothing to gain by asserting them."
+    ),
+    "record_conflict": (
+        "Record that two claims disagree, and what the disagreement is about. Conflicts "
+        "are preserved rather than averaged away: a disagreement nobody wrote down cannot "
+        "be reviewed, and unresolved ones count against the sufficiency of the evidence."
+    ),
+    "assess_evidence": (
+        "Measure what you have gathered against the six considerations — independence, "
+        "authority, directness, condition match, reproducibility, conflict — and say "
+        "whether it can carry the decision it is for. Writes nothing. Ask it more than "
+        "once: `would_change_with` is the list of what to search for next."
+    ),
+    "submit_research_record": (
+        "Submit the structured record for this research task. The record is assembled from "
+        "the ledger and judged against the completion contract, and the completion status "
+        "that comes back is RAVEL's, not yours. INCOMPLETE with a clear list of what you "
+        "could not establish is a correct answer; COMPLETE is only for a task that met "
+        "every requirement."
+    ),
+    "read_execution_contract": (
+        "Read the frozen Execution Contract for your task: the actions you may take, the "
+        "ranges and substitutions permitted, the outputs you owe, and when to stop. This "
+        "is the whole of your authority. An action it does not name is forbidden, not "
+        "merely unmentioned."
+    ),
+    "read_execution_status": (
+        "Read the record of what actually happened on your task: the job in flight, the "
+        "record of a run that ended, what was delivered against what was required, and "
+        "anything waiting on Master. Read it before reporting anything."
+    ),
+    "request_action": (
+        "Ask whether the Execution Contract permits something — a parameter value, a "
+        "substitution, an action — and be told. RAVEL answers by looking the contract up, "
+        "not by judging whether the change is scientifically reasonable, and its answer is "
+        "final: permitted work carries on, and anything else stops the task and asks "
+        "Master. Never answer the question yourself."
+    ),
+    "send_message": (
+        "Say one of the four permitted things to the lab: CONFIRM, INFORM, "
+        "REQUEST_MISSING_INFORMATION or ESCALATE. The first three must be about something "
+        "the contract names, and a message about anything else is refused — a question "
+        "from an operator is escalated to Master, never answered by you, however obvious "
+        "the answer looks."
     ),
 }
 

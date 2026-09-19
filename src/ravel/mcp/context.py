@@ -80,40 +80,75 @@ class ToolContext:
         self.database.dispose()
 
 
-def require_master(context: ToolContext, tool: str) -> None:
-    """Refuse a Master-only tool to anything else.
+def require_role(context: ToolContext, tool: str, *roles: AgentRole) -> None:
+    """Refuse a role-scoped tool to a session serving anything else.
 
-    The roster already keeps these tools out of a non-Master server, so this is
-    the second lock on the same door: a handler that is reachable only because
+    The roster already keeps a tool out of the wrong server, so this is the
+    second lock on the same door: a handler that is reachable only because
     someone mis-edited the registry still refuses to act. The check is on the
     process scope, not on an argument, so no caller can talk around it.
+
+    Takes the roles rather than one role because one tool is legitimately held
+    by two: the two Workers ask their contracts the same question, and the
+    answer is the same for both.
+
+    Raises:
+        PermissionError: The scope's role is not one of these.
+    """
+    if context.role not in roles:
+        permitted = " or ".join(role.display_name for role in roles)
+        raise PermissionError(
+            f"{tool} is a {permitted} tool; this session serves "
+            f"{context.role.value} in {context.project_id}"
+        )
+
+
+def require_master(context: ToolContext, tool: str) -> None:
+    """Refuse a Master-only tool to anything else.
 
     Raises:
         PermissionError: The scope's role is not Master.
     """
-    if not context.scope.is_master:
-        raise PermissionError(
-            f"{tool} is a Master tool; this session serves {context.role.value} "
-            f"in {context.project_id}"
-        )
+    require_role(context, tool, AgentRole.MASTER)
 
 
 def require_review(context: ToolContext, tool: str) -> None:
     """Refuse a Review-only tool to anything else.
 
-    The same second lock as `require_master`, on the other role whose tools
-    write something no other role may write. A verdict is Review's act, and a
-    handler that is reachable only because someone mis-edited the registry
-    still refuses to record one.
+    A verdict is Review's act, and a handler that is reachable only because
+    someone mis-edited the registry still refuses to record one.
 
     Raises:
         PermissionError: The scope's role is not Review.
     """
-    if context.role is not AgentRole.REVIEW:
-        raise PermissionError(
-            f"{tool} is a Review tool; this session serves {context.role.value} "
-            f"in {context.project_id}"
-        )
+    require_role(context, tool, AgentRole.REVIEW)
+
+
+def require_research(context: ToolContext, tool: str) -> None:
+    """Refuse a Research-only tool to anything else.
+
+    Everything Research writes goes into the Evidence Ledger, which is the
+    record every later acceptance criterion's provenance is read from. No other
+    role writes to it, so no other role may reach the tools that do.
+
+    Raises:
+        PermissionError: The scope's role is not Research.
+    """
+    require_role(context, tool, AgentRole.RESEARCH)
+
+
+def require_worker(context: ToolContext, tool: str) -> None:
+    """Refuse a Worker tool to anything that is not a Worker.
+
+    Both Workers, because both work under a frozen Execution Contract and both
+    may find that the contract does not name what they have been asked for.
+    The question is the same one and so is the answer, which is why this is one
+    guard rather than two.
+
+    Raises:
+        PermissionError: The scope's role is neither Worker.
+    """
+    require_role(context, tool, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER)
 
 
 def as_json(value: Any) -> Any:

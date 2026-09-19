@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,11 +47,24 @@ class ProbeResult:
     calls: tuple[ToolCall, ...] = ()
 
 
+#: A call's arguments, or a function of the calls made before it.
+#:
+#: Some tools take a value only the previous tool can produce: `register_source`
+#: needs the reference `open_source` issued, and `record_evidence` needs the
+#: identifier `register_source` returned. Those references are held in the
+#: server's own memory and are deliberately not derivable from the node id, so
+#: a test that has to pass one must read it off the earlier reply — and it must
+#: do so *within one server process*, because that is the only thing that holds
+#: them. Hence a callable: the sequence still runs in one session, and the
+#: dependency between two calls is stated where the calls are.
+type CallArguments = dict[str, Any] | Callable[[tuple[ToolCall, ...]], dict[str, Any]]
+
+
 async def probe(
     env: dict[str, str],
     *,
     call_whoami: bool = True,
-    calls: tuple[tuple[str, dict[str, Any]], ...] = (),
+    calls: tuple[tuple[str, CallArguments], ...] = (),
 ) -> ProbeResult:
     """Launch a tool server with `env` and report what it exposed.
 
@@ -75,8 +89,9 @@ async def probe(
 
         outcomes = []
         for name, arguments in calls:
+            resolved = arguments(tuple(outcomes)) if callable(arguments) else arguments
             try:
-                result = await session.call_tool(name, arguments)
+                result = await session.call_tool(name, resolved)
             except Exception as exc:  # the transport refused to carry the call
                 outcomes.append(
                     ToolCall(

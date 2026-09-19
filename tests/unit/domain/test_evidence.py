@@ -20,6 +20,8 @@ from ravel.domain.evidence import (
     EvidenceSource,
     ResearchRecord,
     SufficiencyAssessment,
+    claim_access,
+    claim_tier,
 )
 
 
@@ -144,6 +146,106 @@ def _assessment(**overrides: object) -> SufficiencyAssessment:
     defaults: dict[str, object] = {"sufficiency": Sufficiency.MODERATE, "rationale": "One source."}
     defaults.update(overrides)
     return SufficiencyAssessment(**defaults)  # type: ignore[arg-type]
+
+
+# ── What a claim's standing is derived from ─────────────────────────────────
+#
+# A claim does not carry a tier because somebody chose one: the tier is read
+# off the sources behind it. These are the rules that read it, and the case
+# that matters most is the unreadable source — a claim cannot be strengthened
+# by a paper RAVEL was unable to open.
+
+
+def test_a_claim_is_as_strong_as_the_best_source_it_was_read_from() -> None:
+    """The strongest *read* source, not the average and not the first.
+
+    A claim supported by a journal article and by a blog is supported by the
+    journal article; the blog does not weaken it, and it does not strengthen it
+    either.
+    """
+    strong = _source(tier=EvidenceSourceTier.A)
+    weak = _source(url="https://blog.example.org/x", tier=EvidenceSourceTier.D)
+
+    assert claim_tier([weak, strong]) is EvidenceSourceTier.A
+    assert claim_tier([strong, weak]) is EvidenceSourceTier.A
+
+
+def test_a_source_ravel_could_not_read_cannot_strengthen_a_claim() -> None:
+    """A paywalled tier-A paper is not a tier-A reading.
+
+    This is the derivation doing its job: a model that could cite the DOI of a
+    paper it never opened would otherwise be able to file the claim at A.
+    """
+    read = _source(tier=EvidenceSourceTier.D)
+    unread = _source(
+        url="https://pubs.acs.org/doi/10.1021/example",
+        tier=EvidenceSourceTier.A,
+        access_status=AccessStatus.PAYWALLED,
+        retrieved_at=None,
+        content_hash=None,
+    )
+
+    assert claim_tier([read, unread]) is EvidenceSourceTier.D
+
+
+def test_a_claim_nobody_could_support_still_has_a_tier() -> None:
+    """Its sources are all unreadable, so the claim is rated on what it names.
+
+    A hypothesis resting on a paywalled paper and one resting on a blog are
+    different propositions, and the tier says which was named even though
+    neither was read.
+    """
+    paywalled = _source(
+        access_status=AccessStatus.PAYWALLED,
+        retrieved_at=None,
+        content_hash=None,
+        tier=EvidenceSourceTier.B,
+    )
+
+    assert claim_tier([paywalled]) is EvidenceSourceTier.B
+
+
+def test_a_source_with_no_recorded_tier_rates_as_the_weakest() -> None:
+    """Rows written before the tier was stored are not promoted by default."""
+    assert claim_tier([_source(tier=None)]) is EvidenceSourceTier.D
+
+
+def test_a_claim_with_no_sources_has_no_tier_to_derive() -> None:
+    """Refused rather than defaulted: the caller decides what "unsupported" means."""
+    with pytest.raises(ValueError, match="names none"):
+        claim_tier([])
+    with pytest.raises(ValueError, match="names none"):
+        claim_access([])
+
+
+def test_access_is_ok_when_any_named_source_was_read() -> None:
+    """A second source RAVEL could not open does not make the claim unread."""
+    unread = _source(
+        access_status=AccessStatus.AUTH_REQUIRED, retrieved_at=None, content_hash=None
+    )
+
+    assert claim_access([unread, _source()]) is AccessStatus.OK
+    assert claim_access([_source(), unread]) is AccessStatus.OK
+
+
+def test_access_reports_why_nothing_could_be_checked() -> None:
+    """The first unreadable source's own reason, in the order the claim named it.
+
+    Not a ranking of the four kinds: which restriction is "worse" is a judgement
+    RAVEL would be inventing, and the useful fact is what happened.
+    """
+    paywalled = _source(
+        access_status=AccessStatus.PAYWALLED, retrieved_at=None, content_hash=None
+    )
+    limited = _source(
+        url="https://slow.example.org/x",
+        access_status=AccessStatus.ACCESS_LIMITED,
+        retrieved_at=None,
+        content_hash=None,
+    )
+
+    assert claim_access([paywalled, limited]) is AccessStatus.PAYWALLED
+    assert claim_access([limited, paywalled]) is AccessStatus.ACCESS_LIMITED
 
 
 def test_a_sufficiency_assessment_must_say_why() -> None:

@@ -12,6 +12,7 @@ opened primary source from a snippet a search engine returned.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from pydantic import Field, model_validator
@@ -57,6 +58,18 @@ class EvidenceSource(Record):
     media_type: str | None = None
     artifact_ref: str | None = None
     snapshot_ref: str | None = None
+    #: The tier RAVEL assigned this source when it registered it, and the type
+    #: the recording source declared for it. `docs/05` §10 lists the tier among
+    #: what is stored for a source, and it is stored here as a field rather
+    #: than left in `notes` because a claim's tier is *derived* from its
+    #: sources: `notes` is prose for a reader, and parsing prose back into a
+    #: value would make the derivation depend on the wording of a sentence.
+    #:
+    #: Optional because rows written before this column existed have no tier,
+    #: and inferring one for them now would be assigning a tier to a source
+    #: nobody classified.
+    tier: EvidenceSourceTier | None = None
+    declared_type: str | None = None
     notes: str = ""
 
     @model_validator(mode="after")
@@ -89,6 +102,68 @@ class EvidenceSource(Record):
     def reference(self) -> str:
         """A citable form: the DOI when the source carries one, else the URL."""
         return f"doi:{self.doi}" if self.doi else self.url
+
+
+#: Tiers from strongest to weakest. Written out rather than derived from the
+#: letters, so that a tier added later has to be placed rather than sorted in
+#: by an alphabet that happens to agree with the ordering today.
+TIER_STRENGTH: tuple[EvidenceSourceTier, ...] = (
+    EvidenceSourceTier.A,
+    EvidenceSourceTier.B,
+    EvidenceSourceTier.C,
+    EvidenceSourceTier.D,
+)
+
+
+def claim_tier(sources: Sequence[EvidenceSource]) -> EvidenceSourceTier:
+    """The tier a claim resting on these sources is entitled to.
+
+    The strongest tier among the sources RAVEL actually read, and — when it
+    read none of them — the strongest among the ones it named. A source it
+    could not open cannot strengthen a claim, and a claim whose sources are all
+    unreadable still has a tier, because a hypothesis resting on a paywalled
+    paper is a different proposition from one resting on a blog.
+
+    Raises:
+        ValueError: There are no sources, so there is nothing to rate.
+    """
+    if not sources:
+        raise ValueError(
+            "a claim's tier is derived from the sources it rests on, and this "
+            "claim names none; a claim with no source is a hypothesis, and a "
+            "hypothesis carries no source tier"
+        )
+    readable = [source for source in sources if source.was_read]
+    rated = readable or list(sources)
+    # `index` rather than a comparison: the ordering is `TIER_STRENGTH`'s, and
+    # the letters are a display convention that happens to sort the same way.
+    return min(
+        (source.tier or EvidenceSourceTier.D for source in rated),
+        key=TIER_STRENGTH.index,
+    )
+
+
+def claim_access(sources: Sequence[EvidenceSource]) -> AccessStatus:
+    """How reachable a claim's support was, in one status.
+
+    `OK` when RAVEL read any of the sources the claim names: the claim is
+    supported by something it holds, and a second source it could not open does
+    not make the claim unread. When nothing was readable, the status is the
+    first unreadable source's, in the order the claim named them — one reason
+    the claim could not be checked, stated as it was found. The alternative is a
+    ranking of the four restriction kinds, which RAVEL would be inventing.
+
+    Raises:
+        ValueError: There are no sources to read a status from.
+    """
+    if not sources:
+        raise ValueError(
+            "a claim's access status is derived from the sources it rests on, "
+            "and this claim names none"
+        )
+    if any(source.was_read for source in sources):
+        return AccessStatus.OK
+    return sources[0].access_status
 
 
 class EvidenceConflict(Record):
