@@ -190,3 +190,59 @@ class ApprovalRequest(Record):
                 "resolved_at": at or utcnow(),
             }
         )
+
+
+class RefreshToken(Record):
+    """One grant of a refresh token, as it was issued.
+
+    **A row is a grant and never a session.** Rotating writes a *second* row
+    naming the first as its parent, so the chain of a single login is a series
+    of immutable facts rather than one row edited each time somebody refreshes.
+    That is what makes the interesting question — *was this token already
+    used?* — a query (`has_child`) rather than a flag somebody has to remember
+    to set, and it is why this table is append-only like every other record in
+    RAVEL.
+
+    The secret is not here. `token_hash` is a SHA-256 of it, which is what the
+    repository looks the presented token up by; a leaked database therefore
+    holds no usable token. A password is hashed with Argon2id because it is
+    low-entropy and guessable; a refresh token is 256 bits of randomness, so a
+    fast digest is the right tool and the search space is what protects it.
+
+    Expiry is stored rather than derived from `issued_at`. The lifetime is a
+    deployment setting, and a token issued under yesterday's setting has to
+    keep whatever lifetime it was granted.
+    """
+
+    token_id: str = Field(default_factory=new_id)
+    user_id: str
+    #: The chain this grant belongs to: the id of the first token issued for
+    #: one login. Revoking a family is how a detected replay is contained —
+    #: the thief and the victim both lose the chain, which is the only safe
+    #: answer once a token is known to have been copied.
+    family_id: str
+    #: The grant this one replaced, or `None` for a family's first.
+    parent_id: str | None = None
+    token_hash: str = Field(min_length=1)
+    issued_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime
+
+    def is_expired(self, at: datetime | None = None) -> bool:
+        """Whether the grant's lifetime has run out."""
+        return (at or utcnow()) >= self.expires_at
+
+
+class RevokedTokenFamily(Record):
+    """A login chain that is no longer accepted, and why.
+
+    A row here rather than a column on `RefreshToken` for the same reason
+    rotation writes a new row: revoking is an event, and the record of it has
+    to survive whatever happens to the tokens it is about. It also means the
+    two facts stay separable — *this grant was issued* remains true of a grant
+    whose family was later revoked.
+    """
+
+    family_id: str
+    user_id: str
+    reason: str = ""
+    revoked_at: datetime = Field(default_factory=utcnow)

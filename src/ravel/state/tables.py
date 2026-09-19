@@ -260,6 +260,64 @@ class ApprovalRequestRow(Base):
     decision_ref: Mapped[str | None] = mapped_column(REF)
 
 
+class RefreshTokenRow(Base):
+    """One grant of a refresh token. Append-only, like every other record.
+
+    Rotation writes a row naming its predecessor rather than marking the old
+    one used, so "has this token already been presented?" is a query over
+    `parent_id` instead of a column somebody has to remember to set — and a
+    replay is detected by the absence of a write rather than by the presence of
+    one a crashed process might have skipped.
+
+    Neither table here is in `UPDATABLE_TABLES`, so the append-only trigger
+    applies and no guard code had to change to protect them.
+
+    **No project column.** A refresh token belongs to a login, and a login is
+    not project-scoped: the same token presents to whichever project the user
+    next opens, and the membership row is what decides whether they may. Making
+    it project-scoped would mean issuing a new token per project, which would
+    make "log out" mean something different in each one.
+    """
+
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (
+        Index("ix_refresh_tokens_family", "family_id"),
+        Index("ix_refresh_tokens_hash", "token_hash", unique=True),
+        CheckConstraint("expires_at > issued_at", name="a_grant_outlives_its_issue"),
+    )
+
+    token_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    family_id: Mapped[str] = mapped_column(ID, nullable=False)
+    parent_id: Mapped[str | None] = mapped_column(ID)
+    #: A SHA-256 of the secret, hex-encoded. The secret itself is never stored,
+    #: and `unique=True` is what makes the lookup a single indexed equality
+    #: rather than a scan-and-compare.
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RevokedTokenFamilyRow(Base):
+    """One login chain that is no longer accepted.
+
+    `family_id` is the primary key: a chain is revoked or it is not, and a
+    second revocation of the same chain has nothing to add. The repository
+    treats the collision as the no-op it is rather than as an error.
+    """
+
+    __tablename__ = "revoked_token_families"
+
+    family_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class RoadmapPhaseRow(Base):
     """A broad future phase. Only the near ones become executable nodes.
 

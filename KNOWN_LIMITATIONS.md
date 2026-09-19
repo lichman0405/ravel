@@ -245,3 +245,43 @@ this gap — `Fetcher` is pinned and its behaviour is asserted in
 unbounded: the attacker needs authoritative DNS for a host the page visits, and
 needs the browser's lookup to land differently from the guard's, in a window
 between the two. What RAVEL cannot do is rule it out.
+
+---
+
+## L-15 — The DSH gate needs a model credential the repository does not carry
+
+- **Since:** Phase 0
+- **Where:** `.env` (`DEEPSEEK_API_KEY`), `tests/dsh/conftest.py` (`model_credential`),
+  `scripts/test_all.sh` (`RAVEL_REQUIRE_DSH=1`)
+
+`tests/dsh` drives the pinned harness through a real model turn, which needs a
+`DEEPSEEK_API_KEY`. `.env.example` ships that key empty, and the version of
+`.env` in this working tree leaves it empty as well — the same size and the same
+contents as the example, with only the local stack's credentials filled in
+(PostgreSQL, MinIO, and the development JWT secret).
+
+The suite behaves as designed under that condition: `pytest tests/dsh` reports
+3 passed and 8 skipped, because the tests that need a turn skip rather than
+substitute. But `scripts/test_all.sh` sets `RAVEL_REQUIRE_DSH=1` for exactly
+this reason — *the harness gate is a gate: it must not be able to pass by not
+running* — so the default `scripts/test_all.sh` run **fails** on a host with no
+credential, at the `harness gate` stage, after lint, unit, and integration have
+passed.
+
+**Do not conclude** that the DSH integration is unverified. It was verified
+against the pinned release and the record is in `vendor/DSH_PIN.json`: the
+wheels install and import, the runtime self-reports `0.1.5-rc.1`, a real
+end-to-end turn with a real model executed a tool and wrote a file that was
+checked on disk, and the session log's durability was inspected. What that
+verification cannot do is re-run itself on a host where nobody has supplied a
+credential, and it is the re-run — not the first run — that a CI gate would be
+making.
+
+**Do not conclude** that the credential was lost by the implementation. It was
+supplied to the Phase 0 spike from the operator's own shell environment and was
+never written into `.env`; a key in a file inside the repository would be the
+larger problem.
+
+**Follow-up:** an operator running `scripts/test_all.sh` must export
+`DEEPSEEK_API_KEY`, or accept that the run stops at the harness gate. Every
+other suite in that script passes without it.

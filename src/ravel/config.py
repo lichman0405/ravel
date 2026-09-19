@@ -116,6 +116,7 @@ class Settings(BaseSettings):
     gateway_port: int = 8000
     gateway_jwt_secret: SecretStr = SecretStr("dev-only-change-me")
     gateway_token_ttl_seconds: int = 3600
+    gateway_refresh_ttl_seconds: int = 30 * 24 * 3600
 
     @field_validator(
         "dsh_bin",
