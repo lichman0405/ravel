@@ -241,7 +241,22 @@ def clean(database: Database) -> None:
     """
     names = ", ".join(sorted(Base.metadata.tables))
     with database.engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+        # TRUNCATE needs the exclusive lock, so one leaked reader stops every
+        # test after it. Unbounded, that surfaces as the *next* test hanging
+        # until pytest-timeout kills it minutes later — a failure that names a
+        # test which did nothing wrong and hides the one that did. Ten seconds
+        # is longer than any honest contention here and short enough to read.
+        connection.execute(text("SET LOCAL lock_timeout = '10s'"))
+        try:
+            connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+        except OperationalError as error:
+            raise RuntimeError(
+                "the database is still locked by an earlier test. The usual "
+                "cause is a session used after its `with ... read_only()` block "
+                "closed: that checks out a connection nothing returns, leaving "
+                "it idle in transaction and holding a read lock on whatever it "
+                "read. It is the test before this one, not this one."
+            ) from error
 
 
 @pytest.fixture
