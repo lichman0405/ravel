@@ -22,6 +22,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from tests.integration.gateway.conftest import account, bearer, sign_in
+from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, fill
 
 from ravel.domain.dag import DagNode, JoinPolicy
 from ravel.domain.enums import NodeType, UserRole
@@ -346,28 +347,56 @@ def test_no_route_lets_a_user_change_the_dag(
     written here, so a route added later is probed without anybody remembering
     to add it. That covers what exists; `test_the_gateway_cannot_reach_the_dag_
     mutation_service` covers what could be added.
+
+    This test spent its whole life until now probing *nothing*. `app.routes`
+    under FastAPI 0.141 does not flatten included routers, so the loop found no
+    entry with a path and made no request, and the assertions below held
+    trivially — which is why there are three of them about the probe itself
+    before there are any about the DAG. See `tests/support/routes.py`.
     """
     (node_id,) = plant(database, project, "The only node.")
     account(database, username="ada", role=UserRole.PROJECT_OWNER, project=project)
     pair = sign_in(client, "ada")
     headers = bearer(pair["access_token"])
 
-    for route in app.routes:
-        path = getattr(route, "path", "")
-        methods = getattr(route, "methods", set()) or set()
-        for method in methods - {"HEAD", "OPTIONS"}:
-            client.request(
-                method,
-                path.replace("{project_id}", project.project_id)
-                .replace("{node_id}", node_id)
-                .replace("{artifact_id}", "x")
-                .replace("{approval_id}", "x")
-                .replace("{version}", "1")
-                .replace("{filename}", "x")
-                .replace("{turn_id}", "x"),
-                headers=headers,
-                json={},
-            )
+    routes = effective_routes(app)
+    assert len(routes) >= EXPECTED_ROUTE_FLOOR, (
+        f"enumerated only {len(routes)} routes, which means the walk is broken "
+        "and this test is about to assert nothing"
+    )
+
+    probed: list[str] = []
+    for route in routes:
+        if not route.is_http:
+            # A WebSocket is connected to, not requested. It reads events and
+            # writes nothing, and the one write in the whole Gateway that is not
+            # a route — Master's tools — is not reachable from a socket.
+            continue
+        path = fill(
+            route.path,
+            project_id=project.project_id,
+            node_id=node_id,
+            task_id=node_id,
+            artifact_id="an-artifact-that-does-not-exist",
+            approval_id="an-approval-that-does-not-exist",
+            version="1",
+        )
+        # A placeholder this probe does not know about would leave a literal
+        # `{name}` in the URL, and every method below would then be sent to a
+        # path that no route serves — a 404 that reads exactly like a refusal.
+        # The route would be silently unprobed, which is the failure this test
+        # was already guilty of once.
+        assert "{" not in path, f"cannot address {route.path!r}; teach this probe its placeholders"
+
+        for method in route.methods - {"HEAD", "OPTIONS"}:
+            client.request(method, path, headers=headers, json={})
+            probed.append(f"{method} {path}")
+
+    # The probe reached the routes, not merely the documentation ones: a
+    # project-scoped route is only served by the routers that carry the
+    # interesting surface.
+    assert any("/dag" in entry for entry in probed), probed
+    assert any("lab/tasks" in entry for entry in probed), probed
 
     with database.read_only() as session:
         nodes = DagRepository(session, project.project_id).nodes()
