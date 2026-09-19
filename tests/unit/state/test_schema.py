@@ -19,6 +19,8 @@ Keeping the two in step is cheap to check and expensive to discover.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy.orm import DeclarativeBase
 
@@ -74,6 +76,35 @@ def test_every_scoped_record_carries_the_project_it_belongs_to(
         f"prove it belongs to the repository's scope"
     )
     assert "project_id" in {column.name for column in repository.row_type.__table__.columns}
+
+
+@pytest.mark.parametrize("repository", _repository_classes(), ids=lambda cls: cls.__name__)
+def test_every_repository_can_order_what_it_returns(
+    repository: type[ProjectScopedRepository],
+) -> None:
+    """`all()` sorts by the column `_order_by` names, and the base names
+    `created_at`.
+
+    `DeviationRepository` is why this exists. A deviation records when it was
+    *raised*, so the table has `raised_at` and no `created_at` — and the
+    repository inherited the base `_order_by` anyway. Nothing failed until
+    `ProjectAudit` asked a project for its deviations: `AttributeError`, from
+    inside a sort, on a table that was populated correctly.
+
+    The class of mistake is "the default assumed a column this record does not
+    have", and it is invisible to every test that does not call `all()`. So the
+    check is the expression itself, evaluated on a stand-in that carries only
+    what `_order_by` reads.
+    """
+    stand_in = SimpleNamespace(row_type=repository.row_type)
+    column = repository._order_by(stand_in)  # type: ignore[arg-type]
+
+    table = repository.row_type.__table__
+    assert column is not None, f"{repository.__name__} orders by nothing"
+    assert column.table is table, (
+        f"{repository.__name__} orders by {column}, which is not a column of "
+        f"{table.name}; `all()` would raise AttributeError rather than sort"
+    )
 
 
 def test_every_table_is_either_append_only_or_explicitly_updatable() -> None:

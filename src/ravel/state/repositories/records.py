@@ -349,6 +349,16 @@ class DeviationRepository(ProjectScopedRepository[DeviationRecord]):
     row_type = DeviationRecordRow
     record_type = DeviationRecord
 
+    def _order_by(self) -> Any:
+        """`raised_at`, because a deviation has no `created_at`.
+
+        The base class sorts by `created_at`, and this is the one record whose
+        timestamp is named for what it is. Without this, `all()` — and therefore
+        `open()`, and therefore every reader that asks what is waiting on Master
+        — raised `AttributeError` rather than returning anything.
+        """
+        return self.row_type.raised_at
+
     def raise_(self, deviation: DeviationRecord) -> DeviationRecord:
         """Record that a Worker was asked for something its contract did not allow."""
         self.add(deviation)
