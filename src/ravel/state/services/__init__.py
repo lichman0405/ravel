@@ -7,5 +7,6 @@ of it is. Those operations live here.
 """
 
 from ravel.state.services.dag import DagMutationService, DecisionDraft
+from ravel.state.services.terms import NodeTerms, commit_terms
 
-__all__ = ["DagMutationService", "DecisionDraft"]
+__all__ = ["DagMutationService", "DecisionDraft", "NodeTerms", "commit_terms"]

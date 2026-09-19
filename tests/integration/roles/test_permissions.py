@@ -27,14 +27,35 @@ from tests.dsh.mcp_probe import probe
 from tests.integration.dag.conftest import STAGES, register_roadmap
 from tests.integration.roles.conftest import RoleEnvironment
 
+from ravel.domain.contracts import CriterionProvenance
+from ravel.domain.enums import NodeStatus, ReviewOutcome
 from ravel.domain.roles import AgentRole
 from ravel.dsh.composition import composition_dump
 from ravel.mcp.registry import DAG_MUTATION_TOOLS
+from ravel.state.repositories.contracts import (
+    AcceptanceContractRepository,
+    ExecutionContractRepository,
+)
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.identity import CheckpointRepository
 from ravel.state.repositories.records import DecisionRepository
 
 WORKERS = tuple(role for role in AgentRole if role is not AgentRole.MASTER)
+
+#: Terms a node runs under, as a model states them. A COMPUTATION node is
+#: measured against criteria frozen before it runs, so a plan that committed one
+#: without any would be a node no Worker may ever start.
+TERMS: dict[str, Any] = {
+    "criteria": [
+        {
+            "statement": "Conductivity rises by at least 15% across the series.",
+            "provenance": "user_requirement",
+            "threshold": ">= 15%",
+        }
+    ],
+    "allowed_actions": ["run_simulation"],
+    "required_outputs": ["conductivity.csv"],
+}
 
 #: A node creation as the model would phrase it. Every argument is one a model
 #: could supply; none of them names a project, because the tool has no such
@@ -186,12 +207,18 @@ async def test_master_expands_a_stage_and_the_siblings_depend_on_each_other(
                     "phase": stage,
                     "rationale": "The stage is planned as a measurement and the fit that reads it.",
                     "nodes": [
-                        {"ref": "measure", "node_type": "COMPUTATION", "objective": "Measure."},
+                        {
+                            "ref": "measure",
+                            "node_type": "COMPUTATION",
+                            "objective": "Measure.",
+                            **TERMS,
+                        },
                         {
                             "node_type": "COMPUTATION",
                             "objective": "Fit the model.",
                             "dependencies": ["measure"],
                             "join_policy": "ALL",
+                            **TERMS,
                         },
                     ],
                 },
@@ -261,6 +288,135 @@ async def test_a_stage_beyond_the_horizon_is_refused_with_a_readable_reason(
     with database.read_only() as session:
         assert DagRepository(session, project.project_id).nodes() == []
         assert DecisionRepository(session, project.project_id).all() == []
+
+
+async def test_a_node_planned_through_the_tool_can_actually_run(
+    role_environment: RoleEnvironment, project: Any, database: Any
+) -> None:
+    """The terms travel with the node, and the DAG agrees the node may start.
+
+    This is the difference between a plan and a graph. `can_enter_running` is
+    what a Worker's start is checked against — frozen acceptance criteria for
+    the node types that have them, and an Execution Contract for every node a
+    Worker executes — and a plan committed without either would leave work in
+    the project that no Worker may start, with nothing saying why.
+
+    Asked of the domain rather than of the tables: whether the criteria are
+    frozen *and* bound is exactly the question `can_enter_running` asks. The
+    gate is asked from READY — a freshly planned node is PLANNED, and PLANNED
+    cannot reach RUNNING at all, which would refuse the node before the terms
+    were ever consulted and make this test pass for the wrong reason.
+    """
+    register_roadmap(database, project, *STAGES)
+    result = await probe(
+        role_environment.for_project(project, AgentRole.MASTER),
+        calls=(
+            (
+                "add_dag_node",
+                {
+                    "node_type": "COMPUTATION",
+                    "objective": "Measure conductivity across the dopant series.",
+                    "rationale": "The stage's first question is what the samples conduct.",
+                    **TERMS,
+                },
+            ),
+        ),
+    )
+
+    call = result.calls[0]
+    assert not call.failed, call.error
+    assert call.payload is not None
+    node_id = str(call.payload["node_id"])
+
+    with database.read_only() as session:
+        dag = DagRepository(session, project.project_id)
+        node = dag.node(node_id)
+        criteria = AcceptanceContractRepository(
+            session, project.project_id
+        ).frozen_for_node(node_id)
+        terms = ExecutionContractRepository(session, project.project_id).for_node(node_id)
+        frozen = dag.has_frozen_acceptance(node_id)
+        contracted = dag.has_execution_contract(node_id)
+        ready = node.model_copy(update={"status": NodeStatus.READY})
+        unreviewed = ready.can_enter_running(
+            has_frozen_acceptance=frozen,
+            has_execution_contract=contracted,
+            pre_run_outcome=dag.latest_pre_run_outcome(node_id),
+        )
+        reviewed = ready.can_enter_running(
+            has_frozen_acceptance=frozen,
+            has_execution_contract=contracted,
+            pre_run_outcome=ReviewOutcome.PASS,
+        )
+
+    assert frozen, "the DAG does not see a frozen acceptance contract for this node"
+    assert contracted, "the DAG does not see an Execution Contract for this node"
+    assert criteria is not None, "the node's criteria were never frozen"
+    assert [criterion.statement for criterion in criteria.criteria] == [
+        TERMS["criteria"][0]["statement"]
+    ]
+    assert criteria.criteria[0].provenance is CriterionProvenance.USER_REQUIREMENT
+    assert criteria.is_frozen
+    assert node.acceptance_contract_ref == criteria.contract_id
+
+    assert terms.is_frozen
+    assert terms.allowed_actions == tuple(TERMS["allowed_actions"])
+    assert terms.required_outputs == tuple(TERMS["required_outputs"])
+    assert terms.acceptance_contract_ref == criteria.contract_id, (
+        "the terms say what the run will be measured against, or a reader of the "
+        "contract has to find that out from somewhere else"
+    )
+
+    # A COMPUTATION node also owes a pre-flight review, which is a different
+    # checkpoint produced by a different role — so the plan is checked for
+    # being the *only* thing standing in the way. Unreviewed, the node is
+    # refused, and the refusal names the review rather than the terms.
+    assert not unreviewed.allowed
+    assert "reviewed" in unreviewed.reason
+    assert reviewed.allowed, reviewed.reason
+
+
+async def test_a_node_that_could_never_run_is_refused_with_a_readable_reason(
+    role_environment: RoleEnvironment, project: Any, database: Any
+) -> None:
+    """A COMPUTATION node with no criteria is work no Worker may start.
+
+    Refused at the moment it is planned rather than left in the DAG for the
+    scheduler to find: the alternative is a node that sits in PLANNED forever
+    with a project that never ends and nothing in the record saying why.
+    """
+    register_roadmap(database, project, *STAGES)
+    result = await probe(
+        role_environment.for_project(project, AgentRole.MASTER),
+        calls=(
+            (
+                "add_dag_node",
+                {
+                    "node_type": "COMPUTATION",
+                    "objective": "Measure something nobody defined.",
+                    "rationale": "The stage needs a measurement.",
+                },
+            ),
+        ),
+    )
+
+    call = result.calls[0]
+    assert call.failed
+    assert call.error is not None
+    prefix = "Error executing tool add_dag_node"
+    assert call.error.startswith(prefix)
+    reason = call.error[len(prefix) :].lstrip(": ")
+    assert "acceptance criteria" in reason, (
+        f"the refusal has to say what was missing; it said {reason!r}"
+    )
+
+    with database.read_only() as session:
+        assert DagRepository(session, project.project_id).nodes() == [], (
+            "a refused plan leaves nothing behind, terms or nodes"
+        )
+        assert (
+            AcceptanceContractRepository(session, project.project_id).all() == []
+        ), "the criteria are written in the node's transaction, so a refusal takes them too"
 
 
 async def test_master_reads_the_project_it_is_actually_serving(

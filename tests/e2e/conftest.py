@@ -50,7 +50,6 @@ from tests.integration.temporal.conftest import RunningWorker
 from ravel.backends import MockComputeBackend, MockLabBackend
 from ravel.config import Settings
 from ravel.domain.contracts import (
-    AcceptanceContract,
     AcceptanceCriterion,
     CriterionProvenance,
     ExecutionContract,
@@ -87,6 +86,7 @@ from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
 from ravel.state.repositories.records import DeviationRepository, RecordRepositories
 from ravel.state.services.dag import DagMutationService, DecisionDraft
+from ravel.state.services.terms import commit_terms
 from ravel.state.store import S3ArtifactStore
 
 #: The phase every scripted project plans into. One stage, so the rolling
@@ -119,38 +119,28 @@ class Task:
         """A fresh node for this task. Fresh, because a node is written once."""
         return self.build()
 
+    def commit(self, session: Session, project_id: str, node: DagNode) -> None:
+        """Write and freeze the two contracts this task's node runs under.
 
-def commit_terms(session: Session, project_id: str, task: Task, node: DagNode) -> None:
-    """Write and freeze the two contracts a node runs under, and bind them."""
-    acceptance = AcceptanceContract(
-        project_id=project_id,
-        node_id=node.node_id,
-        criteria=tuple(
-            AcceptanceCriterion(
-                statement=statement, provenance=CriterionProvenance.USER_REQUIREMENT
-            )
-            for statement in task.criteria
-        ),
-    )
-    acceptances = AcceptanceContractRepository(session, project_id)
-    acceptances.add(acceptance)
-    acceptances.freeze(acceptance.contract_id)
-
-    execution = ExecutionContract(
-        project_id=project_id,
-        node_id=node.node_id,
-        objective=node.objective,
-        allowed_actions=task.allowed_actions,
-        required_outputs=task.required_outputs,
-        allowed_retries=task.allowed_retries,
-    )
-    executions = ExecutionContractRepository(session, project_id)
-    executions.add(execution)
-    executions.freeze(execution.contract_id)
-
-    dag = DagRepository(session, project_id)
-    dag.bind_acceptance_contract(node.node_id, acceptance.contract_id)
-    dag.bind_execution_contract(node.node_id, execution.contract_id)
+        A script's vocabulary — criteria as the sentences Master wrote them —
+        on top of the same act production performs, rather than a second copy of
+        it. What freezes and binds a node is one function, so a scripted run and
+        a planned one cannot end up holding differently-shaped terms.
+        """
+        commit_terms(
+            session,
+            project_id,
+            node,
+            criteria=tuple(
+                AcceptanceCriterion(
+                    statement=statement, provenance=CriterionProvenance.USER_REQUIREMENT
+                )
+                for statement in self.criteria
+            ),
+            allowed_actions=self.allowed_actions,
+            required_outputs=self.required_outputs,
+            allowed_retries=self.allowed_retries,
+        )
 
 
 @dataclass
@@ -243,7 +233,7 @@ class ScriptedMaster:
             ),
         )
         for task, node in zip(self.tasks, expanded.nodes, strict=True):
-            commit_terms(session, self.project_id, task, node)
+            task.commit(session, self.project_id, node)
         self.planned = expanded.nodes
         self.trace.append("planned")
 
@@ -280,6 +270,11 @@ class ScriptedMaster:
                     ),
                     allowed_retries=current.allowed_retries,
                     required_outputs=current.required_outputs,
+                    # A revised revision is still the same question, measured
+                    # the same way: the new version carries the acceptance
+                    # contract forward rather than severing it, so a reviewer
+                    # reading the terms still finds what they were frozen for.
+                    acceptance_contract_ref=current.acceptance_contract_ref,
                 )
             ),
             role=AgentRole.MASTER,
@@ -313,7 +308,7 @@ class ScriptedMaster:
             ),
         )
         for task, node in zip(tasks, replacement.created, strict=True):
-            commit_terms(session, self.project_id, task, node)
+            task.commit(session, self.project_id, node)
         self.trace.append("replanned")
 
     def _conclude(self, session: Session, situation: Situation) -> None:

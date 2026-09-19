@@ -16,17 +16,119 @@ else.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from ravel.domain.contracts import AcceptanceCriterion, CriterionProvenance
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import Confidence, DecisionType, JoinPolicy, NodeType
 from ravel.mcp.context import ToolContext, as_json, require_master
 from ravel.state.services.dag import DagMutationService, DecisionDraft
+from ravel.state.services.terms import commit_terms
 
 #: The confidence a decision is recorded with when the model does not say.
 #: MEDIUM rather than HIGH: an unstated confidence is not evidence of a strong
 #: one, and a record that overstates how sure Master was is worse than a blank.
 _DEFAULT_CONFIDENCE = Confidence.MEDIUM
+
+
+@dataclass(frozen=True, slots=True)
+class NodeTermsSpec:
+    """What one planned node is measured against, and what it may do.
+
+    The model's side of the two contracts. Parsed from the tool call and handed
+    to `commit_terms`, which writes and freezes them with the node — so a plan
+    the model states here is one a Worker can start, rather than one that looks
+    complete until the scheduler finds it stuck.
+    """
+
+    criteria: tuple[AcceptanceCriterion, ...] = ()
+    allowed_actions: tuple[str, ...] = ()
+    required_outputs: tuple[str, ...] = ()
+    allowed_retries: int = 0
+    procedure: str = ""
+
+    def commit(self, session: Session, project_id: str, node: DagNode) -> None:
+        commit_terms(
+            session,
+            project_id,
+            node,
+            criteria=self.criteria,
+            allowed_actions=self.allowed_actions,
+            required_outputs=self.required_outputs,
+            allowed_retries=self.allowed_retries,
+            procedure=self.procedure,
+        )
+
+
+def _terms(spec: dict[str, Any]) -> NodeTermsSpec:
+    """Read one node's terms out of a tool call.
+
+    Raises:
+        ValueError: A criterion has no statement or no provenance, or names a
+            provenance RAVEL does not know. Provenance is required rather than
+            defaulted because it is what tells a benchmark from a guess: a
+            criterion the model inferred and one the user required are the same
+            sentence and very different evidence, and a default would make
+            every criterion the model wrote look like the stronger of the two.
+    """
+    raw = spec.get("criteria") or []
+    criteria = tuple(_criterion(item) for item in raw)
+    retries = spec.get("allowed_retries", 0)
+    return NodeTermsSpec(
+        criteria=criteria,
+        allowed_actions=tuple(str(action) for action in spec.get("allowed_actions") or ()),
+        required_outputs=tuple(str(name) for name in spec.get("required_outputs") or ()),
+        allowed_retries=int(retries),
+        procedure=str(spec.get("procedure") or ""),
+    )
+
+
+def _criterion(item: Any) -> AcceptanceCriterion:
+    """One acceptance criterion, as the model stated it.
+
+    Raises:
+        ValueError: The criterion is not an object, or is missing something a
+            criterion cannot be without.
+    """
+    if not isinstance(item, dict):
+        raise ValueError(
+            "each criterion must be an object with a 'statement' and a "
+            f"'provenance'; got {item!r}"
+        )
+    statement = str(item.get("statement") or "").strip()
+    if not statement:
+        raise ValueError(
+            f"a criterion with no statement measures nothing; got {item!r}"
+        )
+    provenance = item.get("provenance")
+    if not provenance:
+        raise ValueError(
+            f"the criterion {statement!r} states no provenance. Say where it comes "
+            "from — user_requirement, literature_derived, standard, "
+            "authoritative_database, prior_project_result, research_inference, or "
+            "provisional — because a criterion with no provenance cannot be "
+            "presented as an objective benchmark"
+        )
+    try:
+        source = CriterionProvenance(str(provenance))
+    except ValueError as exc:
+        known = ", ".join(level.value for level in CriterionProvenance)
+        raise ValueError(
+            f"provenance must be one of {known}; got {provenance!r}"
+        ) from exc
+    return AcceptanceCriterion(
+        statement=statement,
+        provenance=source,
+        metric=str(item.get("metric") or ""),
+        threshold=str(item.get("threshold") or ""),
+        provenance_ref=(
+            str(item["provenance_ref"]) if item.get("provenance_ref") else None
+        ),
+        notes=str(item.get("notes") or ""),
+    )
 
 
 def _resolve_local_refs(
@@ -149,6 +251,11 @@ def add_dag_node(context: ToolContext) -> Any:
         node_type: str,
         objective: str,
         rationale: str,
+        criteria: list[dict[str, Any]] | None = None,
+        allowed_actions: list[str] | None = None,
+        required_outputs: list[str] | None = None,
+        allowed_retries: int = 0,
+        procedure: str = "",
         roadmap_phase: str | None = None,
         dependencies: list[str] | None = None,
         join_policy: str | None = None,
@@ -164,6 +271,15 @@ def add_dag_node(context: ToolContext) -> Any:
         must already exist, and a dependency fixes what the node waits for — it
         cannot be changed afterwards, so state it correctly or open a new node.
 
+        The node's terms travel with it, because a node without them is work
+        nobody may start. `criteria` is required for COMPUTATION and EXPERIMENT
+        nodes and is a list of objects with a `statement` and a `provenance`
+        (`metric`, `threshold`, `provenance_ref` and `notes` are optional);
+        `allowed_actions` is what the Worker may do without asking (an action
+        that is not listed is refused, not assumed), `required_outputs` is what
+        the run must deliver for the result to be complete, and `allowed_retries`
+        is how many times an infrastructure failure may be retried.
+
         `roadmap_phase` must be a stage within the planning horizon; adding work
         to a stage further ahead is refused, and the refusal says which stages
         are reachable.
@@ -178,6 +294,15 @@ def add_dag_node(context: ToolContext) -> Any:
             join_policy=join_policy,
             join_threshold=join_threshold,
         )
+        terms = _terms(
+            {
+                "criteria": criteria,
+                "allowed_actions": allowed_actions,
+                "required_outputs": required_outputs,
+                "allowed_retries": allowed_retries,
+                "procedure": procedure,
+            }
+        )
         draft = _draft(
             rationale,
             DecisionType.CREATE_NODE,
@@ -188,6 +313,7 @@ def add_dag_node(context: ToolContext) -> Any:
             written = DagMutationService(session, context.project_id).add_node(
                 node, role=context.role, decision=draft
             )
+            terms.commit(session, context.project_id, written)
         return as_json(written)
 
     return add_dag_node
@@ -206,7 +332,11 @@ def expand_dag_phase(context: ToolContext) -> Any:
         """Commit the concrete work a roadmap stage consists of.
 
         `nodes` is a list of objects, each with `node_type`, `objective`, and
-        optionally `ref`, `dependencies`, `join_policy`, `join_threshold`.
+        optionally `ref`, `dependencies`, `join_policy`, `join_threshold`, and
+        the terms the node runs under: `criteria` (required for COMPUTATION and
+        EXPERIMENT nodes — a list of objects with a `statement` and a
+        `provenance`), `allowed_actions`, `required_outputs`, `allowed_retries`
+        and `procedure`.
 
         A node's `dependencies` name nodes that already exist, or siblings in
         this same call — by the `ref` given to them here, since ids are not
@@ -233,6 +363,7 @@ def expand_dag_phase(context: ToolContext) -> Any:
             )
             for spec in nodes
         ]
+        terms = [_terms(spec) for spec in nodes]
         built = _resolve_local_refs(nodes, built)
         draft = _draft(
             rationale,
@@ -244,6 +375,11 @@ def expand_dag_phase(context: ToolContext) -> Any:
             expansion = DagMutationService(session, context.project_id).expand_phase(
                 phase, built, role=context.role, decision=draft
             )
+            # Terms after the nodes exist, in the same transaction: an
+            # expansion that failed to write them would leave a stage of work
+            # no Worker may start, and either all of it is committed or none.
+            for spec, node in zip(terms, expansion.nodes, strict=True):
+                spec.commit(session, context.project_id, node)
         return {
             "phase": expansion.phase,
             "decision": as_json(expansion.decision),

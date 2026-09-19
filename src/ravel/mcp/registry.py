@@ -85,14 +85,18 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "can continue after this one is gone."
     ),
     "add_dag_node": (
-        "Add one node to the Scientific DAG with the reason it is being added. The node is "
-        "recorded against a decision that names it, so supply a real rationale. Its "
-        "dependencies are fixed when it is created."
+        "Add one node to the Scientific DAG with the reason it is being added, and with "
+        "the terms it will run under. The node is recorded against a decision that "
+        "names it, so supply a real rationale. Its dependencies are fixed when it is "
+        "created. A COMPUTATION or EXPERIMENT node needs `criteria` — what would make "
+        "its result acceptable, each with the provenance that says where it came "
+        "from — and every node needs the actions it may take and the outputs it owes."
     ),
     "expand_dag_phase": (
-        "Commit the concrete work a roadmap stage consists of, as one decision. Use this to "
-        "turn the current stage into executable nodes; nodes in one call may depend on each "
-        "other."
+        "Commit the concrete work a roadmap stage consists of, as one decision, each "
+        "node with the criteria it will be measured against and the terms it runs "
+        "under. Use this to turn the current stage into executable nodes; nodes in one "
+        "call may depend on each other."
     ),
     "cancel_dag_node": (
         "Cancel a node that should not happen, recording the decision that ended it. This is "
