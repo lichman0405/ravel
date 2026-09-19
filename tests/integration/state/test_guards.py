@@ -12,11 +12,17 @@ after each call.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from tests.integration.conftest import Prepared
 
+from ravel.domain.execution import DeviationRecord
 from ravel.state import guards
 from ravel.state.database import Database
+from ravel.state.repositories.records import DeviationRepository
 
 pytestmark = pytest.mark.integration
 
@@ -117,6 +123,66 @@ def test_install_is_idempotent(database: Database) -> None:
         len([pair for pair in before if pair[1] == "ravel_append_only"])
         == len(guards.append_only_tables())
     ), "exactly one append-only trigger per append-only table, and no duplicates"
+
+
+def test_a_deviation_may_only_change_where_it_was_answered(
+    database: Database, prepare: Callable[..., Prepared]
+) -> None:
+    """The identity trigger's whole job, asserted as behaviour.
+
+    `deviation_records` is updatable for exactly two columns, and the trigger is
+    what keeps that from being the whole row. Everything describing the
+    escalation — which node raised it, what was asked for, why the contract
+    refused, when — stays as fixed as any append-only record's contents, because
+    a deviation whose `requested_action` could be edited after Master answered it
+    is a record that can be made to agree with any decision taken.
+
+    Written as raw SQL rather than through the repository: the repository is the
+    path that is *supposed* to be narrow, and what is being asserted is that the
+    database refuses the wide write even when nothing narrows it first.
+    """
+    prepared = prepare()
+    with database.transaction() as session:
+        deviation = DeviationRepository(session, prepared.project_id).raise_(
+            DeviationRecord(
+                project_id=prepared.project_id,
+                node_id=prepared.node_id,
+                execution_contract_ref=prepared.contract.contract_id,
+                requested_action="run_extra_rinse",
+                description="the contract does not list this action",
+                raised_by="backend:mock-compute",
+            )
+        )
+
+    with (
+        pytest.raises(IntegrityError, match="requested_action is immutable"),
+        database.engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                "UPDATE deviation_records SET requested_action = :action "
+                "WHERE deviation_id = :deviation_id"
+            ),
+            {"action": "run_measurement", "deviation_id": deviation.deviation_id},
+        )
+
+    with database.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE deviation_records SET resolved_by_decision_ref = :decision, "
+                "resolved_at = now() WHERE deviation_id = :deviation_id"
+            ),
+            {"decision": "dec-1", "deviation_id": deviation.deviation_id},
+        )
+
+    with database.read_only() as session:
+        assert session.execute(
+            text(
+                "SELECT resolved_by_decision_ref FROM deviation_records "
+                "WHERE deviation_id = :deviation_id"
+            ),
+            {"deviation_id": deviation.deviation_id},
+        ).scalar() == "dec-1"
 
 
 def test_the_freeze_guard_is_attached_only_where_it_belongs(database: Database) -> None:

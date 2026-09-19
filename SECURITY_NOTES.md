@@ -247,6 +247,34 @@ the *transition* refusing rather than a function agreeing that it would, plus
 that decides against the Python that explains for the same node — the two
 implementations of one rule nothing else makes agree.
 
+### A guard on the wrong side of the write
+
+Writing A12's tests turned up the same family a third time, in the append-only
+triggers. `DeviationRepository.resolve` writes `resolved_by_decision_ref` and
+`resolved_at` onto an escalation; `deviation_records` was not in
+`UPDATABLE_TABLES`, so the trigger refused **every** resolution. The method had
+a docstring describing what it did, a check constraint
+(`resolution_is_all_or_nothing`) making the write all-or-nothing, and no caller
+that had ever run — so the mistake was invisible for exactly as long as nothing
+asked Master to answer a Worker.
+
+Two things made it invisible, and both are worth recording. The first is that
+the tests which would have called it were failing earlier for an unrelated
+reason, so the traceback pointed at the trigger rather than at the missing list
+entry. The second is that the API-level checks *looked* complete: the
+constraint that keeps the two resolution columns consistent existed and was
+asserted, and it is easy to read an enforced constraint as evidence that the
+write it constrains is permitted.
+
+The table is now updatable, and narrowed in the same move: a new identity
+trigger (`ravel_deviation_records_identity`) fixes which node raised the
+escalation, what was asked for, why the contract refused, and when. Moving the
+table into the updatable set without it would have made the whole row
+rewritable, and a deviation whose `requested_action` can be edited after Master
+answered it is a record that can be made to agree with any decision taken.
+`tests/integration/state/test_guards.py` asserts the update is refused when it
+touches anything but the two resolution columns.
+
 ## 5. Tool authorization
 
 The model never supplies a project id. A tool call is authorized against the
