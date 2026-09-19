@@ -20,7 +20,10 @@ from pathlib import Path
 import pytest
 
 from ravel.config import Settings
+from ravel.domain.events import ActorType
 from ravel.dsh.pool import DshRuntimePool
+from ravel.state.database import Database
+from ravel.state.repositories.projects import ProjectRegistry
 
 
 @pytest.fixture(scope="session")
@@ -63,11 +66,44 @@ def pool(live_settings: Settings) -> Iterator[DshRuntimePool]:
         yield open_pool
 
 
+#: Sentinel written into the DSH spike brief. Tests that read authoritative
+#: state assert the model reports this exact title.
+TITLE_SENTINEL = "Spike Project ZQ7"
+
+
 @pytest.fixture
 def project_id(request: pytest.FixtureRequest) -> str:
-    """A project id unique to the test, so scopes cannot collide across tests."""
+    """A project id unique to the test, with a matching row in the database.
+
+    The harness's tool server reads the same process settings as this fixture,
+    so both sides target the same database. The project is created here so that
+    tools such as `read_project_state` have authoritative state to return.
+    """
     slug = "".join(ch if ch.isalnum() else "-" for ch in request.node.name).strip("-")
-    return f"proj-{slug[:48]}"
+    # The project_id column is String(32). "proj-" is 5 characters, leaving 27
+    # for the slug. This keeps the id deterministic per test while fitting the
+    # schema.
+    project_id = f"proj-{slug[:27]}"
+
+    db = Database.from_settings()
+    try:
+        with db.transaction() as session:
+            existing = ProjectRegistry(session).find(project_id)
+            if existing is not None:
+                # A previous failed or partial run left the row behind. Reusing
+                # the same id keeps the test deterministic and avoids collisions
+                # with other test projects.
+                return project_id
+            ProjectRegistry(session).create(
+                project_id=project_id,
+                title=TITLE_SENTINEL,
+                objective="DSH integration spike objective.",
+                created_by="dsh-spike-test",
+                actor_type=ActorType.USER,
+            )
+        return project_id
+    finally:
+        db.dispose()
 
 
 @pytest.fixture

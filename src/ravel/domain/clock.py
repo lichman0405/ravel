@@ -25,3 +25,13 @@ def ensure_utc(moment: datetime) -> datetime:
     if moment.tzinfo is None:
         raise ValueError("timestamp is naive; RAVEL records are timezone-aware UTC")
     return moment.astimezone(UTC)
+
+
+def json_iso(moment: datetime) -> str:
+    """ISO 8601 UTC timestamp with a `Z` suffix.
+
+    This matches Pydantic's `model_dump(mode="json")` for timezone-aware UTC
+    datetimes, so a timestamp serialized by hand and one serialized through a
+    model compare equal as strings.
+    """
+    return moment.astimezone(UTC).isoformat().replace("+00:00", "Z")

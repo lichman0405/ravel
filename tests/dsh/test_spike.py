@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 from mcp_probe import probe, start_server
+from tests.dsh.conftest import TITLE_SENTINEL
 
 from ravel.config import REPO_ROOT
 from ravel.dsh.pool import DshRuntimePool
@@ -35,7 +36,6 @@ pytestmark = pytest.mark.dsh
 
 #: A token that appears nowhere except the brief RAVEL writes. An agent that
 #: reports it read it from authoritative state; it could not have guessed it.
-TITLE_SENTINEL = "Spike Project ZQ7"
 
 BRIEF: dict[str, Any] = {
     "project_title": TITLE_SENTINEL,

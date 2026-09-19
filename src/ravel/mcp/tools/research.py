@@ -32,6 +32,7 @@ from functools import lru_cache
 from typing import Any
 
 from ravel.config import get_settings
+from ravel.domain.clock import json_iso
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import AccessStatus, ClaimClass, Confidence, EvidenceSourceTier, NodeType
@@ -362,7 +363,7 @@ def _retrieval(reference: str, retrieval: Retrieval) -> dict[str, Any]:
         "title": retrieval.title,
         "content_hash": retrieval.content_hash,
         "size_bytes": retrieval.size_bytes,
-        "retrieved_at": retrieval.retrieved_at.isoformat(),
+        "retrieved_at": json_iso(retrieval.retrieved_at),
         "excerpt": retrieval.excerpt[:EXCERPT_CHARS],
         "excerpt_truncated": len(retrieval.excerpt) > EXCERPT_CHARS,
         "note": retrieval.note,

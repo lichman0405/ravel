@@ -36,9 +36,23 @@ class ProjectRegistry:
         objective: str,
         created_by: str,
         actor_type: ActorType = ActorType.USER,
+        project_id: str | None = None,
     ) -> Project:
-        """Open a project in CREATED status and record that it happened."""
-        project = Project(title=title, objective=objective, created_by=created_by)
+        """Open a project in CREATED status and record that it happened.
+
+        A caller-supplied `project_id` is used only when the identifier must be
+        deterministic, for example in tests that match a harness scope to a
+        pre-existing project row. Production callers should leave it `None` and
+        let the repository mint a new identifier.
+        """
+        project_kwargs: dict[str, Any] = {
+            "title": title,
+            "objective": objective,
+            "created_by": created_by,
+        }
+        if project_id is not None:
+            project_kwargs["project_id"] = project_id
+        project = Project(**project_kwargs)
         self.session.add(build_row(ProjectRow, project))
         emit(
             self.session,
