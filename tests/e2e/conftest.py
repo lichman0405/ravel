@@ -25,10 +25,14 @@ from __future__ import annotations
 # Fixtures are imported and then used as fixture parameters, which ruff reads as
 # a redefinition. That is the pytest idiom.
 # ruff: noqa: F811
-from collections.abc import AsyncIterator, Callable
+import threading
+import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 
 import pytest
+import uvicorn
+from fastapi import FastAPI
 from sqlalchemy.orm import Session
 from tests.integration.backends.conftest import (  # noqa: F401
     artifact_store,
@@ -44,6 +48,20 @@ from tests.integration.backends.conftest import (  # noqa: F401
 # one of its numbers and the fixture it derives from still has to be reachable.
 from tests.integration.backends.conftest import (  # noqa: F401
     execution_settings as integration_execution_settings,
+)
+
+# The Gateway's fixtures, for the same reason: `test_tui.py` drives the console
+# against the real application, and "real" means the one `create_app` builds
+# with the deployment's own secret rather than a second one assembled here.
+from tests.integration.gateway.conftest import (  # noqa: F401
+    PASSWORD,
+    SECRET,
+    TTL_SECONDS,
+    account,
+    bearer,
+    gateway_settings,
+    sign_in,
+    tokens,
 )
 from tests.integration.temporal.conftest import RunningWorker
 
@@ -74,6 +92,10 @@ from ravel.execution.backends import BackendRegistry
 from ravel.execution.loop import ProjectLoop, ProjectRun, Situation
 from ravel.execution.node_runs import TemporalNodeRuns
 from ravel.execution.temporal.client import NodeRunClient
+from ravel.gateway.app import create_app
+from ravel.gateway.auth.tokens import TokenService
+from ravel.gateway.conversation import Answer
+from ravel.gateway.stream import Cadence
 from ravel.master import ENDING_DECISION, MasterService, ReviseContract
 from ravel.review import ReviewService
 from ravel.state.database import Database
@@ -537,6 +559,141 @@ def execution_settings(integration_execution_settings: Settings) -> Settings:
     return integration_execution_settings.model_copy(
         update={"job_deadline_seconds": RUN_DEADLINE_SECONDS}
     )
+
+
+# ── A Gateway on a real socket ──────────────────────────────────────────────
+
+#: Where the test Gateway listens. Loopback, because a test server reachable
+#: from the network is a test server somebody else can reach.
+HOST = "127.0.0.1"
+
+#: How long to wait for the server to come up, and for it to go away.
+LISTEN_TIMEOUT_SECONDS = 15.0
+
+
+@dataclass
+class ScriptedMasterPort:
+    """A `MasterPort` that answers without a model.
+
+    The same bargain this directory makes about `ScriptedMaster`, one layer up:
+    `test_tui.py` asks whether the *console* reaches Master through the real
+    Gateway, and a DSH runtime would answer that question no better while
+    making the answer depend on a network and an API key. What is real here is
+    everything between the keypress and the `MasterPort` call — the socket, the
+    token, the standing check, the transcript row.
+
+    `heard` is what the port was actually asked, so a test can assert that what
+    somebody typed arrived rather than that something did.
+    """
+
+    reply: str = "I have the question."
+    heard: list[str] = field(default_factory=list)
+
+    async def respond(self, situation: Situation, message: str) -> Answer:
+        self.heard.append(message)
+        return Answer(text=self.reply, completed=True)
+
+
+@dataclass
+class LiveGateway:
+    """The Gateway, listening. Everything a TUI needs is a URL and a port."""
+
+    url: str
+    app: FastAPI
+    server: uvicorn.Server
+    thread: threading.Thread
+    master: ScriptedMasterPort
+
+    def stop(self) -> None:
+        """Ask the server to exit and wait for the thread to finish.
+
+        `should_exit` rather than killing the thread: uvicorn closes its
+        listeners and the event loop on the way out, and a thread that was
+        simply abandoned would leave the port bound until the process ended.
+        """
+        self.server.should_exit = True
+        self.thread.join(timeout=LISTEN_TIMEOUT_SECONDS)
+
+
+def _bound_port(server: uvicorn.Server) -> int:
+    """The port uvicorn actually bound.
+
+    Read back from the listening socket rather than chosen in advance. Picking
+    a free port and then asking for it leaves a window in which another process
+    takes it, and the failure that produces is a test connecting to somebody
+    else's server — which is not a failure anybody could diagnose from the
+    message.
+
+    Raises:
+        AssertionError: if the server reports itself started with nothing
+            listening, which would mean the readiness check above was wrong and
+            every test using this fixture is about to talk to nothing.
+    """
+    if not server.servers or not server.servers[0].sockets:
+        raise AssertionError("uvicorn reports itself started but is not listening anywhere")
+    return int(server.servers[0].sockets[0].getsockname()[1])
+
+
+@pytest.fixture
+def live_gateway(
+    database: Database,
+    gateway_settings: Settings,
+    tokens: TokenService,
+) -> Iterator[LiveGateway]:
+    """The real application, served over TCP, for one test.
+
+    A real uvicorn rather than `TestClient`, because what `test_tui.py` is
+    about is a terminal program talking to a Gateway, and that conversation has
+    two halves `TestClient` cannot carry: a socket a WebSocket client can open,
+    and a request that travels through an actual server rather than through a
+    portal into the same event loop. The extra cost is a thread and a port.
+
+    The cadence is shortened so that a test can watch an event arrive rather
+    than serve the deployment's fifteen-second heartbeat. The mechanism is the
+    real one; only the clock is a test's, exactly as the integration settings
+    shorten the Temporal poll interval.
+    """
+    master = ScriptedMasterPort()
+    application = create_app(
+        settings=gateway_settings,
+        database=database,
+        tokens=tokens,
+        master_of=lambda _project_id: master,
+        cadence=Cadence(poll_seconds=0.05, heartbeat_seconds=1.0),
+    )
+    config = uvicorn.Config(
+        application,
+        host=HOST,
+        port=0,
+        log_level="warning",
+        # The application installs no lifespan handler, and asking uvicorn to
+        # run one anyway is how a startup log grows a warning about a protocol
+        # this application never agreed to speak.
+        lifespan="off",
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, name="ravel-test-gateway", daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + LISTEN_TIMEOUT_SECONDS
+    while time.monotonic() < deadline and not server.started:
+        time.sleep(0.01)
+    if not server.started:
+        server.should_exit = True
+        thread.join(timeout=LISTEN_TIMEOUT_SECONDS)
+        raise AssertionError("the Gateway did not start listening within the timeout")
+
+    live = LiveGateway(
+        url=f"http://{HOST}:{_bound_port(server)}",
+        app=application,
+        server=server,
+        thread=thread,
+        master=master,
+    )
+    try:
+        yield live
+    finally:
+        live.stop()
 
 
 @pytest.fixture
