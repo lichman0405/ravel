@@ -42,6 +42,16 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "add_dag_node": frozenset({MASTER}),
     "expand_dag_phase": frozenset({MASTER}),
     "cancel_dag_node": frozenset({MASTER}),
+    # ── Review: judging work against the criteria it was frozen against ─────
+    #
+    # Review reads the record and writes a verdict, and that is the whole of
+    # its surface. It is not given the project state: the question it answers
+    # is about one node, and a reviewer holding the whole plan would be a
+    # reviewer in a position to reason about what the plan *should* be — which
+    # is Master's question, not Review's.
+    "read_review_work": frozenset({REVIEW}),
+    "read_review_package": frozenset({REVIEW}),
+    "submit_review": frozenset({REVIEW}),
 }
 
 #: The tools that change the Scientific DAG. Master is the only role that holds
@@ -53,10 +63,26 @@ DAG_MUTATION_TOOLS: frozenset[str] = frozenset(
     {"add_dag_node", "expand_dag_phase", "cancel_dag_node"}
 )
 
-#: The tools that write anything at all. A role whose contract is "execute this
-#: contract and report" should hold none of these; keeping the set explicit
-#: means a read tool that starts writing has to be noticed here.
-WRITE_TOOLS: frozenset[str] = DAG_MUTATION_TOOLS | {"write_master_checkpoint"}
+#: Which role may hold which writing tool — the record each is the author of.
+#:
+#: Master writes the plan and the decisions that order it; Review writes
+#: verdicts. These are different acts and neither role may perform the other's,
+#: which is why this is a table of authors rather than a single Master-only set.
+#:
+#: `submit_review` is a write and deliberately not a DAG mutation: Review
+#: records what it found, and the one status change that follows a final
+#: verdict is RAVEL applying it, not Review changing the plan. A role absent
+#: from this table holds no writing tool at all — which is the rule the workers
+#: are held to, and the reason the table exists rather than a bare list.
+WRITE_AUTHORSHIP: dict[AgentRole, frozenset[str]] = {
+    MASTER: DAG_MUTATION_TOOLS | {"write_master_checkpoint"},
+    REVIEW: frozenset({"submit_review"}),
+}
+
+#: The tools that write anything at all. Keeping the set explicit means a read
+#: tool that starts writing has to be noticed here, and a writing tool handed
+#: to a role that is not its author has to be noticed in the table above.
+WRITE_TOOLS: frozenset[str] = frozenset().union(*WRITE_AUTHORSHIP.values())
 
 #: Model-facing descriptions. Written from the agent's point of view: what the
 #: tool returns and when to reach for it, with no transport or RAVEL vocabulary.
@@ -102,6 +128,25 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Cancel a node that should not happen, recording the decision that ended it. This is "
         "for work that has not produced a result; a node that already passed or failed has a "
         "result, and cancelling is not how a result is undone."
+    ),
+    "read_review_work": (
+        "List the nodes a verdict is waiting on now, and the ones a verdict could be given "
+        "about but is not required. Each entry names the checkpoint that applies and the "
+        "frozen contract the verdict must be about. Start here, then read the package for "
+        "the node you are about to judge."
+    ),
+    "read_review_package": (
+        "Read everything one node's verdict has to be measured against: its objective and "
+        "status, the criteria frozen before it ran (or, for a node type that has none, the "
+        "Execution Contract it ran under), the record of what actually executed, the "
+        "artifacts it produced, and the verdicts already given about it. Quote the criteria "
+        "by their identifiers in your verdict."
+    ),
+    "submit_review": (
+        "Record a verdict on one node at one checkpoint. A FINAL verdict ends the node — it "
+        "becomes PASSED, FAILED or PARTIAL and stays that way. A RUNTIME verdict is advice "
+        "and moves nothing. Report a final verdict on every frozen criterion one by one, "
+        "with what you observed; a verdict that leaves one out is refused."
     ),
 }
 

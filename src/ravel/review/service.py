@@ -41,6 +41,7 @@ from ravel.domain.dag import DagNode
 from ravel.domain.decisions import ReviewRecord
 from ravel.domain.enums import NodeStatus, ReviewCheckpoint, ReviewOutcome
 from ravel.domain.roles import AgentRole
+from ravel.review.checkpoints import ADMISSIBLE_STATUSES
 from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
@@ -50,21 +51,6 @@ from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.records import ReviewRepository
 
 __all__ = ["ReviewError", "ReviewService", "SubmittedReview"]
-
-#: The statuses a review at each checkpoint may be submitted in.
-#:
-#: PRE_RUN is asked of a node waiting to run. FINAL is asked of a node that has
-#: finished and is waiting to be judged. RUNTIME is asked of work in flight,
-#: which includes a run that is blocked on something outside RAVEL — the
-#: question "is this going the way it should" is answerable there, and often
-#: most worth asking there.
-_CHECKPOINT_STATUSES: dict[ReviewCheckpoint, frozenset[NodeStatus]] = {
-    ReviewCheckpoint.PRE_RUN: frozenset({NodeStatus.READY}),
-    ReviewCheckpoint.RUNTIME: frozenset(
-        {NodeStatus.RUNNING, NodeStatus.WAITING_EXTERNAL, NodeStatus.WAITING_DECISION}
-    ),
-    ReviewCheckpoint.FINAL: frozenset({NodeStatus.REVIEWING}),
-}
 
 #: The node status a FINAL verdict moves to.
 _ENDING: dict[ReviewOutcome, NodeStatus] = {
@@ -169,7 +155,7 @@ class ReviewService:
 
     def _require_admissible(self, node: DagNode, review: ReviewRecord) -> None:
         """Refuse a review the node's status cannot carry."""
-        allowed = _CHECKPOINT_STATUSES[review.checkpoint]
+        allowed = ADMISSIBLE_STATUSES[review.checkpoint]
         if node.status in allowed:
             return
         raise ReviewError(
@@ -178,39 +164,54 @@ class ReviewService:
             f"{node.display_id} is {node.status.value}"
         )
 
-    def _require_frozen_criteria(
-        self, node: DagNode, review: ReviewRecord
+    def definition_of_done(
+        self, node: DagNode
     ) -> AcceptanceContract | ExecutionContract:
-        """The frozen definition of done this review must have measured against.
+        """The frozen contract this node's work is measured against.
 
         A node that froze acceptance criteria is measured against them. One
         that did not — every node type but COMPUTATION and EXPERIMENT — is
         measured against its Execution Contract, which is frozen before the run
-        and names what the node owed. Either way the review has to name the
-        same contract and the same version the node actually had, so a verdict
-        cannot be re-pointed at a criterion written after the fact.
+        and names what the node owed.
 
         A node that has acceptance criteria and never froze them is refused
         rather than measured against its Execution Contract. It is the one case
         where falling back would be wrong rather than merely different: the
         criteria exist, so a reader would take the verdict to be about them,
         and they can still be rewritten.
+
+        Public, and read by the tool that shows a reviewer what it is judging:
+        which contract a verdict has to name is not a rule a reviewer can be
+        left to infer, and a second reading of it would be a second rule.
+
+        Raises:
+            ReviewError: The node has criteria that were never frozen, or
+                nothing at all that a verdict could be measured against.
         """
         frozen = self.acceptance.frozen_for_node(node.node_id)
-        contract: AcceptanceContract | ExecutionContract
         if frozen is not None:
-            contract = frozen
-        else:
-            self._refuse_unfrozen_criteria(node)
-            try:
-                contract = self.executions.for_node(node.node_id)
-            except NotFound as error:
-                raise ReviewError(
-                    f"{node.display_id} has neither frozen acceptance criteria nor an "
-                    "Execution Contract, so there is nothing this review could have "
-                    "measured against"
-                ) from error
+            return frozen
+        self._refuse_unfrozen_criteria(node)
+        try:
+            return self.executions.for_node(node.node_id)
+        except NotFound as error:
+            raise ReviewError(
+                f"{node.display_id} has neither frozen acceptance criteria nor an "
+                "Execution Contract, so there is nothing this review could have "
+                "measured against"
+            ) from error
 
+    def _require_frozen_criteria(
+        self, node: DagNode, review: ReviewRecord
+    ) -> AcceptanceContract | ExecutionContract:
+        """The frozen definition of done this review must have measured against.
+
+        The resolution is `definition_of_done`; what this adds is that the
+        review has to name the same contract and the same version the node
+        actually had, so a verdict cannot be re-pointed at a criterion written
+        after the fact.
+        """
+        contract = self.definition_of_done(node)
         if review.frozen_criteria_ref != contract.contract_id:
             raise ReviewError(
                 f"{review.display_id} measured against {review.frozen_criteria_ref!r}, "

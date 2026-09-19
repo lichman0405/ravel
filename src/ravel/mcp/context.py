@@ -98,6 +98,24 @@ def require_master(context: ToolContext, tool: str) -> None:
         )
 
 
+def require_review(context: ToolContext, tool: str) -> None:
+    """Refuse a Review-only tool to anything else.
+
+    The same second lock as `require_master`, on the other role whose tools
+    write something no other role may write. A verdict is Review's act, and a
+    handler that is reachable only because someone mis-edited the registry
+    still refuses to record one.
+
+    Raises:
+        PermissionError: The scope's role is not Review.
+    """
+    if context.role is not AgentRole.REVIEW:
+        raise PermissionError(
+            f"{tool} is a Review tool; this session serves {context.role.value} "
+            f"in {context.project_id}"
+        )
+
+
 def as_json(value: Any) -> Any:
     """A JSON-safe view of a record, or of a sequence of them.
 

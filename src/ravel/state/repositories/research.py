@@ -190,14 +190,38 @@ class ResearchRecordRepository(ProjectScopedRepository[ResearchRecord]):
 
 
 class ArtifactRepository(ProjectScopedRepository[Artifact]):
-    """Artifact metadata, and the store the bytes go to."""
+    """Artifact metadata, and the store the bytes go to.
+
+    The store is optional because reading metadata is not reading bytes. A
+    caller that only reports what a node produced — a reviewer looking at what
+    it has to judge, a view listing a project's artifacts — needs PostgreSQL
+    and nothing else, and requiring object-storage credentials of it would make
+    the metadata unreadable exactly when the store is the thing that is broken.
+    Every method that touches bytes asks for the store and says so when it is
+    absent.
+    """
 
     row_type = ArtifactRow
     record_type = Artifact
 
-    def __init__(self, session: Session, project_id: str, store: ArtifactStore) -> None:
+    def __init__(
+        self, session: Session, project_id: str, store: ArtifactStore | None = None
+    ) -> None:
         super().__init__(session, project_id)
         self.store = store
+
+    def _store(self) -> ArtifactStore:
+        """The store, refusing a byte-level operation that has none.
+
+        Raises:
+            ArtifactStoreError: This repository was built without a store.
+        """
+        if self.store is None:
+            raise ArtifactStoreError(
+                "this artifact repository has no object store, so it can read "
+                "artifact metadata but not artifact bytes"
+            )
+        return self.store
 
     def register(
         self,
@@ -232,7 +256,7 @@ class ArtifactRepository(ProjectScopedRepository[Artifact]):
         key = artifact_key(
             self.project_id, artifact.artifact_id, 1, filename or _safe_name(name)
         )
-        stored = self.store.put(key, chunks, media_type=media_type)
+        stored = self._store().put(key, chunks, media_type=media_type)
         version = ArtifactVersion(
             artifact_id=artifact.artifact_id,
             project_id=self.project_id,
@@ -276,7 +300,7 @@ class ArtifactRepository(ProjectScopedRepository[Artifact]):
         number = self.latest_version_number(artifact_id) + 1
         name = filename or _safe_name(artifact.name)
         key = artifact_key(self.project_id, artifact_id, number, name)
-        stored = self.store.put(key, chunks, media_type=media_type)
+        stored = self._store().put(key, chunks, media_type=media_type)
         version = ArtifactVersion(
             artifact_id=artifact_id,
             project_id=self.project_id,
@@ -351,7 +375,7 @@ class ArtifactRepository(ProjectScopedRepository[Artifact]):
 
     def verify(self, version: ArtifactVersion) -> bool:
         """Whether the stored bytes still hash to what the record claims."""
-        return self.store.verify(version.storage_key, version.content_hash)
+        return self._store().verify(version.storage_key, version.content_hash)
 
     def read(self, version: ArtifactVersion) -> bytes:
         """The bytes of one version.
@@ -366,7 +390,7 @@ class ArtifactRepository(ProjectScopedRepository[Artifact]):
                 f"version {version.version_id} belongs to project "
                 f"{version.project_id}, not {self.project_id}"
             )
-        return self.store.get(version.storage_key)
+        return self._store().get(version.storage_key)
 
 
 def _safe_name(name: str) -> str:

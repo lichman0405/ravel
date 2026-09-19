@@ -31,12 +31,50 @@ from ravel.domain.enums import NodeStatus, NodeType, ReviewCheckpoint, ReviewOut
 from ravel.domain.state_machines import FROZEN_CRITERIA_NODE_TYPES
 
 __all__ = [
+    "ADMISSIBLE_STATUSES",
     "PRE_RUN_NODE_TYPES",
     "Clearance",
+    "admissible_checkpoints",
     "latest_at",
     "pre_run_clearance",
     "required_checkpoints",
 ]
+
+#: The statuses a review at each checkpoint may be submitted in.
+#:
+#: PRE_RUN is asked of a node waiting to run. FINAL is asked of a node that has
+#: finished and is waiting to be judged. RUNTIME is asked of work in flight,
+#: which includes a run that is blocked on something outside RAVEL — the
+#: question "is this going the way it should" is answerable there, and often
+#: most worth asking there.
+#:
+#: The table lives here rather than in the service because three callers need to
+#: agree on it: the service, which refuses a review the node's status cannot
+#: carry; the tool that tells a reviewer what is waiting for it; and any view
+#: that explains a wait. Three readings of one table, rather than three copies
+#: of one rule.
+ADMISSIBLE_STATUSES: dict[ReviewCheckpoint, frozenset[NodeStatus]] = {
+    ReviewCheckpoint.PRE_RUN: frozenset({NodeStatus.READY}),
+    ReviewCheckpoint.RUNTIME: frozenset(
+        {NodeStatus.RUNNING, NodeStatus.WAITING_EXTERNAL, NodeStatus.WAITING_DECISION}
+    ),
+    ReviewCheckpoint.FINAL: frozenset({NodeStatus.REVIEWING}),
+}
+
+
+def admissible_checkpoints(status: NodeStatus) -> tuple[ReviewCheckpoint, ...]:
+    """The checkpoints a node in this status can be reviewed at, just now.
+
+    A node's status admits exactly one checkpoint in every case, but this
+    returns a tuple rather than the one: which statuses belong to which
+    checkpoint is the table's business, and a caller that assumed a single
+    answer would be a second statement of the table.
+    """
+    return tuple(
+        checkpoint
+        for checkpoint, statuses in ADMISSIBLE_STATUSES.items()
+        if status in statuses
+    )
 
 #: The node types a pre-flight review is asked of. Derived from the frozen
 #: criteria rule rather than written out a second time: a node that must have

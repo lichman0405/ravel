@@ -14,6 +14,7 @@ from ravel.mcp.registry import (
     DAG_MUTATION_TOOLS,
     TOOL_DESCRIPTIONS,
     TOOL_ROLES,
+    WRITE_AUTHORSHIP,
     WRITE_TOOLS,
     mutating_tools_for,
     roles_for,
@@ -101,25 +102,46 @@ def test_every_dag_mutation_tool_is_granted_to_master() -> None:
         assert TOOL_ROLES[name] == frozenset({AgentRole.MASTER})
 
 
-def test_every_tool_that_writes_is_master_only() -> None:
-    """The write set is named explicitly so a read tool that starts writing, or
-    a writing tool handed to another role, has to be noticed here."""
+def test_every_writing_tool_belongs_to_exactly_one_role() -> None:
+    """A writing tool is held by its author and by nobody else.
+
+    The write set is named explicitly so that a read tool which starts writing,
+    or a writing tool handed to a second role, has to be noticed in two places
+    rather than one — the roster and the table that says who the author is.
+    """
     assert DAG_MUTATION_TOOLS <= WRITE_TOOLS
-    for name in WRITE_TOOLS:
-        assert name in TOOL_ROLES, f"{name} writes but is not part of the RAVEL roster"
-        assert TOOL_ROLES[name] == frozenset({AgentRole.MASTER}), (
-            f"{name} writes, so it must not be reachable by any other role"
-        )
+    assert set(WRITE_TOOLS) == set().union(*WRITE_AUTHORSHIP.values())
+    for role, authored in WRITE_AUTHORSHIP.items():
+        for name in authored:
+            assert name in TOOL_ROLES, f"{name} writes but is not part of the RAVEL roster"
+            assert TOOL_ROLES[name] == frozenset({role}), (
+                f"{name} is {role.value}'s to write, so no other role may hold it"
+            )
+
+
+def test_master_writes_the_plan_and_review_writes_verdicts() -> None:
+    """The two authorship sets are disjoint, and neither contains the other's.
+
+    Stated separately from the role loop above because this is the separation
+    of powers itself: Master cannot record a verdict on its own work, and
+    Review cannot change the plan it judges.
+    """
+    assert WRITE_AUTHORSHIP[AgentRole.MASTER].isdisjoint(WRITE_AUTHORSHIP[AgentRole.REVIEW])
+    assert DAG_MUTATION_TOOLS.issubset(WRITE_AUTHORSHIP[AgentRole.MASTER])
+    assert "submit_review" not in WRITE_AUTHORSHIP[AgentRole.MASTER]
 
 
 @pytest.mark.parametrize(
     "role",
-    [AgentRole.RESEARCH, AgentRole.REVIEW, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER],
+    [AgentRole.RESEARCH, AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER],
 )
-def test_a_worker_role_holds_no_writing_tool_at_all(role: AgentRole) -> None:
+def test_a_role_with_no_authorship_holds_no_writing_tool_at_all(role: AgentRole) -> None:
     """A worker's contract is "execute this and report"; it does not write state.
 
     Stated as a disjointness rather than a fixed roster: later phases give the
-    workers tools of their own, and this rule has to keep holding as they do.
+    workers tools of their own, and this rule has to keep holding as they do —
+    a worker that needs to write a record is a role whose authorship has to be
+    added to the table deliberately, not a role that quietly acquired a tool.
     """
+    assert role not in WRITE_AUTHORSHIP
     assert set(tools_for(role)).isdisjoint(WRITE_TOOLS)

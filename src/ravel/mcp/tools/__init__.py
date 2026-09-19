@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ravel.mcp.context import ToolContext
-from ravel.mcp.tools import dag, state
+from ravel.mcp.tools import dag, review, state
 
 #: What a registered tool looks like: an async callable whose parameters are
 #: the arguments the model supplies. Declared rather than inferred because the
@@ -30,6 +30,7 @@ ToolFactory = Callable[[ToolContext], ToolHandler]
 IMPLEMENTATIONS: dict[str, ToolFactory] = {
     **state.IMPLEMENTATIONS,
     **dag.IMPLEMENTATIONS,
+    **review.IMPLEMENTATIONS,
 }
 
 __all__ = ["IMPLEMENTATIONS", "ToolFactory", "ToolHandler"]

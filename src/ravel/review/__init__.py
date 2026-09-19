@@ -14,9 +14,11 @@ goes when the answer is no.
 """
 
 from ravel.review.checkpoints import (
+    ADMISSIBLE_STATUSES,
     PRE_RUN_NODE_TYPES,
     Clearance,
     NotClearedError,
+    admissible_checkpoints,
     latest_at,
     pre_run_clearance,
     required_checkpoints,
@@ -24,12 +26,14 @@ from ravel.review.checkpoints import (
 from ravel.review.service import ReviewError, ReviewService, SubmittedReview
 
 __all__ = [
+    "ADMISSIBLE_STATUSES",
     "PRE_RUN_NODE_TYPES",
     "Clearance",
     "NotClearedError",
     "ReviewError",
     "ReviewService",
     "SubmittedReview",
+    "admissible_checkpoints",
     "latest_at",
     "pre_run_clearance",
     "required_checkpoints",
