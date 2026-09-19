@@ -15,6 +15,27 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+def require_role(role: AgentRole, allowed: AgentRole, action: str) -> None:
+    """Refuse an action to every role but the one that holds it.
+
+    The one place the check is written, so the several places that need it
+    cannot disagree about what it says. A caller that wants to know whether an
+    action is permitted should not be asking this function — it raises, and it
+    raises the same way wherever it is called from.
+
+    The role is the one RAVEL bound to the caller's scope, never a name in a
+    payload, which is why this takes a value rather than looking one up.
+
+    Raises:
+        PermissionError: The actor is not the role that holds this authority.
+    """
+    if role is not allowed:
+        raise PermissionError(
+            f"the {role.value} role may not {action}; only {allowed.value} "
+            "holds that authority"
+        )
+
+
 class AgentRole(StrEnum):
     """The five agent roles. The value is the on-the-wire role name."""
 

@@ -168,7 +168,7 @@ today and needs no upstream change.
 
 ---
 
-## 4. Authority is created in two places, and both now check
+## 4. Authority is created in a few places, and all of them now check
 
 `docs/09_SECURITY_AND_IDENTITY.md` separates Execution, Review, and Decision.
 The audit that produced the fixes below asked a narrower question than "is the
@@ -194,6 +194,58 @@ removed (`2b40d32`):
   Admin outranking owner is deliberately narrow — it lets an administrator answer
   a request waiting on a human — and no method anywhere takes a user identity and
   writes a DAG node, so it cannot become a scientific decision.
+
+### The same audit, run again on the review package
+
+A later review asked the same question of the code written since, and found one
+door: **a Worker could write its own PASS.** `ReviewService.submit` took an
+`actor_id` and defaulted it to `AgentRole.REVIEW.value` — it *recorded* Review as
+the author rather than checking that Review was the caller — so a Compute Worker
+that could reach the service could accept its own node's work under Review's
+name.
+
+The check now sits in `ReviewRepository.submit`, at the write, and takes the
+caller's role as a required keyword. `DecisionRepository.record` had the same
+shape and is fixed the same way, and both go through one function,
+`ravel.domain.roles.require_role`, which is also what `require_master` delegates
+to: one implementation, so the several call sites cannot disagree about what the
+rule says. The role is the one RAVEL bound to the caller's scope, never a name in
+a payload — which is why the function takes a value rather than looking one up.
+
+Tests: `tests/integration/review/test_pre_run_gate.py::test_only_review_may_submit_a_verdict`
+(a parametrized refusal for the three other agent roles, asserting nothing was
+written) and `::test_the_refused_worker_does_not_open_the_gate`.
+
+### A check that was written down but not on the path
+
+The same review found the pre-flight review gate **fail-open**.
+`pre_run_clearance` and `NotClearedError` existed, were documented as *the*
+checkpoint that clears a node to run — `acceptance/V0_ACCEPTANCE.md` A09 requires
+it — and had no production caller at all. Nothing on the path into `RUNNING`
+consulted them, so a COMPUTATION or EXPERIMENT node could be handed to a Worker
+with no review, or after a refusal, and the only thing preventing it was that
+nobody had written the code to skip the review.
+
+The gate now lives in `DagNode.can_enter_running`, which is the one place every
+route into RUNNING passes through: a Worker's activity, Master's own transition,
+a test's fixture. It refuses when the node's latest PRE_RUN verdict is absent,
+FAIL, or PARTIAL, and the parameter that carries the verdict defaults to `None`,
+which is a refusal — so a caller that forgets to pass it fails closed rather than
+open. `pre_run_clearance` was kept, and its docstring now says what it is: the
+readable form of a rule enforced elsewhere, for callers that want to explain a
+wait rather than to permit a run.
+
+The evidence the gate is on the real path is that wiring it broke 26 tests, in
+exactly the places that build a runnable node. Four fixtures — the shared
+`prepare`, the temporal `runnable_node`, the review package's `computation` and
+`Driving`, and the DAG package's new `clear_to_run` — now pass the checkpoint
+the way the runtime does, through `ReviewService` rather than by writing a row.
+
+Tests: `tests/integration/review/test_pre_run_gate.py`, whose gate tests assert
+the *transition* refusing rather than a function agreeing that it would, plus
+`::test_the_enforced_gate_and_the_readable_one_agree`, which compares the SQL
+that decides against the Python that explains for the same node — the two
+implementations of one rule nothing else makes agree.
 
 ## 5. Tool authorization
 
@@ -237,12 +289,26 @@ findings they produced were real:
 | SSRF: the browser guarded only the URL it was given, not redirects or subresources | **Fixed.** Route handler on `**/*`; service workers blocked; aborted navigations re-raised as `UnsafeURL`. |
 | Evidence integrity: a retrieval's hash could be recorded unverified on the no-store path | **Fixed.** `register` recomputes it from the body. |
 | SSRF: DNS rebinding TOCTOU between the check and the connection | **Fixed for the fetcher**, by pinning the connection to the validated address (§1). **Open for the browser**, which cannot be given a network backend; recorded as L-14. |
+| Fail-open review gate: nothing on the path into RUNNING called `pre_run_clearance` | **Fixed.** The gate is in `DagNode.can_enter_running`, on the transition, and fails closed on a missing argument (§4). |
+| A Worker could submit a Review Record and be recorded as Review | **Fixed.** `require_role` at the write in `ReviewRepository.submit`, and the caller's role is a required keyword (§4). |
 | A fourth finding | **Not retrieved.** The review notification body arrived truncated and the full report is not on disk; what is recorded here is what could be read. |
 
 Two of the three earlier access-control findings were likewise fixed in place
 rather than described: the gateway's write path is scoped by construction (the
 project id comes from the gateway, not the caller) and is covered by
 `tests/integration/research/test_gateway_registration.py::test_a_gateway_cannot_write_into_another_project`.
+
+A third finding from the same review — a migration that creates a table without
+re-installing the guards would ship unguarded, and the parity gate between the
+migrated schema and the model-built one compared tables, columns, and check
+constraints but **not triggers** — was real as a gap in coverage rather than as
+a live hole: every table is covered today, because `guards.install()` is called
+from the initial migration and again from the revision that adds `backend_jobs`.
+It is now checked rather than relied on:
+`tests/integration/state/test_migrations_match_the_models.py::test_the_chain_installs_the_guards_the_suite_asserts_against`
+compares the guard triggers table by table between the two schemas, in both
+directions, and `::test_the_chain_installs_every_guard_function` checks the
+functions they call.
 
 ---
 

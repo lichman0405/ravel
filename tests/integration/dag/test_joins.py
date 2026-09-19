@@ -43,19 +43,21 @@ def finish(
     service: DagMutationService,
     freeze_criteria: Callable[[str], str],
     execution_contract: Callable[[str], str],
+    clear_to_run: Callable[[str], None],
 ) -> Callable[..., DagNode]:
     """Drive a node to a terminal status the way the runtime would.
 
-    A node cannot start without both contracts, so this binds them first — the
-    same two conditions the DAG checks before RUNNING, in the same order a
-    worker would meet them. `REVIEWING` is on the path to PASSED because a
-    result is reviewed before it is accepted, not because the DAG requires it.
+    A node cannot start without its two contracts and a pre-flight PASS, so this
+    supplies all three in the order a worker would meet them. `REVIEWING` is on
+    the path to PASSED because a result is reviewed before it is accepted, not
+    because the DAG requires it.
     """
 
     def drive(node_id: str, outcome: NodeStatus = NodeStatus.PASSED) -> DagNode:
         service.dag.bind_acceptance_contract(node_id, freeze_criteria(node_id))
         service.dag.bind_execution_contract(node_id, execution_contract(node_id))
         service.dag.transition_node(node_id, NodeStatus.READY, actor_id="scheduler")
+        clear_to_run(node_id)
         service.dag.transition_node(node_id, NodeStatus.RUNNING, actor_id="compute-worker")
         if outcome is NodeStatus.PASSED:
             service.dag.transition_node(node_id, NodeStatus.REVIEWING, actor_id="compute-worker")

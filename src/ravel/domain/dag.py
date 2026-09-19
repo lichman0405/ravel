@@ -14,7 +14,13 @@ from pydantic import Field, model_validator
 
 from ravel.domain.base import Record
 from ravel.domain.clock import utcnow
-from ravel.domain.enums import FailurePolicy, JoinPolicy, NodeStatus, NodeType
+from ravel.domain.enums import (
+    FailurePolicy,
+    JoinPolicy,
+    NodeStatus,
+    NodeType,
+    ReviewOutcome,
+)
 from ravel.domain.ids import new_id
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import (
@@ -192,17 +198,35 @@ class DagNode(Record):
         return self.model_copy(update=update)
 
     def can_enter_running(
-        self, has_frozen_acceptance: bool, has_execution_contract: bool
+        self,
+        has_frozen_acceptance: bool,
+        has_execution_contract: bool,
+        pre_run_outcome: ReviewOutcome | None = None,
     ) -> TransitionCheck:
         """Whether this node may start executing.
 
-        Two preconditions beyond the state machine, both from the specs:
+        Three preconditions beyond the state machine, all from the specs:
 
         - a COMPUTATION/EXPERIMENT node must have acceptance criteria defined
           before it enters RUNNING, so the result cannot be measured against a
           threshold invented after seeing it;
         - every executed node needs an Execution Contract, because a Worker
-          with no contract has no authority to act at all.
+          with no contract has no authority to act at all;
+        - and a node that owes a pre-flight review must have *passed* one, which
+          is what a checkpoint is for. `pre_run_outcome` is the verdict of the
+          node's most recent PRE_RUN review, or `None` if it has never been
+          reviewed — and both refusals are the point: a gate that only checked
+          for a FAIL would let a node run by never being reviewed at all.
+
+        The set of node types that owe a pre-flight review is the set that
+        freezes criteria before running, which is why this reads
+        `requires_frozen_criteria` rather than a second list: the criteria are
+        what the reviewer reads, and a node without them has nothing to
+        pre-flight.
+
+        The default is `None` deliberately: a caller that forgets the argument
+        fails closed for exactly the node types that need it, rather than
+        opening the gate.
         """
         check = can_transition_node(self.status, NodeStatus.RUNNING)
         if not check.allowed:
@@ -218,5 +242,17 @@ class DagNode(Record):
                 False,
                 f"{self.node_type.value} node {self.display_id} has no Execution Contract; "
                 "a worker would have no authority to act",
+            )
+        if self.requires_frozen_criteria and pre_run_outcome is not ReviewOutcome.PASS:
+            reviewed = (
+                "has not been reviewed before running"
+                if pre_run_outcome is None
+                else f"was reviewed before running and the verdict was {pre_run_outcome.value}"
+            )
+            return TransitionCheck(
+                False,
+                f"{self.node_type.value} node {self.display_id} {reviewed}; the "
+                "pre-flight review is the checkpoint that clears a node to run, and "
+                "starting without it is the one thing it exists to prevent",
             )
         return TransitionCheck(True, f"{self.display_id} may enter RUNNING")

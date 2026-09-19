@@ -522,17 +522,27 @@ def test_a_node_cannot_run_without_an_execution_contract(
         service.dag.transition_node(node.node_id, NodeStatus.RUNNING, actor_id="compute-worker")
 
 
-def test_a_node_runs_once_both_contracts_are_frozen_and_bound(
+def test_a_prepared_and_cleared_node_runs(
     service: DagMutationService,
     a_node: NodeFactory,
     freeze_criteria: Callable[[str], str],
     execution_contract: Callable[[str], str],
+    clear_to_run: Callable[[str], None],
 ) -> None:
+    """Everything a COMPUTATION node owes before it may be handed to a Worker.
+
+    Three things, and the third is the one this file is not the right place to
+    argue for: the pre-flight review is asserted in
+    `tests/integration/review/test_pre_run_gate.py`, and what is checked here is
+    only that the three together are *sufficient* — the refusals above each stop
+    the node, and this shows the node runs once none of them applies.
+    """
     node = a_node(NodeType.COMPUTATION, objective="Measure conductivity.")
     service.expand_phase(STAGES[0], [node], role=AgentRole.MASTER, decision=_draft())
     service.dag.bind_acceptance_contract(node.node_id, freeze_criteria(node.node_id))
     service.dag.bind_execution_contract(node.node_id, execution_contract(node.node_id))
     service.dag.transition_node(node.node_id, NodeStatus.READY, actor_id="scheduler")
+    clear_to_run(node.node_id)
 
     running = service.dag.transition_node(
         node.node_id, NodeStatus.RUNNING, actor_id="compute-worker"

@@ -73,7 +73,7 @@ def test_a_node_that_owes_no_pre_flight_review_is_clear(prepare):
     clearance.raise_if_denied()
 
 
-def test_a_pre_flight_pass_clears_the_node(computation, driving, submit, reviews_of):
+def test_a_pre_flight_pass_clears_the_node(computation, submit, reviews_of):
     submitted = submit(
         verdict(
             computation,

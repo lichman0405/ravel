@@ -95,6 +95,14 @@ def pre_run_clearance(
     A node whose type owes no pre-flight review is clear: the answer for a
     RESEARCH or HYPOTHESIS node is not "yes, reviewed" but "this question does
     not apply to it", and saying so is different from passing.
+
+    **This is the readable form of a rule that is enforced elsewhere.** The
+    gate itself is in `DagNode.can_enter_running`, which every path into
+    RUNNING passes through — this function exists for the callers that hold the
+    reviews and want to say *why* a node cannot start yet: the loop choosing
+    what to do next, the TUI explaining a wait, a test naming the verdict that
+    denied it. A caller that only needs the answer should ask the transition,
+    because that is the one that can refuse.
     """
     if node.node_type not in PRE_RUN_NODE_TYPES:
         return Clearance(

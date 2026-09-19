@@ -24,9 +24,16 @@ from ravel.domain.contracts import (
     ExecutionContract,
 )
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import JoinPolicy, NodeType
+from ravel.domain.decisions import ReviewRecord
+from ravel.domain.enums import (
+    JoinPolicy,
+    NodeType,
+    ReviewCheckpoint,
+    ReviewOutcome,
+)
 from ravel.domain.project import Project, RoadmapPhase
 from ravel.domain.roles import AgentRole
+from ravel.review import ReviewService
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
@@ -144,6 +151,47 @@ def freeze_criteria(
         return acceptance_contract(service.session, service.project_id, node_id)
 
     return freeze
+
+
+@pytest.fixture
+def clear_to_run(service: DagMutationService) -> Callable[[str], None]:
+    """Submit the pre-flight PASS that lets a COMPUTATION or EXPERIMENT node run.
+
+    The third thing a node needs before RUNNING, beside its two contracts, and
+    the only one that is a *judgement* rather than a record: the DAG refuses the
+    transition without it, so a fixture that wants to drive a node to a terminal
+    status has to pass this checkpoint the way the runtime does.
+
+    The criteria it names are read from the node's frozen acceptance contract
+    rather than supplied by the caller, so the review is about the plan the node
+    will actually run. A caller free to name its own could hand the gate a PASS
+    over criteria the node is not measured against, which is the mismatch
+    `ReviewService` exists to refuse — and a fixture that could produce one
+    would be handing the tests a clearance production cannot issue.
+    """
+
+    def clear(node_id: str) -> None:
+        criteria = AcceptanceContractRepository(
+            service.session, service.project_id
+        ).frozen_for_node(node_id)
+        if criteria is None:
+            raise AssertionError(
+                f"{node_id} has no frozen acceptance criteria to be cleared against"
+            )
+        ReviewService(service.session, service.project_id).submit(
+            ReviewRecord(
+                project_id=service.project_id,
+                node_id=node_id,
+                checkpoint=ReviewCheckpoint.PRE_RUN,
+                frozen_criteria_ref=criteria.contract_id,
+                frozen_criteria_version=criteria.version,
+                outcome=ReviewOutcome.PASS,
+                diagnosis="The criteria are measurable and the contract permits the run.",
+            ),
+            role=AgentRole.REVIEW,
+        )
+
+    return clear
 
 
 @pytest.fixture

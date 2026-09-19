@@ -37,7 +37,7 @@ from ravel.domain.execution import (
     ExecutionRecord,
     WorkerMessage,
 )
-from ravel.domain.roles import AgentRole
+from ravel.domain.roles import AgentRole, require_role
 from ravel.state.mapping import to_row_data
 from ravel.state.outbox import emit
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
@@ -69,11 +69,7 @@ class DecisionRepository(ProjectScopedRepository[DecisionRecord]):
             PermissionError: The actor is not Master. A decision record is the
                 formal scientific decision; only Master holds that authority.
         """
-        if role is not AgentRole.MASTER:
-            raise PermissionError(
-                f"the {role.value} role may not write a Decision Record; only "
-                f"{AgentRole.MASTER.value} decides"
-            )
+        require_role(role, AgentRole.MASTER, "write a Decision Record")
         self.add(decision)
         emit(
             self.session,
@@ -105,19 +101,32 @@ class ReviewRepository(ProjectScopedRepository[ReviewRecord]):
     row_type = ReviewRecordRow
     record_type = ReviewRecord
 
-    def submit(self, review: ReviewRecord, *, actor_id: str) -> ReviewRecord:
+    def submit(
+        self, review: ReviewRecord, *, role: AgentRole, actor_id: str | None = None
+    ) -> ReviewRecord:
         """Write a Review Record and announce it.
 
         Review may report, diagnose, and recommend. It has no method here to
         change a node's status, a contract, or the DAG.
+
+        **Who is asking is part of the record.** A Review Record is the
+        measurement the three powers are separated to protect: it is what a
+        verdict about someone else's work is made of, and a Worker that could
+        write one could pass its own work. So the role is required and checked
+        at the write, which is the boundary a caller has to cross, rather than
+        trusted from a caller that has already decided to be Review.
+
+        Raises:
+            PermissionError: The caller is not Review.
         """
+        require_role(role, AgentRole.REVIEW, "submit a Review Record")
         self.add(review)
         emit(
             self.session,
             project_id=self.project_id,
             event_type=ProjectEventType.REVIEW_SUBMITTED,
             actor_type=ActorType.AGENT,
-            actor_id=actor_id,
+            actor_id=actor_id or role.value,
             payload={
                 "review_id": review.review_id,
                 "display_id": review.display_id,

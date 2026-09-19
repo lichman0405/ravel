@@ -75,7 +75,7 @@ def test_a_final_verdict_must_answer_every_frozen_criterion(
 
     with pytest.raises(ReviewError, match=node.acceptance.criteria[1].criterion_id):
         submit(half)
-    assert reviews_of(node.project_id, node.node_id) == [], (
+    assert reviews_of(node.project_id, node.node_id, ReviewCheckpoint.FINAL) == [], (
         "the refusal has to happen before the record is written; a review "
         "rejected after it was stored is a review someone can still read"
     )
@@ -124,7 +124,7 @@ def test_a_final_verdict_on_work_still_in_flight_is_refused(
 
     with pytest.raises(ReviewError, match="REVIEWING"):
         submit(verdict(node))
-    assert reviews_of(node.project_id, node.node_id) == []
+    assert reviews_of(node.project_id, node.node_id, ReviewCheckpoint.FINAL) == []
 
 
 def test_a_passing_verdict_the_criteria_contradict_is_refused(computation, driving):
@@ -260,7 +260,7 @@ def test_a_submitted_review_is_readable_afterwards(
 
     submitted = submit(verdict(node, review_session_ref="session-master-1"))
 
-    written = reviews_of(node.project_id, node.node_id)
+    written = reviews_of(node.project_id, node.node_id, ReviewCheckpoint.FINAL)
     assert [review.review_id for review in written] == [submitted.review.review_id]
     assert written[0].review_session_ref == "session-master-1"
     assert latest_at(written, ReviewCheckpoint.FINAL) == written[0]

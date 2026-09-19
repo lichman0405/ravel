@@ -6,7 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from ravel.domain.dag import DagEdge, DagNode
-from ravel.domain.enums import FailurePolicy, JoinPolicy, NodeStatus, NodeType
+from ravel.domain.enums import (
+    FailurePolicy,
+    JoinPolicy,
+    NodeStatus,
+    NodeType,
+    ReviewOutcome,
+)
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import TransitionError
 
@@ -165,8 +171,33 @@ def test_no_node_runs_without_an_execution_contract() -> None:
 
 
 def test_a_fully_prepared_computation_may_run() -> None:
-    check = _ready().can_enter_running(has_frozen_acceptance=True, has_execution_contract=True)
+    check = _ready().can_enter_running(
+        has_frozen_acceptance=True,
+        has_execution_contract=True,
+        pre_run_outcome=ReviewOutcome.PASS,
+    )
     assert check.allowed
+
+
+def test_a_computation_that_was_never_reviewed_cannot_run() -> None:
+    """The gate is the review's absence, not only its refusal.
+
+    A check that looked for a FAIL would leave the shorter path open: never be
+    reviewed, and run anyway.
+    """
+    check = _ready().can_enter_running(has_frozen_acceptance=True, has_execution_contract=True)
+    assert not check.allowed
+    assert "has not been reviewed" in check.reason
+
+
+def test_a_refused_computation_cannot_run() -> None:
+    check = _ready().can_enter_running(
+        has_frozen_acceptance=True,
+        has_execution_contract=True,
+        pre_run_outcome=ReviewOutcome.FAIL,
+    )
+    assert not check.allowed
+    assert "the verdict was FAIL" in check.reason
 
 
 def test_research_does_not_need_frozen_criteria() -> None:

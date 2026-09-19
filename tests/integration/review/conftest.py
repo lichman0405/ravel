@@ -22,6 +22,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from sqlalchemy.orm import Session
 from tests.integration.conftest import (  # noqa: F401
     DEFAULT_OUTPUTS,
     Prepared,
@@ -33,8 +34,11 @@ from tests.integration.conftest import (  # noqa: F401
     project,
 )
 
+from ravel.domain.dag import DagNode
 from ravel.domain.decisions import CriterionResult, ReviewRecord
 from ravel.domain.enums import NodeStatus, ReviewCheckpoint, ReviewOutcome
+from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import requires_frozen_criteria
 from ravel.review import ReviewService, SubmittedReview
 from ravel.state.database import Database
 from ravel.state.repositories.dag import DagRepository
@@ -80,8 +84,17 @@ _ROUTES: dict[tuple[NodeStatus, NodeStatus], tuple[NodeStatus, ...]] = {
 
 @pytest.fixture
 def computation(prepare: Callable[..., Prepared]) -> Prepared:
-    """A READY COMPUTATION node with one frozen criterion."""
-    return prepare()
+    """A READY COMPUTATION node with one frozen criterion, awaiting its review.
+
+    Uncleared, and that is this package's starting state: its subject is the
+    review, so the node the tests begin from is the one nobody has judged yet.
+    The shared `prepare` clears by default because "ready to run" is what most
+    callers mean by preparing a node — here it would put a PASS in front of
+    every verdict a test submits, and "the refusal did not clear the node" would
+    become a race against the fixture's own approval rather than a statement
+    about the verdict.
+    """
+    return prepare(cleared=False)
 
 
 @pytest.fixture
@@ -97,6 +110,12 @@ def driving(database: Database) -> Callable[[Prepared, NodeStatus], Prepared]:
     record the caller holds, so that a test can move a node a second time — a
     Master sending a refused node back to be reviewed again — without having to
     remember which copy of the record it kept.
+
+    A route that enters RUNNING clears the node first, because that is what
+    reaching RUNNING takes: the DAG refuses the transition otherwise, and a
+    fixture that wrote the status anyway would hand the tests a node the system
+    cannot produce. It is the same reason the routes are transitions rather than
+    assignments.
     """
 
     def build(prepared: Prepared, status: NodeStatus) -> Prepared:
@@ -109,11 +128,44 @@ def driving(database: Database) -> Callable[[Prepared, NodeStatus], Prepared]:
                     f"no route from {node.status.value} to {status.value}; add one "
                     "to _ROUTES rather than writing the status directly"
                 )
+            if NodeStatus.RUNNING in route and requires_frozen_criteria(node.node_type):
+                _clear_for_running(session, prepared, node)
             for step in route:
                 node = dag.transition_node(node.node_id, step, actor_id="scheduler")
         return replace(prepared, node=node)
 
     return build
+
+
+def _clear_for_running(session: Session, prepared: Prepared, node: DagNode) -> None:
+    """Give a node the pre-flight PASS it owes, unless it already has one.
+
+    The guard is what keeps this from being a fixture that approves things on
+    the tests' behalf: a node that arrived cleared is left exactly as it was,
+    and only the nodes these tests deliberately left unreviewed are cleared —
+    and then only because the transition they are being driven through cannot
+    happen without it.
+
+    Submitted through `ReviewService` for the reason the shared fixture gives:
+    the gate reads the review the service accepted, and a clearance written by
+    hand could be one the service would have refused.
+    """
+    dag = DagRepository(session, prepared.project_id)
+    if dag.latest_pre_run_outcome(node.node_id) is ReviewOutcome.PASS:
+        return
+    measured = prepared.acceptance if prepared.acceptance is not None else prepared.contract
+    ReviewService(session, prepared.project_id).submit(
+        ReviewRecord(
+            project_id=prepared.project_id,
+            node_id=node.node_id,
+            checkpoint=ReviewCheckpoint.PRE_RUN,
+            frozen_criteria_ref=measured.contract_id,
+            frozen_criteria_version=measured.version,
+            outcome=ReviewOutcome.PASS,
+            diagnosis="The plan states what will be measured and how it will be run.",
+        ),
+        role=AgentRole.REVIEW,
+    )
 
 
 @pytest.fixture
@@ -128,24 +180,50 @@ def status_of(database: Database) -> Callable[[str, str], NodeStatus]:
 
 
 @pytest.fixture
-def reviews_of(database: Database) -> Callable[[str, str], list[ReviewRecord]]:
-    """Every Review Record written about a node, oldest first."""
+def reviews_of(database: Database) -> Callable[..., list[ReviewRecord]]:
+    """Every Review Record written about a node, oldest first.
 
-    def read(project_id: str, node_id: str) -> list[ReviewRecord]:
+    `checkpoint` narrows it to one moment in the node's life, which is not the
+    same question as "what has been written about this node": a node driven to
+    RUNNING was cleared on the way, so a test asserting that *this* verdict was
+    written has to say which verdict it means. Asking for all of them and
+    picking out the ones it wanted would be a test that keeps passing after the
+    checkpoint it cares about stopped being written.
+    """
+
+    def read(
+        project_id: str,
+        node_id: str,
+        checkpoint: ReviewCheckpoint | None = None,
+    ) -> list[ReviewRecord]:
         with database.read_only() as session:
-            return ReviewRepository(session, project_id).for_node(node_id)
+            written = ReviewRepository(session, project_id).for_node(node_id)
+        if checkpoint is None:
+            return written
+        return [review for review in written if review.checkpoint is checkpoint]
 
     return read
 
 
 @pytest.fixture
 def submit(database: Database) -> Callable[..., SubmittedReview]:
-    """Submit a review the way a Review Worker's session would."""
+    """Submit a review the way a Review Worker's session would.
 
-    def run(review: ReviewRecord, *, actor_id: str | None = None) -> SubmittedReview:
+    The role is supplied here rather than by each test because it is not what
+    the test is varying: a test that wants to show a *non*-Review caller being
+    refused calls the service itself, and one that changed this default would
+    be testing the fixture.
+    """
+
+    def run(
+        review: ReviewRecord,
+        *,
+        role: AgentRole = AgentRole.REVIEW,
+        actor_id: str | None = None,
+    ) -> SubmittedReview:
         with database.transaction() as session:
             return ReviewService(session, review.project_id).submit(
-                review, actor_id=actor_id
+                review, role=role, actor_id=actor_id
             )
 
     return run

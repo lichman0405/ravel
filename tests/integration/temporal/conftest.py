@@ -41,7 +41,15 @@ from ravel.domain.contracts import (
     ExecutionContract,
 )
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import FailureClass, JobState, NodeStatus, NodeType
+from ravel.domain.decisions import ReviewRecord
+from ravel.domain.enums import (
+    FailureClass,
+    JobState,
+    NodeStatus,
+    NodeType,
+    ReviewCheckpoint,
+    ReviewOutcome,
+)
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.execution.backends import (
@@ -53,6 +61,7 @@ from ravel.execution.backends import (
     JobStatus,
 )
 from ravel.execution.temporal.worker import ExecutionRuntime
+from ravel.review import ReviewService
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
@@ -241,9 +250,26 @@ def runnable_node(
 
             dag.bind_acceptance_contract(node.node_id, acceptance.contract_id)
             dag.bind_execution_contract(node.node_id, execution.contract_id)
-            return dag.transition_node(
-                node.node_id, NodeStatus.READY, actor_id="scheduler"
+            ready = dag.transition_node(node.node_id, NodeStatus.READY, actor_id="scheduler")
+            # A node that freezes criteria is cleared by a pre-flight review
+            # before it may run, and the DAG enforces that on the transition
+            # rather than trusting the caller to ask. Written through the
+            # review service for the same reason the contracts are written
+            # through their repositories: a row written here by hand could be
+            # one the service would have refused.
+            ReviewService(session, project.project_id).submit(
+                ReviewRecord(
+                    project_id=project.project_id,
+                    node_id=node.node_id,
+                    checkpoint=ReviewCheckpoint.PRE_RUN,
+                    frozen_criteria_ref=acceptance.contract_id,
+                    frozen_criteria_version=acceptance.version,
+                    outcome=ReviewOutcome.PASS,
+                    diagnosis="The plan states what will be measured.",
+                ),
+                role=AgentRole.REVIEW,
             )
+            return ready
 
     return build
 

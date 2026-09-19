@@ -106,11 +106,24 @@ class ReviewService:
 
     # ── Submitting ──────────────────────────────────────────────────────────
 
-    def submit(self, review: ReviewRecord, *, actor_id: str | None = None) -> SubmittedReview:
+    def submit(
+        self,
+        review: ReviewRecord,
+        *,
+        role: AgentRole,
+        actor_id: str | None = None,
+    ) -> SubmittedReview:
         """Write a Review Record and apply it.
+
+        `role` is the role RAVEL bound to the caller's scope, and it is
+        required rather than defaulted: writing a verdict is Review's act, and
+        a default would be this method deciding who is allowed to lie about
+        their own work. The check itself is at the write, in
+        `ReviewRepository.submit`.
 
         Raises:
             NotFound: This project has no such node.
+            PermissionError: The caller is not Review.
             ReviewError: The review is not one this node's state can carry.
         """
         node = self.dag.node(review.node_id)
@@ -119,7 +132,9 @@ class ReviewService:
         self._require_criteria_are_the_frozen_ones(frozen, review)
 
         written = self.reviews.submit(
-            review, actor_id=actor_id or review.review_session_ref or AgentRole.REVIEW.value
+            review,
+            role=role,
+            actor_id=actor_id or review.review_session_ref or role.value,
         )
         return SubmittedReview(review=written, node=node, moved_to=self._apply(node, written))
 

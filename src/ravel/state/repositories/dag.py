@@ -27,9 +27,9 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 
 from ravel.domain.dag import DagEdge, DagNode
-from ravel.domain.enums import NodeStatus, NodeType
+from ravel.domain.enums import NodeStatus, NodeType, ReviewCheckpoint, ReviewOutcome
 from ravel.domain.events import ActorType, ProjectEventType
-from ravel.domain.roles import AgentRole
+from ravel.domain.roles import AgentRole, require_role
 from ravel.domain.state_machines import (
     ACTIVE_NODE_STATUSES,
     TERMINAL_NODE_STATUSES,
@@ -49,6 +49,7 @@ from ravel.state.tables import (
     DagEdgeRow,
     DagNodeRow,
     ExecutionContractRow,
+    ReviewRecordRow,
 )
 
 #: The coarse event a status change is announced as. The payload always carries
@@ -83,11 +84,7 @@ def require_master(role: AgentRole) -> None:
     Raises:
         PermissionError: The actor is not Master.
     """
-    if role is not AgentRole.MASTER:
-        raise PermissionError(
-            f"the {role.value} role may not mutate the DAG; only "
-            f"{AgentRole.MASTER.value} holds that authority"
-        )
+    require_role(role, AgentRole.MASTER, "mutate the DAG")
 
 
 class DagRepository(ProjectScopedRepository[DagNode]):
@@ -393,6 +390,7 @@ class DagRepository(ProjectScopedRepository[DagNode]):
             node.can_enter_running(
                 has_frozen_acceptance=self.has_frozen_acceptance(node_id),
                 has_execution_contract=self.has_execution_contract(node_id),
+                pre_run_outcome=self.latest_pre_run_outcome(node_id),
             ).raise_if_denied()
 
         moved = node.transition(target)
@@ -525,6 +523,35 @@ class DagRepository(ProjectScopedRepository[DagNode]):
             )
         ).scalar_one()
         return bool(found)
+
+    def latest_pre_run_outcome(self, node_id: str) -> ReviewOutcome | None:
+        """The verdict of the node's most recent PRE_RUN review, if any.
+
+        Read here rather than through `ravel.review` because this is a fact
+        about a node and the module that answers "what is this node's state"
+        should not depend on the module that judges it — the dependency runs
+        the other way, and a cycle between them would make the gate's
+        enforcement point depend on the review package importing successfully.
+
+        Latest rather than first: a PRE_RUN review may legitimately happen
+        twice, and the second is the one that describes what is about to run.
+
+        `None` means the node has never been reviewed before running, which is
+        a refusal for a node type that owes one — and is deliberately not the
+        same value as a FAIL, because the two are different facts and the
+        message a reader gets should say which.
+        """
+        row = self.session.execute(
+            select(ReviewRecordRow.outcome)
+            .where(
+                ReviewRecordRow.project_id == self.project_id,
+                ReviewRecordRow.node_id == node_id,
+                ReviewRecordRow.checkpoint == ReviewCheckpoint.PRE_RUN.value,
+            )
+            .order_by(ReviewRecordRow.created_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        return ReviewOutcome(row) if row is not None else None
 
     def _require_decision(self, decision_ref: str) -> None:
         if not decision_ref:

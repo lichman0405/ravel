@@ -29,6 +29,7 @@ import pytest
 from sqlalchemy import CheckConstraint, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.orm import Session
 
 from ravel.config import Settings
 from ravel.domain.contracts import (
@@ -38,10 +39,19 @@ from ravel.domain.contracts import (
     ExecutionContract,
 )
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus, NodeType, UserRole
+from ravel.domain.decisions import ReviewRecord
+from ravel.domain.enums import (
+    NodeStatus,
+    NodeType,
+    ReviewCheckpoint,
+    ReviewOutcome,
+    UserRole,
+)
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import requires_frozen_criteria
 from ravel.execution.backends import JobRequest
+from ravel.review import ReviewService
 from ravel.state import guards
 from ravel.state.database import Database, create_db_engine, install_utc_guard
 from ravel.state.repositories.contracts import (
@@ -333,6 +343,7 @@ def prepare(database: Database, project) -> Callable[..., Prepared]:
         criteria: tuple[str, ...] = ("Conductivity rises by at least 15%.",),
         with_acceptance: bool = True,
         freeze_acceptance: bool = True,
+        cleared: bool = True,
     ) -> Prepared:
         """Build one.
 
@@ -342,6 +353,13 @@ def prepare(database: Database, project) -> Callable[..., Prepared]:
         whose criteria were revised and not yet re-frozen — and which the two
         are kept apart for: the system's lookup is by node, so a contract that
         exists is found whether or not the node's binding names it.
+
+        `cleared=False` leaves a COMPUTATION or EXPERIMENT node without the
+        pre-flight review it needs to enter RUNNING, which is the state a node
+        is in while it waits to be reviewed. The default is the cleared one
+        because "ready to run" is what almost every caller means by preparing a
+        node, and the gate that refuses an uncleared one is asserted in
+        `tests/integration/review/test_pre_run_gate.py` rather than here.
         """
         with database.transaction() as session:
             dag = DagRepository(session, project.project_id)
@@ -391,12 +409,47 @@ def prepare(database: Database, project) -> Callable[..., Prepared]:
             contracts.freeze(contract.contract_id)
             dag.bind_execution_contract(node.node_id, contract.contract_id)
 
-            return Prepared(
-                node=dag.transition_node(
-                    node.node_id, NodeStatus.READY, actor_id="scheduler"
-                ),
-                acceptance=acceptance,
-                contract=contract,
-            )
+            ready = dag.transition_node(node.node_id, NodeStatus.READY, actor_id="scheduler")
+            if cleared and requires_frozen_criteria(node_type):
+                _clear_for_running(
+                    session,
+                    project_id=project.project_id,
+                    node=ready,
+                    acceptance=acceptance,
+                    contract=contract,
+                )
+            return Prepared(node=ready, acceptance=acceptance, contract=contract)
 
     return build
+
+
+def _clear_for_running(
+    session: Session,
+    *,
+    project_id: str,
+    node: DagNode,
+    acceptance: AcceptanceContract | None,
+    contract: ExecutionContract,
+) -> None:
+    """Submit the pre-flight PASS a node needs before it may run.
+
+    Through `ReviewService`, not by writing a row: the gate reads the review
+    the service accepted, and a fixture that wrote a PASS directly could hand a
+    node a clearance the service would have refused — for instance one naming
+    criteria that were never frozen. The definition of done it names is the
+    same one the service will look up, which is the acceptance contract when
+    there is one and the Execution Contract otherwise.
+    """
+    measured = acceptance if acceptance is not None else contract
+    ReviewService(session, project_id).submit(
+        ReviewRecord(
+            project_id=project_id,
+            node_id=node.node_id,
+            checkpoint=ReviewCheckpoint.PRE_RUN,
+            frozen_criteria_ref=measured.contract_id,
+            frozen_criteria_version=measured.version,
+            outcome=ReviewOutcome.PASS,
+            diagnosis="The plan states what will be measured and how it will be run.",
+        ),
+        role=AgentRole.REVIEW,
+    )
