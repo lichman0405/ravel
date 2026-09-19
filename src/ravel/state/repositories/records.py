@@ -124,7 +124,7 @@ class ReviewRepository(ProjectScopedRepository[ReviewRecord]):
                 "node_id": review.node_id,
                 "checkpoint": review.checkpoint.value,
                 "outcome": review.outcome.value,
-                "frozen_acceptance_version": review.frozen_acceptance_version,
+                "frozen_criteria_version": review.frozen_criteria_version,
             },
         )
         return review

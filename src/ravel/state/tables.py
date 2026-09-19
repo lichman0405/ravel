@@ -408,9 +408,17 @@ class DagNodeRow(Base):
             name="completion_time_matches_status",
         ),
         # Every status that implies work started requires a start time.
+        #
+        # WAITING_DECISION is deliberately absent. It is the one status a node
+        # can reach without having started: a pre-flight review that refuses a
+        # plan parks the node there before any work happens, because Master is
+        # the only role that may revise the plan and the node must be visibly
+        # waiting on that rather than sitting at READY where it cannot run.
+        # Requiring a start time for it would mean writing a moment into the
+        # record at which work began, for a node where none did.
         CheckConstraint(
-            "status NOT IN ('RUNNING', 'WAITING_EXTERNAL', 'WAITING_DECISION', "
-            "'REVIEWING', 'PASSED', 'FAILED', 'PARTIAL') OR started_at IS NOT NULL",
+            "status NOT IN ('RUNNING', 'WAITING_EXTERNAL', 'REVIEWING', "
+            "'PASSED', 'FAILED', 'PARTIAL') OR started_at IS NOT NULL",
             name="started_nodes_have_a_start_time",
         ),
         Index("ix_dag_nodes_project_status", "project_id", "status"),
@@ -779,7 +787,7 @@ class ReviewRecordRow(Base):
         _enum_constraint("checkpoint", ReviewCheckpoint),
         _enum_constraint("outcome", ReviewOutcome),
         CheckConstraint(
-            "frozen_acceptance_version >= 1", name="frozen_version_is_positive"
+            "frozen_criteria_version >= 1", name="frozen_version_is_positive"
         ),
         Index("ix_review_records_node_created", "node_id", "created_at"),
     )
@@ -793,8 +801,8 @@ class ReviewRecordRow(Base):
         ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
     )
     checkpoint: Mapped[str] = mapped_column(String(32), nullable=False)
-    frozen_acceptance_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
-    frozen_acceptance_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    frozen_criteria_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    frozen_criteria_version: Mapped[int] = mapped_column(Integer, nullable=False)
     outcome: Mapped[str] = mapped_column(String(32), nullable=False)
     criterion_results: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list

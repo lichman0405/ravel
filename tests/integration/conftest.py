@@ -22,7 +22,8 @@ which reads as an unguarded column rather than as an old table.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 
 import pytest
 from sqlalchemy import CheckConstraint, inspect, text
@@ -30,10 +31,24 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from ravel.config import Settings
-from ravel.domain.enums import UserRole
+from ravel.domain.contracts import (
+    AcceptanceContract,
+    AcceptanceCriterion,
+    CriterionProvenance,
+    ExecutionContract,
+)
+from ravel.domain.dag import DagNode
+from ravel.domain.enums import NodeStatus, NodeType, UserRole
 from ravel.domain.project import Project
+from ravel.domain.roles import AgentRole
+from ravel.execution.backends import JobRequest
 from ravel.state import guards
 from ravel.state.database import Database, create_db_engine, install_utc_guard
+from ravel.state.repositories.contracts import (
+    AcceptanceContractRepository,
+    ExecutionContractRepository,
+)
+from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
 from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.store import S3ArtifactStore
@@ -249,3 +264,139 @@ def other_project(database: Database, project: Project) -> Project:
         return ProjectRegistry(session).create(
             title="Unrelated", objective="Something else entirely.", created_by="someone"
         )
+
+
+#: The outputs a contract requires when a caller does not name its own. Two of
+#: them, so that a run delivering one short is visibly incomplete rather than
+#: ambiguous.
+DEFAULT_OUTPUTS = ("conductivity.csv", "notes.json")
+
+
+@dataclass(frozen=True)
+class Prepared:
+    """A node that can be run, and the contracts it runs under."""
+
+    node: DagNode
+    #: The node's acceptance criteria, or `None` for a node type that has none.
+    #: `None` rather than a contract nothing bound, because the lookup the
+    #: system does is by node and would have found it either way.
+    acceptance: AcceptanceContract | None
+    contract: ExecutionContract
+
+    @property
+    def node_id(self) -> str:
+        """The node's identifier, so a test does not have to reach through."""
+        return self.node.node_id
+
+    @property
+    def project_id(self) -> str:
+        return self.contract.project_id
+
+    def request(self, *, attempt: int = 1) -> JobRequest:
+        """The work a Worker would hand a backend for this node."""
+        return JobRequest(
+            project_id=self.contract.project_id,
+            node_id=self.node.node_id,
+            attempt=attempt,
+            execution_contract_ref=self.contract.contract_id,
+            execution_contract_version=self.contract.version,
+            objective=self.contract.objective,
+            required_outputs=self.contract.required_outputs,
+            is_retry=attempt > 1,
+        )
+
+
+@pytest.fixture
+def prepare(database: Database, project) -> Callable[..., Prepared]:
+    """Build a READY node with frozen contracts, the way production does.
+
+    Assembled through the same repositories production uses, because the
+    preconditions that let a node run are part of what is being tested: a
+    fixture that wrote rows directly could hand a Worker a contract that was
+    never frozen, and the run would then be exercising a state the system
+    cannot reach.
+
+    Shared by three gates — the mock backends, the review gate, and the
+    headless loop — because all three start from a node that is ready to run,
+    and three copies of "how a runnable node is built" would be three places
+    for that to drift.
+    """
+
+    def build(
+        *,
+        node_type: NodeType = NodeType.COMPUTATION,
+        required_outputs: tuple[str, ...] = DEFAULT_OUTPUTS,
+        allowed_actions: tuple[str, ...] = ("run_measurement",),
+        allowed_ranges: dict[str, str] | None = None,
+        allowed_substitutions: tuple[str, ...] = (),
+        allowed_retries: int = 0,
+        criteria: tuple[str, ...] = ("Conductivity rises by at least 15%.",),
+        with_acceptance: bool = True,
+        freeze_acceptance: bool = True,
+    ) -> Prepared:
+        """Build one.
+
+        `with_acceptance=False` writes no acceptance criteria at all, which is
+        what a RESEARCH node has. `freeze_acceptance=False` writes them and
+        leaves them unfrozen, which is a state production can reach for a node
+        whose criteria were revised and not yet re-frozen — and which the two
+        are kept apart for: the system's lookup is by node, so a contract that
+        exists is found whether or not the node's binding names it.
+        """
+        with database.transaction() as session:
+            dag = DagRepository(session, project.project_id)
+            node = dag.add_node(
+                DagNode.create(
+                    project_id=project.project_id,
+                    node_type=node_type,
+                    objective="Measure conductivity across the dopant series.",
+                    created_by="master",
+                ),
+                role=AgentRole.MASTER,
+                decision_ref="dec-1",
+            )
+            acceptance: AcceptanceContract | None = None
+            if with_acceptance:
+                acceptance = AcceptanceContract(
+                    project_id=project.project_id,
+                    node_id=node.node_id,
+                    criteria=tuple(
+                        AcceptanceCriterion(
+                            statement=statement,
+                            provenance=CriterionProvenance.USER_REQUIREMENT,
+                        )
+                        for statement in criteria
+                    ),
+                )
+                acceptance_repository = AcceptanceContractRepository(
+                    session, project.project_id
+                )
+                acceptance_repository.add(acceptance)
+                if freeze_acceptance:
+                    acceptance_repository.freeze(acceptance.contract_id)
+                dag.bind_acceptance_contract(node.node_id, acceptance.contract_id)
+
+            contract = ExecutionContract(
+                project_id=project.project_id,
+                node_id=node.node_id,
+                objective="Measure the conductivity of each sample.",
+                allowed_actions=allowed_actions,
+                allowed_ranges=allowed_ranges or {},
+                allowed_substitutions=allowed_substitutions,
+                required_outputs=required_outputs,
+                allowed_retries=allowed_retries,
+            )
+            contracts = ExecutionContractRepository(session, project.project_id)
+            contracts.add(contract)
+            contracts.freeze(contract.contract_id)
+            dag.bind_execution_contract(node.node_id, contract.contract_id)
+
+            return Prepared(
+                node=dag.transition_node(
+                    node.node_id, NodeStatus.READY, actor_id="scheduler"
+                ),
+                acceptance=acceptance,
+                contract=contract,
+            )
+
+    return build

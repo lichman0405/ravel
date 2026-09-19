@@ -292,8 +292,8 @@ def _review(outcome: ReviewOutcome, satisfied: list[bool]) -> ReviewRecord:
         project_id="proj-a",
         node_id="n1",
         checkpoint=ReviewCheckpoint.FINAL,
-        frozen_acceptance_contract_ref="ctr-1",
-        frozen_acceptance_version=1,
+        frozen_criteria_ref="ctr-1",
+        frozen_criteria_version=1,
         outcome=outcome,
         criterion_results=_results(satisfied),
     )
@@ -321,8 +321,8 @@ def test_a_review_must_name_the_frozen_version_it_measured() -> None:
             project_id="proj-a",
             node_id="n1",
             checkpoint=ReviewCheckpoint.FINAL,
-            frozen_acceptance_contract_ref="ctr-1",
-            frozen_acceptance_version=0,
+            frozen_criteria_ref="ctr-1",
+            frozen_criteria_version=0,
             outcome=ReviewOutcome.PASS,
         )
 
@@ -332,8 +332,8 @@ def test_a_pre_run_review_may_reach_a_verdict_without_results() -> None:
         project_id="proj-a",
         node_id="n1",
         checkpoint=ReviewCheckpoint.PRE_RUN,
-        frozen_acceptance_contract_ref="ctr-1",
-        frozen_acceptance_version=1,
+        frozen_criteria_ref="ctr-1",
+        frozen_criteria_version=1,
         outcome=ReviewOutcome.PASS,
     )
     assert review.criterion_results == ()

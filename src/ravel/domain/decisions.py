@@ -113,8 +113,13 @@ class CriterionResult(Record):
 class ReviewRecord(Record):
     """What Review found, against the criteria that were frozen before the run.
 
-    `frozen_acceptance_version` is required. A review measured against criteria
-    that changed after the result would be measuring the result against itself.
+    `frozen_criteria_ref` and `frozen_criteria_version` name the definition of
+    done this review measured against, and they are required. Which contract
+    that is depends on the node: a COMPUTATION or EXPERIMENT node has an
+    Acceptance Contract because `can_enter_running` demands one, and every
+    other executed node has its Execution Contract, which is also frozen before
+    the run and names what it owed. Either way the review states what it read,
+    so a verdict cannot be measured against criteria that changed afterwards.
     """
 
     review_id: str = Field(default_factory=new_id)
@@ -122,8 +127,8 @@ class ReviewRecord(Record):
     project_id: str
     node_id: str
     checkpoint: ReviewCheckpoint
-    frozen_acceptance_contract_ref: str
-    frozen_acceptance_version: int = Field(ge=1)
+    frozen_criteria_ref: str
+    frozen_criteria_version: int = Field(ge=1)
     outcome: ReviewOutcome
     criterion_results: tuple[CriterionResult, ...] = ()
     diagnosis: str = ""
