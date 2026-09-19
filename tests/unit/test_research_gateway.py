@@ -333,6 +333,18 @@ def test_a_pdf_is_never_treated_as_a_shell() -> None:
             "percent signs are dropped, so an encoded traversal is inert",
         ),
         ("https://example.org/a/", "a", "a trailing slash names the directory above"),
+        (
+            "https://example.org/a/..",
+            "index",
+            "a bare traversal is not a name, and a server may redirect to one",
+        ),
+        ("https://example.org/a/.", "index", "nor is the current directory"),
+        (
+            "https://example.org/a/...",
+            "index",
+            "the rule is dots and nothing else, not the two spellings that traverse",
+        ),
+        ("https://example.org/a/..v2.pdf", "..v2.pdf", "a name that merely starts with dots")
     ],
 )
 def test_a_snapshot_filename_is_taken_from_the_url_and_stripped_of_anything_else(
@@ -343,12 +355,16 @@ def test_a_snapshot_filename_is_taken_from_the_url_and_stripped_of_anything_else
     It is derived from the URL rather than from the content type because it is
     only a convenience for a human reading a bucket listing; the artifact's
     identity is its id, not its key. What matters is that nothing in a URL can
-    put a separator or a traversal into the key.
+    put a separator or a traversal into the key — and that a URL that names
+    nothing still yields a name, since `artifact_key` refuses `.` and `..` and
+    a retrieval that cannot be snapshotted would fail for a reason that has
+    nothing to do with whether the source could be read.
     """
     filename = _filename(_retrieval(final_url=url))
 
     assert filename == expected, why
-    assert "/" not in filename and "\\" not in filename and ".." not in filename
+    assert "/" not in filename and "\\" not in filename
+    assert filename.strip(".") != "", "a name of nothing but dots is not a name"
 
 
 def test_the_notes_carry_the_tier_and_the_rule_that_produced_it() -> None:

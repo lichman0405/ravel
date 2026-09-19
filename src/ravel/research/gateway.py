@@ -625,11 +625,22 @@ def _is_a_shell(retrieval: Retrieval) -> bool:
 
 
 def _filename(retrieval: Retrieval) -> str:
-    """A filename for a snapshot, taken from the URL that answered."""
+    """A filename for a snapshot, taken from the URL that answered.
+
+    The result is handed to `artifact_key`, which refuses a name that is `.` or
+    `..`, so the filter has to refuse them too. Keeping dots is what makes a
+    name like `paper.v3.pdf` survive; it also means a URL whose last segment is
+    nothing *but* dots arrives here as one, and `/a/..` is a URL a server may
+    legitimately redirect to. Falling back rather than raising is the point:
+    whether a snapshot can be stored is not a question about how the source
+    spelled its path.
+    """
     path = retrieval.final_url.split("?")[0].split("#")[0].rstrip("/")
     tail = path.rsplit("/", 1)[-1] or "index"
     cleaned = "".join(character for character in tail if character.isalnum() or character in "._-")
-    return (cleaned or "index")[:120]
+    if not cleaned.strip("."):
+        return "index"
+    return cleaned[:120]
 
 
 def _notes(
