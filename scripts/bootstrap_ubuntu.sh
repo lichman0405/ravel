@@ -122,10 +122,18 @@ step "Playwright Chromium"
 
 if [[ "${RAVEL_SKIP_PLAYWRIGHT:-0}" == "1" ]]; then
     warn "skipped (RAVEL_SKIP_PLAYWRIGHT=1)"
+elif python -m playwright install --with-deps chromium >/dev/null 2>&1; then
+    pass "chromium installed with its system libraries"
 else
-    python -m playwright install --with-deps chromium >/dev/null 2>&1 \
-        || python -m playwright install chromium
-    pass "chromium installed"
+    # The browser binary and the shared libraries it links against come from two
+    # different places: `install` fetches the first into the venv, `--with-deps`
+    # apt-installs the second and needs sudo. Binary without libraries is a
+    # browser that downloads and cannot launch, so this does not report success
+    # — browser-based retrieval is a research path, and an operator who believes
+    # it works will not look here when it does not.
+    python -m playwright install chromium >/dev/null 2>&1 || true
+    warn "chromium downloaded WITHOUT its system libraries, so it cannot launch"
+    warn "browser-based retrieval will not run until: sudo .venv/bin/python -m playwright install-deps chromium"
 fi
 
 # ── Docker ──────────────────────────────────────────────────────────────────

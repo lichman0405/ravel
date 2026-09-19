@@ -15,7 +15,8 @@ PYRIGHT ?= pyright
 
 .PHONY: help bootstrap env-check dev-up dev-down migrate test test-unit \
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
-        typecheck gateway tui acceptance-matrix clean
+        typecheck gateway tui acceptance-matrix acceptance-raw clean \
+        up worker project account
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -54,11 +55,20 @@ test-live: ## Real-Internet research acceptance; never mocked
 test-e2e: ## Headless loop and TUI end-to-end tests
 	$(VENV)/bin/pytest tests/e2e -m e2e
 
-acceptance: ## Run A01-A20 plus the extra gates
-	$(VENV)/bin/pytest tests/acceptance -m acceptance
-
-acceptance-matrix: ## Print the A01-A20 pass/fail matrix
+# The matrix and the run are one command. Phase 9's gate is that the acceptance
+# run *prints a pass/fail matrix* — a pytest summary says how many tests passed,
+# not which of the twenty items they were about, and says nothing about an item
+# nobody wrote a test for. `scripts/acceptance_matrix.py` runs the suite, streams
+# its output, and then answers the item-level question; the two names below are
+# the same command, kept because both are written down elsewhere.
+acceptance: ## Run A01-A20, the extra gates, and print the pass/fail matrix
 	$(PY) scripts/acceptance_matrix.py
+
+acceptance-matrix: acceptance ## Print the A01-A20 pass/fail matrix
+
+# Run the suite without the matrix, for iterating on one item.
+acceptance-raw: ## Run the acceptance suite, no matrix
+	$(VENV)/bin/pytest tests/acceptance -m acceptance
 
 # The checks that decide whether the tree is acceptable: the linter for style
 # and likely mistakes, and the type checker for the interfaces between modules.
@@ -81,6 +91,22 @@ gateway: ## Run the RAVEL Gateway
 
 tui: ## Run the local Textual TUI
 	$(VENV)/bin/python -m ravel.tui
+
+# The four below are how a deployment is run rather than tested. `up` is the
+# whole of V0: infrastructure, migrations, the Gateway, the execution worker,
+# and the console a person sits at.
+up: ## Start RAVEL V0 on this machine (infra, Gateway, worker, TUI)
+	scripts/run_v0.sh
+
+worker: ## Run the execution worker; V0 registers the mock compute and lab backends
+	$(PY) scripts/run_worker.py
+
+project: ## Drive one project to an ending; make project PROJECT=<project_id>
+	@test -n "$(PROJECT)" || { echo "usage: make project PROJECT=<project_id>"; exit 2; }
+	$(PY) scripts/run_project.py --project $(PROJECT)
+
+account: ## Create an account; make account ARGS="--username ada --new-project ..."
+	$(PY) scripts/create_account.py $(ARGS)
 
 clean: ## Remove caches and build output
 	rm -rf .pytest_cache .ruff_cache build dist

@@ -46,6 +46,51 @@ RAVEL V0 的唯一标准开发、验收和生产基准环境是 **Ubuntu 24.04 L
 3. 首先完成 DSH Integration Spike，拉取**开发当天真实当前版本**并 pin tag/commit
 4. 严格按 V0 acceptance matrix 开发到全部通过
 
+## 部署与运行
+
+V0 已经实现并在单台 Ubuntu 24.04 CVM 上验证。完整说明见 `DEPLOYMENT.md`；下面是实际命令。
+
+```bash
+# 1. 环境（幂等；校验 DSH 是否为 vendor/DSH_PIN.json 钉住的版本）
+scripts/bootstrap_ubuntu.sh
+
+# 2. 配置：只有一个文件，且不进 Git
+cp .env.example .env && $EDITOR .env
+
+# 3. 启动：基础设施 + Gateway + 执行 worker + TUI
+make up
+
+# 4. 第一个账号与第一个 Project（账号只能在主机上开，密码走终端提示）
+make account ARGS="--username ada \
+  --new-project --title '…' --objective '…'"
+
+# 5. 让某个 Project 跑起来
+make project PROJECT=<project_id>
+```
+
+`make up` 是 START_PROMPT 要求的「一条命令启动 V0」：它起 PostgreSQL / Temporal / MinIO、跑 migration、起 Gateway 和 worker，然后进入本地 Textual TUI。不加 `--project` 就不启动任何 Project —— **V0 没有调度器，哪个 Project 运行是人的决定**。所有端口只绑 `127.0.0.1`。
+
+`DEEPSEEK_API_KEY` 为空时服务照常启动，但 Master 与 Review 无法完成任何 turn，Project 不会规划也不会 Review：这是设计行为，不是降级模式。没有 `RAVEL_RESEARCH_CONTACT_EMAIL` 时 A03/A04 会 skip。
+
+### 测试
+
+```bash
+make lint          # ruff check src tests + pyright src tests（唯一门禁）
+make acceptance    # 跑 A01–A20 与 7 个额外 gate，打印 pass/fail 矩阵
+scripts/test_all.sh  # lint → unit → integration → DSH gate（需要 DEEPSEEK_API_KEY）
+```
+
+**同一台机器上绝不并发跑两个 pytest 进程**：它们共用 `ravel_test`，进入时都会 TRUNCATE。
+
+### 交付文档
+
+- `IMPLEMENTATION_REPORT.md`：实现报告，逐阶段与门禁
+- `TEST_REPORT.md`：测试报告与真实数字
+- `KNOWN_LIMITATIONS.md`：已知限制，逐条说明「不要由此推断什么」
+- `DSH_INTEGRATION_REPORT.md`：DSH 集成与 pin 的验证记录
+- `SECURITY_NOTES.md`：安全姿态与未关闭风险
+- `DEPLOYMENT.md`：部署、配置、运行、测试的完整说明
+
 ## 目录
 
 - `START_PROMPT.md`：唯一启动提示词
