@@ -84,6 +84,51 @@ class ProjectStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class ProjectOutcome(StrEnum):
+    """How a project ended, in the words `acceptance/V0_ACCEPTANCE.md` A20 uses.
+
+    The same four facts as the terminal `ProjectStatus` values, under the names
+    the acceptance criterion is written in — and the mapping is a property
+    rather than a convention, because a reader checking A20 against the code
+    should find the four words in one place instead of translating between two
+    vocabularies.
+
+    It exists as its own enum for the reason every closed vocabulary here does:
+    the outcome is a decision Master records, and a decision that named its
+    ending as a project status would be recording a database field rather than
+    a scientific conclusion. `TERMINATED` and `FAILED` are the pair most worth
+    keeping apart — one says the work was stopped, the other says the answer
+    was no — and a status enum that spells them `CANCELLED` and `FAILED` makes
+    that easy to conflate.
+    """
+
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    TERMINATED = "TERMINATED"
+
+    @property
+    def status(self) -> ProjectStatus:
+        """The project status this ending is recorded as."""
+        return {
+            ProjectOutcome.SUCCESS: ProjectStatus.COMPLETED,
+            ProjectOutcome.FAILED: ProjectStatus.FAILED,
+            ProjectOutcome.INCONCLUSIVE: ProjectStatus.INCONCLUSIVE,
+            ProjectOutcome.TERMINATED: ProjectStatus.CANCELLED,
+        }[self]
+
+    @property
+    def is_termination(self) -> bool:
+        """Whether this ending stops work rather than concluding it.
+
+        The one ending a project may reach with nodes still unfinished. The
+        others are statements about results, and a result that does not exist
+        yet is not one — so `conclude` refuses them while work is in flight and
+        cancels the work for this one.
+        """
+        return self is ProjectOutcome.TERMINATED
+
+
 class EvidenceSourceTier(StrEnum):
     """Source quality tiers, A (strongest) to D (weakest)."""
 
@@ -178,6 +223,7 @@ class DecisionType(StrEnum):
     RESOLVE_DEVIATION = "RESOLVE_DEVIATION"
     ACCEPT_RESULT = "ACCEPT_RESULT"
     REJECT_RESULT = "REJECT_RESULT"
+    CONCLUDE_INCONCLUSIVE = "CONCLUDE_INCONCLUSIVE"
     TERMINATE_PROJECT = "TERMINATE_PROJECT"
     RESOLVE_APPROVAL = "RESOLVE_APPROVAL"
 

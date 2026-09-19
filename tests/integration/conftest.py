@@ -316,8 +316,21 @@ class Prepared:
         )
 
 
-@pytest.fixture
-def prepare(database: Database, project) -> Callable[..., Prepared]:
+def build_prepared(
+    session: Session,
+    *,
+    project_id: str,
+    node_type: NodeType = NodeType.COMPUTATION,
+    required_outputs: tuple[str, ...] = DEFAULT_OUTPUTS,
+    allowed_actions: tuple[str, ...] = ("run_measurement",),
+    allowed_ranges: dict[str, str] | None = None,
+    allowed_substitutions: tuple[str, ...] = (),
+    allowed_retries: int = 0,
+    criteria: tuple[str, ...] = ("Conductivity rises by at least 15%.",),
+    with_acceptance: bool = True,
+    freeze_acceptance: bool = True,
+    cleared: bool = True,
+) -> Prepared:
     """Build a READY node with frozen contracts, the way production does.
 
     Assembled through the same repositories production uses, because the
@@ -326,99 +339,132 @@ def prepare(database: Database, project) -> Callable[..., Prepared]:
     never frozen, and the run would then be exercising a state the system
     cannot reach.
 
+    A function rather than only a fixture, because *which transaction* this
+    runs in is not a detail. Most packages here take a session per operation
+    and the fixture below is right for them; Master holds one session for the
+    whole of a decision, so its tests have to build their nodes inside it. Two
+    open transactions writing events for one project serialise on the event
+    counter — which does not fail, it waits, and a test that waits reads as a
+    hang rather than as a mistake about transactions.
+
+    `with_acceptance=False` writes no acceptance criteria at all, which is what
+    a RESEARCH node has. `freeze_acceptance=False` writes them and leaves them
+    unfrozen, which is a state production can reach for a node whose criteria
+    were revised and not yet re-frozen — and which the two are kept apart for:
+    the system's lookup is by node, so a contract that exists is found whether
+    or not the node's binding names it.
+
+    `cleared=False` leaves a COMPUTATION or EXPERIMENT node without the
+    pre-flight review it needs to enter RUNNING, which is the state a node is
+    in while it waits to be reviewed. The default is the cleared one because
+    "ready to run" is what almost every caller means by preparing a node, and
+    the gate that refuses an uncleared one is asserted in
+    `tests/integration/review/test_pre_run_gate.py` rather than here.
+    """
+    dag = DagRepository(session, project_id)
+    node = dag.add_node(
+        DagNode.create(
+            project_id=project_id,
+            node_type=node_type,
+            objective="Measure conductivity across the dopant series.",
+            created_by="master",
+        ),
+        role=AgentRole.MASTER,
+        decision_ref="dec-1",
+    )
+    acceptance: AcceptanceContract | None = None
+    if with_acceptance:
+        acceptance = AcceptanceContract(
+            project_id=project_id,
+            node_id=node.node_id,
+            criteria=tuple(
+                AcceptanceCriterion(
+                    statement=statement,
+                    provenance=CriterionProvenance.USER_REQUIREMENT,
+                )
+                for statement in criteria
+            ),
+        )
+        acceptance_repository = AcceptanceContractRepository(session, project_id)
+        acceptance_repository.add(acceptance)
+        if freeze_acceptance:
+            acceptance_repository.freeze(acceptance.contract_id)
+        dag.bind_acceptance_contract(node.node_id, acceptance.contract_id)
+
+    contract = ExecutionContract(
+        project_id=project_id,
+        node_id=node.node_id,
+        objective="Measure the conductivity of each sample.",
+        allowed_actions=allowed_actions,
+        allowed_ranges=allowed_ranges or {},
+        allowed_substitutions=allowed_substitutions,
+        required_outputs=required_outputs,
+        allowed_retries=allowed_retries,
+    )
+    contracts = ExecutionContractRepository(session, project_id)
+    contracts.add(contract)
+    contracts.freeze(contract.contract_id)
+    dag.bind_execution_contract(node.node_id, contract.contract_id)
+
+    ready = dag.transition_node(node.node_id, NodeStatus.READY, actor_id="scheduler")
+    if cleared and requires_frozen_criteria(node_type):
+        _clear_for_running(
+            session,
+            project_id=project_id,
+            node=ready,
+            acceptance=acceptance,
+            contract=contract,
+        )
+    return Prepared(node=ready, acceptance=acceptance, contract=contract)
+
+
+@pytest.fixture
+def a_node(project: Project) -> Callable[..., DagNode]:
+    """Build a node in this project, the way production builds one.
+
+    Uncommitted: it returns the record a caller would hand to a mutation. That
+    is what makes it usable for a *replacement* — the node Master decides to
+    commit instead — as well as for a node a test is about to commit itself.
+
+    Shared, because building a node is not specific to the package that plans
+    them: the DAG tests plan with it, and Master's tests use it to describe
+    terms written for a different node.
+    """
+
+    def build(
+        node_type: NodeType = NodeType.RESEARCH,
+        *,
+        objective: str = "Survey the literature on the dopant series.",
+        **overrides: object,
+    ) -> DagNode:
+        node = DagNode.create(
+            project_id=project.project_id,
+            node_type=node_type,
+            objective=objective,
+            created_by="master",
+        )
+        return node.model_copy(update=overrides) if overrides else node
+
+    return build
+
+
+@pytest.fixture
+def prepare(database: Database, project: Project) -> Callable[..., Prepared]:
+    """A runnable node, built and committed in a transaction of its own.
+
     Shared by three gates — the mock backends, the review gate, and the
     headless loop — because all three start from a node that is ready to run,
     and three copies of "how a runnable node is built" would be three places
     for that to drift.
     """
 
-    def build(
-        *,
-        node_type: NodeType = NodeType.COMPUTATION,
-        required_outputs: tuple[str, ...] = DEFAULT_OUTPUTS,
-        allowed_actions: tuple[str, ...] = ("run_measurement",),
-        allowed_ranges: dict[str, str] | None = None,
-        allowed_substitutions: tuple[str, ...] = (),
-        allowed_retries: int = 0,
-        criteria: tuple[str, ...] = ("Conductivity rises by at least 15%.",),
-        with_acceptance: bool = True,
-        freeze_acceptance: bool = True,
-        cleared: bool = True,
-    ) -> Prepared:
-        """Build one.
-
-        `with_acceptance=False` writes no acceptance criteria at all, which is
-        what a RESEARCH node has. `freeze_acceptance=False` writes them and
-        leaves them unfrozen, which is a state production can reach for a node
-        whose criteria were revised and not yet re-frozen — and which the two
-        are kept apart for: the system's lookup is by node, so a contract that
-        exists is found whether or not the node's binding names it.
-
-        `cleared=False` leaves a COMPUTATION or EXPERIMENT node without the
-        pre-flight review it needs to enter RUNNING, which is the state a node
-        is in while it waits to be reviewed. The default is the cleared one
-        because "ready to run" is what almost every caller means by preparing a
-        node, and the gate that refuses an uncleared one is asserted in
-        `tests/integration/review/test_pre_run_gate.py` rather than here.
-        """
+    def build(**options: object) -> Prepared:
         with database.transaction() as session:
-            dag = DagRepository(session, project.project_id)
-            node = dag.add_node(
-                DagNode.create(
-                    project_id=project.project_id,
-                    node_type=node_type,
-                    objective="Measure conductivity across the dopant series.",
-                    created_by="master",
-                ),
-                role=AgentRole.MASTER,
-                decision_ref="dec-1",
-            )
-            acceptance: AcceptanceContract | None = None
-            if with_acceptance:
-                acceptance = AcceptanceContract(
-                    project_id=project.project_id,
-                    node_id=node.node_id,
-                    criteria=tuple(
-                        AcceptanceCriterion(
-                            statement=statement,
-                            provenance=CriterionProvenance.USER_REQUIREMENT,
-                        )
-                        for statement in criteria
-                    ),
-                )
-                acceptance_repository = AcceptanceContractRepository(
-                    session, project.project_id
-                )
-                acceptance_repository.add(acceptance)
-                if freeze_acceptance:
-                    acceptance_repository.freeze(acceptance.contract_id)
-                dag.bind_acceptance_contract(node.node_id, acceptance.contract_id)
-
-            contract = ExecutionContract(
+            return build_prepared(
+                session,
                 project_id=project.project_id,
-                node_id=node.node_id,
-                objective="Measure the conductivity of each sample.",
-                allowed_actions=allowed_actions,
-                allowed_ranges=allowed_ranges or {},
-                allowed_substitutions=allowed_substitutions,
-                required_outputs=required_outputs,
-                allowed_retries=allowed_retries,
+                **options,  # type: ignore[arg-type]
             )
-            contracts = ExecutionContractRepository(session, project.project_id)
-            contracts.add(contract)
-            contracts.freeze(contract.contract_id)
-            dag.bind_execution_contract(node.node_id, contract.contract_id)
-
-            ready = dag.transition_node(node.node_id, NodeStatus.READY, actor_id="scheduler")
-            if cleared and requires_frozen_criteria(node_type):
-                _clear_for_running(
-                    session,
-                    project_id=project.project_id,
-                    node=ready,
-                    acceptance=acceptance,
-                    contract=contract,
-                )
-            return Prepared(node=ready, acceptance=acceptance, contract=contract)
 
     return build
 
