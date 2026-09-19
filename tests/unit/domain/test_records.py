@@ -553,7 +553,7 @@ def test_an_admin_may_not_direct_the_research() -> None:
 
 
 def test_a_user_password_hash_is_not_required_at_creation() -> None:
-    assert User(username="shibo").password_hash is None
+    assert User(username="Jason").password_hash is None
 
 
 def test_an_agent_identity_defaults_to_its_role_name() -> None:
