@@ -95,7 +95,7 @@ fi
 
 start gateway "$REPO_ROOT/.venv/bin/uvicorn" ravel.gateway.app:create_app --factory \
     --host "${RAVEL_GATEWAY_HOST:-127.0.0.1}" --port "${RAVEL_GATEWAY_PORT:-8000}"
-start worker "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_worker.py"
+start worker "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_temporal_worker.py"
 
 if [[ -n "$PROJECT" ]]; then
     start project "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_project.py" \

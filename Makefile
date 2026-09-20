@@ -102,8 +102,11 @@ tui: ## Run the local Textual TUI
 up: ## Start RAVEL V0 on this machine (infra, Gateway, worker, TUI)
 	scripts/run_v0.sh
 
-worker: ## Run the execution worker; V0 registers the mock compute and lab backends
-	$(PY) scripts/run_worker.py
+worker: ## Run the Temporal execution worker; V0 registers the mock compute and lab backends
+	$(PY) scripts/run_temporal_worker.py
+
+supervisor: ## Run the unattended project supervisor
+	$(PY) scripts/run_supervisor.py
 
 project: ## Drive one project to an ending; make project PROJECT=<project_id>
 	@test -n "$(PROJECT)" || { echo "usage: make project PROJECT=<project_id>"; exit 2; }

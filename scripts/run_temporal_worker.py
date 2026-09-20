@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The process that runs a project's nodes, for a deployment rather than a test.
+"""The Temporal execution worker process, for a deployment rather than a test.
 
-    .venv/bin/python scripts/run_worker.py
-    .venv/bin/python scripts/run_worker.py --compute-scenario COMPUTE_FAILURE
+    .venv/bin/python scripts/run_temporal_worker.py
+    .venv/bin/python scripts/run_temporal_worker.py --compute-scenario COMPUTE_FAILURE
 
 Temporal is durable execution and RAVEL is the record: this process holds
 nothing that a restart would lose. Kill it mid-run and a replacement picks up
@@ -21,6 +21,7 @@ The scenarios are the acceptance catalogue's, by name. A deployment normally
 plays the successful path and is pointed at a failure scenario deliberately,
 to watch what the loop does about it.
 """
+
 
 from __future__ import annotations
 

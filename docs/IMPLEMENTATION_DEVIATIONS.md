@@ -44,8 +44,13 @@ Each entry:
   original design, not weaker.
 - **Acceptance behavior:** Equivalent or stronger. A02, A15, and A19 are unaffected; A19 (DAG
   authorization) is enforced twice — once by profile composition, once by the mutation service.
-- **Follow-up:** Re-evaluate at the next DSH re-pin. If a future SDK exposes preset selection or
-  session-scoped MCP servers, consolidate onto one host and retire this entry.
+- **Follow-up:** Re-evaluated at the next public tag (`dsh-v0.1.6-alpha.2`) on 2026-09-20. The
+  blockers persist: the Python SDK still exposes only `initialize` / `session/prompt` / `shutdown`;
+  `packages/sdk/server/src/server.ts:274-292` still creates sessions without joining an Agent Preset;
+  and `packages/mcp/mcp-client/src/tools.ts:138-141` still forwards tool calls without session/project
+  identity. The `alpha.2` tag has no release assets or PyPI wheels. The deviation therefore remains
+  in force. Re-evaluate again only when a future DSH release exposes preset selection or
+  session-scoped MCP servers through the Python SDK.
 
 ## D-002 — Role capabilities are exposed as Python MCP servers, not DSH-native tools
 

@@ -37,7 +37,7 @@ import sys
 
 from ravel.config import Settings
 from ravel.domain.roles import AgentRole
-from ravel.dsh.agents import HarnessAgent
+from ravel.dsh.agents import HarnessAgent, WorkerAgent
 from ravel.dsh.pool import create_pool
 from ravel.execution.loop import ProjectLoop
 from ravel.execution.node_runs import TemporalNodeRuns
@@ -74,6 +74,12 @@ async def drive(args: argparse.Namespace, settings: Settings) -> int:
     pool = create_pool(settings)
     master = HarnessAgent(pool=pool, project_id=project.project_id, role=AgentRole.MASTER)
     review = HarnessAgent(pool=pool, project_id=project.project_id, role=AgentRole.REVIEW)
+    compute_worker = WorkerAgent(
+        pool=pool, project_id=project.project_id, role=AgentRole.COMPUTE_WORKER
+    )
+    experimental_worker = WorkerAgent(
+        pool=pool, project_id=project.project_id, role=AgentRole.EXPERIMENTAL_WORKER
+    )
     execution = await TemporalNodeRuns.connect(database, settings)
 
     print(
@@ -88,14 +94,18 @@ async def drive(args: argparse.Namespace, settings: Settings) -> int:
             master=master,
             review=review,
             execution=execution,
+            compute_worker=compute_worker,
+            experimental_worker=experimental_worker,
             poll_seconds=args.poll_seconds,
             max_rounds=args.max_rounds,
         ).run()
     finally:
-        # Both scopes, and before the engine goes: a runtime left alive holds a
+        # Every scope, and before the engine goes: a runtime left alive holds a
         # session binding that would outlive the process that could serve it.
         master.close()
         review.close()
+        compute_worker.close()
+        experimental_worker.close()
         database.dispose()
 
     if run.halted:

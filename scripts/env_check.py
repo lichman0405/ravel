@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from ravel.config import get_settings  # noqa: E402
+from ravel.config import get_settings
 
 PASS = "\033[32m✓\033[0m"
 FAIL = "\033[31m✗\033[0m"
@@ -161,7 +161,7 @@ async def main() -> int:
     for check in checks:
         try:
             await check()
-        except Exception as exc:  # noqa: BLE001 - a failed check must not stop the rest
+        except Exception as exc:  # a failed check must not stop the rest
             name = check.__name__.removeprefix("check_").replace("_", " ")
             record(name, False, f"{type(exc).__name__}: {exc}")
             if get_settings().log_level.upper() == "DEBUG":

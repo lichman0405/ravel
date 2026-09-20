@@ -53,7 +53,7 @@ from ravel.execution.loop import Situation
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["HarnessAgent", "MasterConversation", "RoleSession"]
+__all__ = ["HarnessAgent", "MasterConversation", "RoleSession", "WorkerAgent"]
 
 
 @dataclass
@@ -335,6 +335,85 @@ class HarnessAgent(RoleSession):
             "the criteria."
         )
         return lines
+
+
+@dataclass
+class WorkerAgent(RoleSession):
+    """A task-scoped Worker reached as a DSH session.
+
+    The loop hands this agent one in-flight node at a time. The agent reads the
+    frozen Execution Contract and the record of what has happened, then uses the
+    Worker tools to ask the contract about anything the backend or operator
+    requested, or to send a message to the lab. It does not judge results, does
+    not change the plan, and does not answer scientific questions itself.
+
+    The actual backend calls stay in Temporal activities: this agent decides
+    what is permitted and what must be escalated; durable execution carries out
+    the work and survives this agent being restarted.
+    """
+
+    async def act(self, node: DagNode, situation: Situation) -> None:
+        """Run one monitoring or communication turn for the given node."""
+        outcome = await self.run(self._prompt(node, situation))
+        if not outcome.completed:
+            logger.warning(
+                "worker turn did not complete: project=%s role=%s node=%s session=%s "
+                "finish_reason=%s",
+                self.project_id,
+                self.role.value,
+                node.display_id,
+                self.session_id,
+                outcome.finish_reason,
+            )
+        logger.info(
+            "worker turn: project=%s role=%s node=%s turns=%d tool_calls=%d completed=%s",
+            self.project_id,
+            self.role.value,
+            node.display_id,
+            self._turns,
+            len(outcome.tool_calls),
+            outcome.completed,
+        )
+
+    def _prompt(self, node: DagNode, situation: Situation) -> str:
+        """What the Worker is told at the start of its turn."""
+        project = situation.project
+        lines = [
+            f"A turn of yours. Project {project.display_id} ({project.status.value}).",
+            f"You are serving as {self.role.display_name} for one task.",
+            "",
+            f"Node: {node.display_id} ({node.node_type.value})",
+            f"Node ID: {node.node_id}",
+            f"Status: {node.status.value}",
+            f"Objective: {node.objective}",
+            f"Execution contract: {node.execution_contract_ref}",
+        ]
+        if node.status is NodeStatus.WAITING_EXTERNAL:
+            lines.extend(
+                [
+                    "",
+                    "The task is waiting for something outside RAVEL. If you need to "
+                    "communicate with the lab, do so through the contract and your tools.",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "What to do this turn:",
+                "1. Read the frozen Execution Contract for this node.",
+                "2. Read the record of what has happened so far.",
+                "3. If the backend or operator has asked for something, use request_action "
+                "to ask the contract whether it is permitted. RAVEL answers; you do not.",
+                "4. If you are the Experimental Worker and need to send a message within "
+                "the contract, use send_message.",
+                "5. If the task is progressing and needs no intervention, say so and stop.",
+                "",
+                "Do not change the plan, do not judge whether a result passes, and do not "
+                "answer a scientific question yourself. A request the contract does not "
+                "explicitly permit is an escalation to Master.",
+            ]
+        )
+        return "\n".join(lines)
 
 
 @dataclass

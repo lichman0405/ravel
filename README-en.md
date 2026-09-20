@@ -258,10 +258,10 @@ V0 compute and lab are mocks; their behavior is controlled by scenarios:
 make worker ARGS="--compute-scenario COMPUTE_SCIENTIFIC_FAILURE --lab-scenario LAB_DEVIATION_PRESSURE"
 ```
 
-Available scenarios are listed at the top of `scripts/run_worker.py`, or run:
+Available scenarios are listed at the top of `scripts/run_temporal_worker.py`, or run:
 
 ```bash
-.venv/bin/python scripts/run_worker.py --help
+.venv/bin/python scripts/run_temporal_worker.py --help
 ```
 
 Defaults are `COMPUTE_SUCCESS` / `LAB_SUCCESS`. Every artifact produced by a mock is marked as simulated and cannot be used as real evidence in the Evidence Ledger.

@@ -258,10 +258,10 @@ V0 的 compute 和 lab 都是 mock，通过 scenario 决定行为：
 make worker ARGS="--compute-scenario COMPUTE_SCIENTIFIC_FAILURE --lab-scenario LAB_DEVIATION_PRESSURE"
 ```
 
-可用 scenario 见 `scripts/run_worker.py` 顶部，或运行：
+可用 scenario 见 `scripts/run_temporal_worker.py` 顶部，或运行：
 
 ```bash
-.venv/bin/python scripts/run_worker.py --help
+.venv/bin/python scripts/run_temporal_worker.py --help
 ```
 
 默认是 `COMPUTE_SUCCESS` / `LAB_SUCCESS`。mock 产生的所有 artifact 都会被标记为 simulated，不能作为 Evidence Ledger 的真实证据。

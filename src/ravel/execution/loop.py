@@ -39,11 +39,12 @@ and a loop that would wait forever hides it.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus, ProjectStatus, ReviewOutcome
+from ravel.domain.enums import NodeStatus, NodeType, ProjectStatus, ReviewOutcome
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.project import Project
 from ravel.domain.state_machines import TERMINAL_PROJECT_STATUSES, requires_frozen_criteria
@@ -51,6 +52,8 @@ from ravel.state.database import Database
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.repositories.records import DeviationRepository
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ExecutionPort",
@@ -60,6 +63,7 @@ __all__ = [
     "ProjectRun",
     "ReviewPort",
     "Situation",
+    "WorkerPort",
     "read_situation",
 ]
 
@@ -262,6 +266,15 @@ class ExecutionPort(Protocol):
         ...
 
 
+@runtime_checkable
+class WorkerPort(Protocol):
+    """Execution-side monitoring: read the contract/status and act inside it."""
+
+    async def act(self, node: DagNode, situation: Situation) -> None:
+        """One monitoring or communication turn for the given node."""
+        ...
+
+
 class LoopHalted(RuntimeError):
     """The loop stopped without the project reaching an ending."""
 
@@ -295,6 +308,8 @@ class ProjectLoop:
     master: MasterPort
     review: ReviewPort
     execution: ExecutionPort
+    compute_worker: WorkerPort | None = None
+    experimental_worker: WorkerPort | None = None
     #: How long to wait between rounds. Every round re-reads PostgreSQL, so this
     #: is the project's reaction time rather than a sleep: a node that finishes
     #: in an activity is noticed on the next round.
@@ -396,10 +411,65 @@ class ProjectLoop:
             await self.review.act(situation)
         for node in situation.runnable:
             await self.execution.start(node, actor_id="scheduler")
+        await self._worker_turns(situation)
         if self._awaiting_final_verdict(situation):
             await self.review.act(situation)
         if self._ready_to_conclude(situation):
             await self.master.act(situation)
+
+    async def _worker_turns(self, situation: Situation) -> None:
+        """Dispatch Worker agents for in-flight nodes that need attention.
+
+        A Worker turn is a monitoring/communication turn, not the durable
+        execution itself. The backend calls stay in Temporal; this agent decides
+        what is permitted and what must be escalated.
+        """
+        turns = self._worker_turn_list(situation)
+        if not turns:
+            return
+        results = await asyncio.gather(
+            *(worker.act(node, situation) for node, worker in turns),
+            return_exceptions=True,
+        )
+        for (node, _worker), result in zip(turns, results, strict=True):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "worker turn failed: project=%s node=%s error=%s",
+                    self.project_id,
+                    node.display_id,
+                    result,
+                    exc_info=result,
+                )
+
+    def _worker_turn_list(self, situation: Situation) -> list[tuple[DagNode, WorkerPort]]:
+        """Which in-flight nodes owe a Worker turn this round.
+
+        - WAITING_EXTERNAL always gets the Experimental Worker: a lab that is
+          waiting is a lab that may need a message.
+        - RUNNING gets a Worker when a deviation has already been raised on the
+          node, so the Worker can confirm or escalate rather than the loop
+          waiting silently.
+        """
+        if self.compute_worker is None and self.experimental_worker is None:
+            return []
+        deviations_by_node = {deviation.node_id for deviation in situation.open_deviations}
+        turns: list[tuple[DagNode, WorkerPort]] = []
+        for node in situation.nodes:
+            if node.status is NodeStatus.WAITING_EXTERNAL and node.node_type is NodeType.EXPERIMENT:
+                if self.experimental_worker is not None:
+                    turns.append((node, self.experimental_worker))
+            elif node.status is NodeStatus.RUNNING and node.node_id in deviations_by_node:
+                worker = self._worker_for(node.node_type)
+                if worker is not None:
+                    turns.append((node, worker))
+        return turns
+
+    def _worker_for(self, node_type: NodeType) -> WorkerPort | None:
+        if node_type is NodeType.COMPUTATION:
+            return self.compute_worker
+        if node_type is NodeType.EXPERIMENT:
+            return self.experimental_worker
+        return None
 
     @staticmethod
     def _ready_to_conclude(situation: Situation) -> bool:
