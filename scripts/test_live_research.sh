@@ -40,7 +40,7 @@ import httpx
 SOURCES = [
     ("Crossref", "https://api.crossref.org/works?rows=1"),
     ("OpenAlex", "https://api.openalex.org/works?per-page=1"),
-    ("arXiv", "https://export.arxiv.org/api/query?max_results=1"),
+    ("arXiv", "https://export.arxiv.org/api/query?search_query=all:electron&max_results=1"),
 ]
 reachable = []
 for name, url in SOURCES:

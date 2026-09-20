@@ -13,6 +13,10 @@ PIP := $(VENV)/bin/pip
 # this machine keeps it somewhere else.
 PYRIGHT ?= pyright
 
+# Source .env if it exists so credential-dependent targets work from a clean
+# shell. `scripts/test_all.sh` does this itself; the targets below do not.
+WITH_ENV := set -a; . ./.env 2>/dev/null || true; set +a;
+
 .PHONY: help bootstrap env-check dev-up dev-down migrate test test-unit \
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
         typecheck gateway tui acceptance-matrix acceptance-raw clean \
@@ -47,10 +51,10 @@ test-integration: ## Integration tests; requires make dev-up
 	$(VENV)/bin/pytest tests/integration -m integration
 
 test-dsh: ## Phase 0 DSH integration gate against a real pinned runtime
-	RAVEL_REQUIRE_DSH=1 $(VENV)/bin/pytest tests/dsh -m dsh
+	$(WITH_ENV) RAVEL_REQUIRE_DSH=1 $(VENV)/bin/pytest tests/dsh -m dsh
 
 test-live: ## Real-Internet research acceptance; never mocked
-	scripts/test_live_research.sh
+	$(WITH_ENV) scripts/test_live_research.sh
 
 test-e2e: ## Headless loop and TUI end-to-end tests
 	$(VENV)/bin/pytest tests/e2e -m e2e
