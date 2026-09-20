@@ -74,10 +74,10 @@ Two consequences worth naming:
   built on `httpcore.ConnectionPool` directly and mirrors what `HTTPTransport`
   does with the response. `tests/live_research` re-verified real Crossref,
   OpenAlex, arXiv and publisher TLS against it — that is what `d647084` records,
-  against the 11 cases the suite held then. It **does not re-run on this host**:
-  the suite requires a contact address it does not have, and now skips in full
-  rather than fetching anonymously. `KNOWN_LIMITATIONS.md` L-20 records what
-  that costs and how little it takes to close.
+  against the 11 cases the suite held then. The suite now holds 13 cases and
+  passes on this host once `RAVEL_RESEARCH_CONTACT_EMAIL` is set; without it the
+  suite still skips in full rather than fetching anonymously. `KNOWN_LIMITATIONS.md`
+  L-20 records what that costs and how little it takes to close.
 
 **Not fixed for the browser.** Playwright's connections are made inside a
 browser process this code does not own and cannot give a network backend to.

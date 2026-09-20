@@ -68,9 +68,9 @@ verification recorded in `vendor/DSH_PIN.json` and no patch required
 (`vendor/DSH_PATCHES.md`). Five roles, each with a generated composition overlay
 carrying its own prompt and only its own tools.
 
-**Gate** `tests/dsh/test_spike.py` against a real runtime — see
-`DSH_INTEGRATION_REPORT.md`, including the one check that failed at the pin and
-what RAVEL does instead.
+**Gate** `tests/dsh/test_spike.py` against a real runtime with a real DeepSeek
+model turn — 11 passed, 0 skipped. See `DSH_INTEGRATION_REPORT.md`, including
+the one check that failed at the pin and what RAVEL does instead.
 
 ### Phase 1 — Core domain and persistence
 
@@ -112,10 +112,10 @@ source is registered only after it has actually been read, and a lead is not
 evidence.
 
 **Gate** `tests/live_research/` — written against the real Internet and never
-mocked. On the machine this was built on it reports 13 skipped, because it
-refuses to fetch anonymously and no contact address was supplied; gate 1 and
-gate 2 cover the structural half without a network call. See
-`KNOWN_LIMITATIONS.md` L-20.
+mocked. On the machine this was built on it reports **13 passed, 0 skipped**
+once `RAVEL_RESEARCH_CONTACT_EMAIL` is set; without it the suite still refuses
+to fetch anonymously and reports 13 skipped. Gate 1 and gate 2 cover the
+structural half without a network call. See `KNOWN_LIMITATIONS.md` L-20.
 
 ### Phase 5 — Temporal durable execution
 

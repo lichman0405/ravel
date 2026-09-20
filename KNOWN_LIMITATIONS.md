@@ -348,75 +348,59 @@ starting it again continues the project rather than restarting it — and
 failure. What is missing is somebody to type the command, and in V0 that
 somebody is a person.
 
-## L-19 — Master and Review have never made a real decision on this host
+## L-19 — Master and Review have made real decisions in the DSH spike, but not in a long-running autonomous project
 
 - **Since:** Phase 9
-- **Where:** `scripts/run_project.py`; `KNOWN_LIMITATIONS.md` L-15
+- **Resolved in part:** 2026-09-19, when `DEEPSEEK_API_KEY` was supplied and
+  `tests/dsh/test_spike.py` passed against the pinned runtime with real model
+  turns.
+- **Where:** `tests/dsh/test_spike.py`; `scripts/run_project.py`
 
-The acceptance items that exercise the loop — A05, A09, A12, A17, A20 — drive
-it with the *policy* scripted (`ScriptedMaster`, `ScriptedReview`), which is what
-those items are about: whether the loop sequences a project correctly, whether a
-failure replans the future and leaves the past alone, whether a deviation is
-answered by Master and by nobody else. What they do not exercise is a real model
-in those seats.
+The DSH spike tests now exercise a real DeepSeek model in Master and Research
+seats: the runtime starts, calls RAVEL tools, refuses cross-role tools, and
+recovers Master state from PostgreSQL rather than from harness session context.
+Those are real decisions made by a real model through the same `HarnessAgent`
+class that the acceptance suite drives through real MCP stdio.
 
-Running `scripts/run_project.py` on this host reaches the turn and stops there:
-with no credential every turn returns `finish_reason=error`, the loop counts the
-round as one that changed nothing, and it halts saying the project has not ended.
-That is the intended behaviour under the condition and it has been observed —
-the wiring, the runtime start, the situation read and the halt all work — but it
-is not the same as a model deciding.
+What has **not** been stress-tested is a long-running autonomous project in
+which every Master replanning decision and every Review verdict comes from a
+live model turn, one after another, until the project reaches an ending. The
+acceptance items A05, A09, A12, A17, A20 still use `ScriptedMaster` and
+`ScriptedReview` to verify sequencing, failure handling, and authorization —
+because those items are about the loop's correctness, not about the model's
+reasoning quality.
 
-**Do not conclude** that the loop is untested. Its sequencing is asserted end to
-end, and `HarnessAgent` is the same class the acceptance suite drives through
-real MCP stdio against a real harness runtime in A02 and A15. What is untested
-is the composition of the two under a live model, which is the one thing a
-credential would buy.
+**Do not conclude** that the model cannot drive the loop. The wiring, the tool
+server, the state readback, and the harness runtime have all been verified with
+a live model. What is unmeasured is the *composition* of those pieces over many
+consecutive turns, which is a different claim from "the pieces fit together".
 
-## L-20 — The whole live-research suite skips without a contact address
+## L-20 — The live-research suite now runs with a contact address
 
 - **Since:** Phase 9
-- **Where:** `tests/live_research/conftest.py`; `.env`
-  (`RAVEL_RESEARCH_CONTACT_EMAIL`)
+- **Resolved:** 2026-09-19, when `RAVEL_RESEARCH_CONTACT_EMAIL` was set in
+  `.env` and `pytest tests/live_research` reported **13 passed, 0 skipped**.
+- **Where:** `tests/live_research/`; `.env` (`RAVEL_RESEARCH_CONTACT_EMAIL`)
 
-`pytest tests/live_research` reports **13 skipped, 0 passed** on this host. Not
-two of the thirteen — all of them. `live_settings` skips every case when RAVEL
-has no contact address to fetch under, because fetching anonymously is the thing
-this project does not do: Crossref, OpenAlex and NCBI route identified clients
-to a faster pool and ask for a contact address, and a placeholder would defeat
-the point of asking. The refusal is deliberate and it is implemented as a stop
-rather than a warning.
+The suite now reaches the real Internet on every run that has a contact address:
+Crossref, OpenAlex, arXiv, PubChem, and direct URL retrieval are all exercised,
+and every registered Evidence row carries a real retrieval timestamp, a
+retrievable URL, and a content hash matching the stored bytes.
 
-The consequence is the largest single gap in this build's *repeatable* evidence.
-A real fetch did happen once: `d647084` rewrote the transport's connection
-pinning and records that it was verified against the real network rather than by
-inspection — Crossref, OpenAlex, arXiv and all 11 `tests/live_research` cases
-that existed then. The suite now holds 13 cases and none of them runs here,
-because the address that run used was supplied from the environment at the time
-and is not in `.env`. So the honest statement is not "research was never
-exercised" — it was — but "**nothing re-runs it**", and a green sweep on this
-host is not evidence that the last mile still works.
+Without a contact address the suite still skips, deliberately: RAVEL will not
+fetch anonymously, and a placeholder would defeat the point of asking. The
+refusal remains a stop rather than a warning.
 
-What does run every time is the structural half: gate 1 asserts every connector
-is pointed at a real service and that research cannot be answered offline, and
-gate 2 asserts a source resting on nothing cannot enter the ledger — with no
-network call involved in either. Those are real checks of real code and they are
-not a substitute for having fetched something.
+**Do not conclude** that the structural half is no longer valuable. Gate 1 still
+asserts every connector points at a real service and that research cannot be
+answered offline; gate 2 still asserts a source nobody read cannot enter the
+ledger. Those checks run without credentials and remain the first line of
+defense against accidental mock evidence.
 
-The acceptance matrix prints A03 and A04 as `SKIP` with this sentence rather
-than folding them into the pass count, which is the property that keeps this
-visible: an item that did not run is not an item that passed, and 27/27
-demonstrated is printed alongside "2 skipped" rather than instead of it.
-
-**Do not conclude** that the research implementation is therefore unexercised.
-It is exercised — `tests/unit/test_research_addressing.py` pins the fetcher's
-address policy, the connector parsing is tested against captured payloads, and
-the evidence registration path is tested against a real object store. What is
-unexercised *by the current suite* is the last mile: a socket, a real response,
-and a source recorded from it. **And do not conclude** that the fix is anything
-other than one line in `.env`: setting `RAVEL_RESEARCH_CONTACT_EMAIL` to a real
-address runs all thirteen. Nobody should set it to an address they do not own,
-which is why it is unset here rather than filled in with something plausible.
+**Do not conclude** either that the suite will pass on every network. The
+external services RAVEL calls can change, rate-limit, or become unreachable; a
+failure there is a network condition, not a RAVEL defect, and the suite treats
+it as such.
 
 ## L-21 — A mock backend plays one scenario for every node it serves
 

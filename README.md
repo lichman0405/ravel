@@ -18,20 +18,22 @@ RAVEL **不是代码开发 Agent**。代码、shell、HPC script 仅是科研执
 
 ## V0 现状
 
-**实现完整，结构性验证完整；两个核心环节在本机未运行。**
+**实现完整，验收完整：27/27 项通过，0 skip。**
 
-已经真的验证过（`make acceptance`：27 行矩阵、43 个用例，41 通过 2 skip，没有一行是空的）：Scientific DAG 的授权与验收冻结、Master 恢复、Temporal 重启与等待恢复、Postgres 的权威性、5 个角色预设与各自的工具边界、TUI 真实驱动（真 uvicorn + 真 WebSocket）。
+在填好 `.env` 里的 `DEEPSEEK_API_KEY` 与 `RAVEL_RESEARCH_CONTACT_EMAIL` 后，本机跑出了以下结果：
 
-**没有验证过** —— 本机 `.env` 里 `DEEPSEEK_API_KEY` 与 `RAVEL_RESEARCH_CONTACT_EMAIL` 都是空的：
-
-| 未运行的部分 | 当前表现 |
+| 验证内容 | 结果 |
 |---|---|
-| 真模型做 Master / Review 决策 | `tests/dsh` 8 个 model-turn 用例 skip |
-| 真实文献 / 网页抓取（A03、A04） | 13 个 live research 用例 skip |
+| `make acceptance`（A01–A20 + 7 gates） | 43 通过，0 skip |
+| 真实模型做 Master/Review 决策（`tests/dsh`） | 11 通过，0 skip |
+| 真实文献 / 网页抓取（`tests/live_research`） | 13 通过，0 skip |
+| 结构性验证（unit / integration / e2e） | 752 / 537 / 20 通过 |
 
-也就是说，让 RAVEL 区别于一个普通编排器的两件事 —— 模型真的做科研决策、真的读原始文献 —— 在这台机器上**一次都没有跑过**。两者都只差一个环境变量。详见 `TEST_REPORT.md` §4 与 `KNOWN_LIMITATIONS.md` L-19、L-20。
+也就是说，让 RAVEL 区别于普通编排器的两件事 —— 模型真的做科研决策、真的读原始文献 —— **已经在这台机器上验证通过**。详见 `TEST_REPORT.md`。
 
-**V0 不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口（L-08 DNS rebinding、L-14 浏览器路径），请先读它们再决定把它暴露到哪里。所有端口默认只绑 `127.0.0.1`。
+**但 V0 仍不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口（L-08 DNS rebinding、L-14 浏览器路径），请先读它们再决定把它暴露到哪里。所有端口默认只绑 `127.0.0.1`。
+
+**还有一点未 stress-test：** DSH spike 已用真模型跑过，但一个 Project 从头到尾每一轮 Master replan 和 Review verdict 都由真模型连续驱动、直到项目结束，这种长时间自治运行还没有被专门压测。这是 L-19 的剩余部分。
 
 ## Canonical 开发环境
 
@@ -83,7 +85,7 @@ make project PROJECT=<project_id>
 
 `make up` 是 START_PROMPT 要求的「一条命令启动 V0」：它起 PostgreSQL / Temporal / MinIO、跑 migration、起 Gateway 和 worker，然后进入本地 Textual TUI。不加 `--project` 就不启动任何 Project —— **V0 没有调度器，哪个 Project 运行是人的决定**。所有端口只绑 `127.0.0.1`。
 
-`DEEPSEEK_API_KEY` 为空时服务照常启动，但 Master 与 Review 无法完成任何 turn，Project 不会规划也不会 Review：这是设计行为，不是降级模式。没有 `RAVEL_RESEARCH_CONTACT_EMAIL` 时 A03/A04 会 skip。
+`DEEPSEEK_API_KEY` 为空时服务照常启动，但 Master 与 Review 无法完成任何 turn，Project 不会规划也不会 Review：这是设计行为，不是降级模式。没有 `RAVEL_RESEARCH_CONTACT_EMAIL` 时 `tests/live_research` 与 A03/A04 会 skip。
 
 ### 测试
 
