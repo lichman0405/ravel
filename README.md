@@ -1,5 +1,7 @@
 # RAVEL V0 — Autonomous Scientific Research Runtime
 
+**[English](README-en.md) | 中文**
+
 **RAVEL = Research Autonomous Validation & Execution Loop**
 
 RAVEL V0 是一个运行在单台 Ubuntu 24.04 CVM 上的自主科研执行 Runtime。它接收自然语言的研究/产业需求，将其形式化为科学问题，进行真实的网络/API/数据库研究，构建动态 Scientific DAG，调度计算与实验执行，独立 Review，并由 Master 在证据约束下持续重规划，直到 Project 进入 `SUCCESS`、`FAILED`、`INCONCLUSIVE` 或 `TERMINATED`。
