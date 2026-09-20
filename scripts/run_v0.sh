@@ -2,22 +2,21 @@
 #
 # Start RAVEL V0 on one machine.
 #
-#   scripts/run_v0.sh                    infrastructure, Gateway, worker, TUI
-#   scripts/run_v0.sh --project <id>     the same, and drive that project
+#   scripts/run_v0.sh                    infrastructure, Gateway, worker, supervisor, TUI
+#   scripts/run_v0.sh --project <id>     the same, but drive only that project
 #   scripts/run_v0.sh --no-tui           the same without the console (a server)
 #
-# Four processes, and the order matters only in that the Gateway and the worker
-# both need the database to be reachable. Everything else about them is
-# independent: the Gateway serves the console, the worker executes nodes, and a
-# project's loop asks Master and Review what to decide. Stopping this script
-# stops the three it started; the containers are `scripts/dev_down.sh`'s.
+# Four processes by default, and the order matters only in that the Gateway and
+# the worker both need the database to be reachable. Everything else about them
+# is independent: the Gateway serves the console, the worker executes nodes, the
+# supervisor discovers and drives active projects, and the TUI is the console a
+# person sits at. Stopping this script stops the children it started; the
+# containers are `scripts/dev_down.sh`'s.
 #
-# Nothing here is a supervisor. It is a development and single-host deployment
-# convenience: if a child dies, this reports the exit and stops the rest rather
-# than restarting into a state nobody is watching.
-#
-# A project is not started by this script unless `--project` names one, because
-# which projects run is an operator's decision and there is no scheduler in V0.
+# With `--project` the script drives a single named project through
+# `scripts/run_project.py`. Without `--project` it starts the unattended
+# `scripts/run_supervisor.py`, which discovers every active project and drives
+# each one until it ends.
 
 set -euo pipefail
 
@@ -100,6 +99,8 @@ start worker "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_temporal_work
 if [[ -n "$PROJECT" ]]; then
     start project "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_project.py" \
         --project "$PROJECT"
+else
+    start supervisor "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_supervisor.py"
 fi
 
 printf '\n\033[1mRAVEL V0 is up.\033[0m\n'
@@ -109,8 +110,7 @@ printf '  logs      runtime/logs/\n'
 if [[ -n "$PROJECT" ]]; then
     printf '  driving   project %s\n' "$PROJECT"
 else
-    printf '\n  drive a project with:\n'
-    printf '    .venv/bin/python scripts/run_project.py --project <project_id>\n'
+    printf '  supervisor discovering active projects\n'
 fi
 printf '\n'
 

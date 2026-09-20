@@ -131,9 +131,10 @@ make up
 2. 应用数据库 migrations 到 head；
 3. 启动 Gateway（HTTP/WebSocket）；
 4. 启动执行 worker；
-5. 打开本地 Textual TUI。
+5. 启动 Project Supervisor（自动发现所有活跃 Project 并驱动）；
+6. 打开本地 Textual TUI。
 
-退出 TUI（`q` 或 `Ctrl-C`）会同时停止 Gateway、worker 和本脚本启动的 loop，但容器会继续运行。停止容器用 `make dev-down`。
+退出 TUI（`q` 或 `Ctrl-C`）会同时停止 Gateway、worker、supervisor 和本脚本启动的 loop，但容器会继续运行。停止容器用 `make dev-down`。
 
 `DEEPSEEK_API_KEY` 为空时服务也会启动，但 Master 与 Review 无法完成任何 turn，Project 不会规划也不会 Review —— 这是设计行为，不是降级模式。
 
@@ -143,13 +144,17 @@ make up
 # 无 TUI，作为后台服务运行
 scripts/run_v0.sh --no-tui
 
-# 启动时同时驱动某个 Project
+# 启动 unattended Project Supervisor（不指定 project）
+.venv/bin/python scripts/run_supervisor.py
+
+# 启动时同时驱动某个 Project（不启动 supervisor）
 scripts/run_v0.sh --project <project_id>
 
 # 单独启动某个组件
-make gateway   # Gateway + hot-reload
-make worker    # 执行 worker
-make tui       # 纯 TUI 客户端（需 Gateway 已在运行）
+make gateway     # Gateway + hot-reload
+make worker      # Temporal 执行 worker
+make supervisor  # 无人值守 Project Supervisor
+make tui         # 纯 TUI 客户端（需 Gateway 已在运行）
 ```
 
 ### 服务与端口（全部绑在 127.0.0.1）
@@ -211,18 +216,28 @@ make account ARGS="--username bench --project <project_id> \
 
 ### 驱动 Project 运行
 
+V0 现在默认通过无人值守的 **Project Supervisor** 驱动所有活跃 Project：
+
+```bash
+make supervisor
+# 或
+.venv/bin/python scripts/run_supervisor.py
+```
+
+Supervisor 会：
+
+- 定期轮询 PostgreSQL，发现所有未结束且未暂停的 Project；
+- 为每个 Project 创建 Master、Review、Compute Worker、Experimental Worker 的 DSH session；
+- 进入 loop：启动运行、等待结果、在需要决策/评审/Worker 沟通时调用对应 Agent；
+- 直到 Project 结束或连续多轮无进展。
+
+如需只驱动单个 Project（例如调试或 CI）：
+
 ```bash
 make project PROJECT=<project_id>
 # 或
 .venv/bin/python scripts/run_project.py --project <project_id>
 ```
-
-V0 **没有调度器**，哪个 Project 运行是人的决定。`run_project.py` 会：
-
-- 读取 PostgreSQL 中的 project 状态；
-- 为 Master 和 Review 各创建一个 DSH agent；
-- 进入 loop：启动运行、等待结果、在需要决策时调用 Master/Review；
-- 直到 project 结束或连续多轮无进展。
 
 常用参数：
 

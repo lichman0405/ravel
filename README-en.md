@@ -131,9 +131,10 @@ This is `scripts/run_v0.sh`. It will:
 2. Apply database migrations to head;
 3. Start the Gateway (HTTP/WebSocket);
 4. Start the execution worker;
-5. Open the local Textual TUI.
+5. Start the Project Supervisor (discovers and drives every active Project);
+6. Open the local Textual TUI.
 
-Quitting the TUI (`q` or `Ctrl-C`) stops the Gateway, worker, and loop started by this script, but leaves the containers running. Stop containers with `make dev-down`.
+Quitting the TUI (`q` or `Ctrl-C`) stops the Gateway, worker, supervisor, and loop started by this script, but leaves the containers running. Stop containers with `make dev-down`.
 
 If `DEEPSEEK_API_KEY` is empty, services still start, but Master and Review cannot take any turn, so a Project will not plan or review — this is by design, not a degraded mode.
 
@@ -143,13 +144,17 @@ If `DEEPSEEK_API_KEY` is empty, services still start, but Master and Review cann
 # No TUI, run as a background-like server
 scripts/run_v0.sh --no-tui
 
-# Also drive a specific project on startup
+# Start the unattended Project Supervisor (no project argument)
+.venv/bin/python scripts/run_supervisor.py
+
+# Also drive a specific project on startup (no supervisor)
 scripts/run_v0.sh --project <project_id>
 
 # Start individual components
-make gateway   # Gateway with hot-reload
-make worker    # Execution worker
-make tui       # TUI client only (requires Gateway already running)
+make gateway     # Gateway with hot-reload
+make worker      # Temporal execution worker
+make supervisor  # Unattended Project Supervisor
+make tui         # TUI client only (requires Gateway already running)
 ```
 
 ### Services and ports (all bound to 127.0.0.1)
@@ -211,18 +216,28 @@ Only a member already holding at least the target authority can grant it. The **
 
 ### Drive a Project
 
+V0 now defaults to driving every active Project through the unattended **Project Supervisor**:
+
+```bash
+make supervisor
+# or
+.venv/bin/python scripts/run_supervisor.py
+```
+
+The Supervisor will:
+
+- Poll PostgreSQL periodically and discover every Project that is not ended and not paused;
+- Create DSH sessions for Master, Review, Compute Worker, and Experimental Worker for each Project;
+- Enter the loop: start runs, wait for results, and call the right Agent when a decision, review, or Worker communication is needed;
+- Continue until the Project ends or stalls for multiple rounds.
+
+To drive a single Project manually (for debugging or CI):
+
 ```bash
 make project PROJECT=<project_id>
 # or
 .venv/bin/python scripts/run_project.py --project <project_id>
 ```
-
-V0 **has no scheduler**; which Project runs is an operator's decision. `run_project.py` will:
-
-- Read project state from PostgreSQL;
-- Create a DSH agent for Master and another for Review;
-- Enter the loop: start runs, wait for results, and call Master/Review when decisions are needed;
-- Continue until the project ends or stalls for multiple rounds.
 
 Common parameters:
 
