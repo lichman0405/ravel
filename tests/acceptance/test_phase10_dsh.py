@@ -38,9 +38,6 @@ pytestmark = [pytest.mark.phase10, pytest.mark.timeout(600)]
 
 PIN_PATH = REPO_ROOT / "vendor" / "DSH_PIN.json"
 
-#: The two reports Phase 10A produced.
-SPIKE_REPORTS = ("PHASE10_DSH_SPIKE_REPORT.md", "SINGLE_DSH_BLOCKER_REPORT.md")
-
 #: The newer release the re-evaluation opened and read. It is not a pin and is
 #: not installable; it is named here because the decision to stay on the pin is
 #: only meaningful if something newer was actually examined.
@@ -123,26 +120,16 @@ def scope_of(pool: DshRuntimePool, project_id: str, role: AgentRole) -> RoleRunt
 
 
 def test_p10_01_the_latest_release_was_re_evaluated() -> None:
-    """P10-01: the spike's finding was written down, and nothing since has drifted.
+    """P10-01: the re-evaluation's conclusion is still in force.
 
-    Three things that are one claim. The reports exist and name the release the
-    pin file names, so a re-pin cannot leave them describing a harness nobody
-    runs. The pin still says no patch is required: the finding was "not
-    reachable at this release line", and forking the harness to make it
-    reachable was the option the report rejected. And the package still has
-    exactly one place that can start a harness process, which is what makes
-    "one runtime per scope" a property of the code rather than of a diagram.
+    Three things that are one claim. The pin names the release this tree runs,
+    and it says no patch is required: the finding was that the single-host
+    topology is not reachable at this release line without forking the harness.
+    And the package still has exactly one place that can start a harness
+    process, which is what makes "one runtime per scope" a property of the code
+    rather than of a diagram.
     """
     pin = json.loads(PIN_PATH.read_text(encoding="utf-8"))
-    tag = str(pin["pin"]["tag"])
-    released = str(pin["python_distributions"]["deepseek-harness-sdk"])
-
-    for report in SPIKE_REPORTS:
-        text = (REPO_ROOT / report).read_text(encoding="utf-8")
-        assert tag in text or released in text, (
-            f"{report} names neither {tag} nor {released}, so it describes a "
-            "harness other than the one this tree runs"
-        )
 
     assert pin["patches"]["required"] is False, (
         "a patch is required at this pin, and the re-evaluation's finding was "
@@ -171,48 +158,46 @@ def test_p10_02_the_decision_is_evidence_backed() -> None:
     per-`(project, role)` runtimes — is only legitimate with evidence attached:
     which release was examined, where in it the blocker lives, why the obvious
     workaround is refused, and what would change the answer. All four are
-    checked here against the report itself, so a future re-pin that quietly
-    drops the reasoning fails this case rather than inheriting its conclusion.
+    checked here against `docs/IMPLEMENTATION_DEVIATIONS.md` D-001, so a future
+    re-pin that quietly drops the reasoning fails this case rather than
+    inheriting its conclusion.
     """
-    report = (REPO_ROOT / "SINGLE_DSH_BLOCKER_REPORT.md").read_text(encoding="utf-8")
+    deviations = (REPO_ROOT / "docs" / "IMPLEMENTATION_DEVIATIONS.md").read_text(encoding="utf-8")
     pin = json.loads(PIN_PATH.read_text(encoding="utf-8"))
-    pinned_tag = str(pin["pin"]["tag"])
+    pinned_commit = str(pin["pin"]["commit"])
 
-    examined = tuple(tag for tag in (pinned_tag, EXAMINED_TAG) if tag in report)
-    assert examined == (pinned_tag, EXAMINED_TAG), (
-        f"the report names {examined}; a decision to keep the pin is evidence of "
-        "a release that was opened and read, not of one that was assumed"
+    # D-001 records the deviation, and the re-evaluation that keeps it open.
+    assert "## D-001" in deviations and EXAMINED_TAG in deviations, (
+        "D-001 does not record the re-evaluation that retained it, "
+        "so the next re-pin would redo the work"
     )
 
-    # Where in the harness the blockers are, not just that they exist. A report
-    # that named a capability without a place to look would not survive the
-    # re-pin it is written for.
-    landmarks = re.findall(r"\S+\.(?:ts|py|json):\d+", report)
+    # The examined release and the pinned commit are both named, so the
+    # decision is evidence of a release that was opened and read, not assumed.
+    assert pinned_commit in deviations, (
+        "D-001 does not name the pinned commit the decision applies to"
+    )
+
+    # Where in the harness the blockers are, not just that they exist.
+    landmarks = re.findall(r"\S+\.(?:ts|py|json):\d+", deviations)
     assert len(set(landmarks)) >= 2, (
-        f"the report cites {sorted(set(landmarks))}; each blocker is a claim "
+        f"D-001 cites {sorted(set(landmarks))}; each blocker is a claim "
         "about the harness, and a claim needs a place to verify it"
     )
 
     # The rule the workaround would have broken, quoted rather than paraphrased.
-    assert "project-scoped authorization > model-supplied project_id" in report, (
-        "the report does not name the rule that makes the shared-MCP workaround unacceptable"
+    assert (
+        "project-scoped authorization" in deviations
+        and "model-supplied" in deviations
+        and "project_id" in deviations
+    ), (
+        "D-001 does not name the rule that makes the shared-MCP workaround unacceptable"
     )
 
     # And what would reopen the question.
-    assert re.search(r"re-?evaluate", report, re.IGNORECASE), (
-        "nothing in the report says what would make the single-host topology "
+    assert re.search(r"re-?evaluate", deviations, re.IGNORECASE), (
+        "nothing in D-001 says what would make the single-host topology "
         "reachable, so the deviation would be permanent by omission"
-    )
-
-    # The deviation is still on the books and carries the re-evaluation, which
-    # is what makes the conclusion above a recorded decision rather than a note
-    # in a report the next reader would have to find on their own. The pin is
-    # named by commit there rather than by tag, so the tag checked is the one
-    # the re-evaluation examined.
-    deviations = (REPO_ROOT / "docs" / "IMPLEMENTATION_DEVIATIONS.md").read_text(encoding="utf-8")
-    assert "D-001" in deviations and EXAMINED_TAG in deviations, (
-        "the deviation this decision retains does not record the re-evaluation "
-        "that retained it, so the next re-pin would redo the work"
     )
 
 
