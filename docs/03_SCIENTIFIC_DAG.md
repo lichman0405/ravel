@@ -38,6 +38,34 @@ RAVEL keeps:
 
 Master should fully expand current stage and at most 1–2 next research stages when confidence supports it.
 
+The two are stored as two things. The roadmap is `RoadmapPhase` rows — a name, a
+position counting from 0, and what the stage is for — and Master writes them
+with `commit_roadmap_phase`. A project is created with no stages at all, so on a
+new project this is the first planning act, and a node cannot be committed to a
+stage that does not exist yet. The DAG is `DagNode` rows, each naming the stage
+it is work for.
+
+How far the DAG may reach is derived, never stored:
+
+- the current stage is the first one that is not settled — either it has no
+  nodes yet, or some of its nodes have not reached a terminal status;
+- the current stage and the two after it may be expanded into nodes, which is
+  the "1–2 next research stages" above;
+- a stage with nodes is settled once every one of them is terminal. PASSED,
+  FAILED and CANCELLED are all endings, so a stage whose work was cancelled is
+  behind the project rather than still under way;
+- if every stage is settled, the current stage is the last one, so a project
+  that has exhausted its roadmap can still be given follow-up work on the stage
+  it ended on.
+
+Nothing records which stages were expanded: that is a fact the DAG already
+carries, and a stored copy would be a second answer that could disagree with the
+first.
+
+Committing a stage writes no `DecisionRecord`; committing the nodes that expand
+it does. A decision records what changed among the nodes, and a stage on its own
+commits none.
+
 ## 4. Parallelism
 
 Native support:
@@ -141,3 +169,20 @@ Project-level:
 - unresolved critical uncertainty policy
 
 Frozen before formal execution; later changes are versioned and require Decision Record.
+
+它也是 Project 自己的生命周期所依据的那份记录，两个状态由它和 DAG 决定，
+不需要任何人记得去改：
+
+- 第一版由 Master 经 `commit_success_contract` 写下一版，
+  `SuccessContractRepository` 在同一个事务里把 Project 从 `CREATED`
+  推到 `CONTRACT_DEFINED` —— 一个 Project 不可能一边持有 frozen 的成功定义，
+  一边状态还说它没有；
+- `CONTRACT_DEFINED → EXECUTING` 发生在第一个 node 进入 `RUNNING` 时，
+  由 `DagRepository._apply_transition` 完成。Project 有没有开始，是 DAG
+  知道的事：所有写 node 状态的路径都经过这一个函数，所以
+  `begin_research` 和 Worker 的 `start_execution` 都不需要知道这件事。
+
+A20 的四个 ending 里，COMPLETED / FAILED / INCONCLUSIVE 都是 `EXECUTING`
+的出边，所以没有第二个状态，Project 就没有任何 ending 可以到达。记录
+ending 的是 `conclude_project`（Master 独有），它把结果交给
+`MasterService.conclude`；判据和拒绝理由都不变。

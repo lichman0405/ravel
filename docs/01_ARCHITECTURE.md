@@ -100,12 +100,37 @@ Isolation rules:
 - Authority checker
 - Compute Backend
 - Experiment Backend
+- Project Supervisor
 - authentication
 - event dispatcher
 - database repository layer
 - TUI
 
 They are deterministic software.
+
+### Control plane and data plane
+
+Phase 10 splits the runtime in two, and the split is the answer to "who drives a
+project when nobody is at a keyboard":
+
+```text
+Control plane   ProjectSupervisor (src/ravel/execution/supervisor.py)
+                发现 active project、给每个 project 一个 ProjectLoop、reap 结束的 loop。
+                它读 PostgreSQL 决定做什么，不决定科研问题，也不执行任何 node 的工作。
+                scripts/run_v0.sh 启动它；TUI 不是它。
+
+Data plane      ProjectLoop + 五类 Agent + Temporal + Backend
+                一个 node 的工作在这里发生：Worker Agent 在席位上说和问，
+                Temporal 保证 durable execution，Backend 真正干活（V0 是 mock）。
+```
+
+Supervisor 不持有科研权威，也不持有 worker 的权威：它只做“把仍然活跃的 project
+交给一个 loop”这一件事，loop 自己去问 DAG、问 contract、问 review。所以 supervisor
+挂掉不会丢失 project（重启后从 PostgreSQL 重新发现），而 loop 挂掉只影响那一个
+project——这是 P10-12 与 P10-10/P10-11 的差别。
+
+Loop 的数量与 project 的数量相同，而不是与 session 的数量相同：一个 project 的五个
+席位由同一个 loop 依次 dispatch，每个席位在自己的 `(project, role)` scope 里起 session。
 
 ## 6. Event model
 

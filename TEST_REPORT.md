@@ -38,20 +38,23 @@ Two warnings, both of which cost time when ignored:
 
 ## 2. Results
 
-Run on 2026-09-19 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
+Run on 2026-09-21 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
 set in `.env`:
 
 | Suite | Passed | Skipped | Failed | Exit |
 |---|---:|---:|---:|---|
-| `tests/unit` | 752 | 0 | 0 | 0 |
-| `tests/integration` | 537 | 0 | 0 | 0 |
+| `tests/unit` | 803 | 0 | 0 | 0 |
+| `tests/integration` | 538 | 0 | 0 | 0 |
 | `tests/dsh` | 11 | 0 | 0 | 0 |
 | `tests/e2e` | 20 | 0 | 0 | 0 |
 | `tests/live_research` | 13 | 0 | 0 | 0 |
 | `tests/acceptance` (`make acceptance`) | 43 | 0 | 0 | 0 |
+| `tests/acceptance -m phase10` (`make phase10-acceptance`) | 56 | 0 | 0 | 0 |
 
 `make acceptance` reports by *item* rather than by test, which is a different
-question from the one a pytest summary answers — see §3.
+question from the one a pytest summary answers — see §3. The same is true of
+`make phase10-acceptance`, whose 56 cases are the 36 behind the twenty `P10-`
+items plus the twenty worker items — see §3.1.
 
 ## 3. The acceptance matrix
 
@@ -103,6 +106,76 @@ other angle.
 
 27/27 demonstrated, 0 failed, 0 skipped, 0 missing (pytest exit 0)
 ```
+
+### 3.1 The Phase 10 matrix
+
+`make phase10-acceptance` runs the same script with `--phase phase10`, and prints
+a second table beside the first: the twenty `P10-` items, then the twenty
+`test_p10_wNN_...` worker items, each derived from the test name the same way.
+The worker items are printed separately rather than folded into `P10-04` / `P10-05`
+because the Compute and Experimental Worker items are architectural — *the seat
+exists* — and the worker items are the twenty properties of that seat that
+somebody would otherwise have to take on faith.
+
+```
+── RAVEL Phase 10 acceptance ──
+
+  PASS    P10-01  latest DSH re-evaluated                     1 passed
+  PASS    P10-02  single-host decision evidence-backed        1 passed
+  PASS    P10-03  five real DSH agent roles exist             7 passed
+  PASS    P10-04  Compute Worker live                         1 passed
+  PASS    P10-05  Experimental Worker live                    1 passed
+  PASS    P10-06  Compute Backend remains Mock                1 passed
+  PASS    P10-07  Lab Backend remains Mock                    1 passed
+  PASS    P10-08  no worker bypass                            1 passed
+  PASS    P10-09  worker contract enforcement                 1 passed
+  PASS    P10-10  worker death/recovery                       1 passed
+  PASS    P10-11  Master death/recovery                       1 passed
+  PASS    P10-12  Project Supervisor autonomous               6 passed
+  PASS    P10-13  no manual run_project requirement           2 passed
+  PASS    P10-14  long external wait/resume                   1 passed
+  PASS    P10-15  TUI disconnect does not stop project        1 passed
+  PASS    P10-16  multi-project isolation                     3 passed
+  PASS    P10-17  live five-agent autonomous certification    1 passed
+  PASS    P10-18  real Research provenance                    1 passed
+  PASS    P10-19  original A01-A20 remain green               1 passed
+  PASS    P10-20  one-command server startup                  3 passed
+
+── worker-level items ──
+
+  PASS    P10-W01  The supervisor's Worker seats are real DSH sessions, not scripts  1 passed
+  PASS    P10-W02  The Experimental Worker seat is a real DSH session               1 passed
+  PASS    P10-W03  Both Workers are task-scoped identities: the session is the task's 1 passed
+  PASS    P10-W04  A Worker is told about one task, not about the plan              1 passed
+  PASS    P10-W05  A Worker reaches only its own contract, and holds five tools between the two seats  1 passed
+  PASS    P10-W06  A Worker cannot mutate the Scientific DAG                        1 passed
+  PASS    P10-W07  A Worker cannot alter Acceptance Criteria                        1 passed
+  PASS    P10-W08  The Compute Worker's turn reaches the MockComputeBackend execution path  1 passed
+  PASS    P10-W09  The Experimental Worker's turn reaches the MockLabBackend execution path  1 passed
+  PASS    P10-W10  Every artifact a mock produced is marked simulated               1 passed
+  PASS    P10-W11  A simulated artifact cannot become Evidence                      1 passed
+  PASS    P10-W12  A retry the contract permits is carried out                      1 passed
+  PASS    P10-W13  An out-of-contract request is refused at the code layer           1 passed
+  PASS    P10-W14  An unauthorized substitution is refused                          1 passed
+  PASS    P10-W15  An experimental deviation escalates to Master rather than being answered by the Worker  1 passed
+  PASS    P10-W16  A Worker waiting on something external needs no live turn and no process  1 passed
+  PASS    P10-W17  A Worker's identity continues after a long wait ends              1 passed
+  PASS    P10-W18  A dead Worker session is rebuilt from authoritative execution state 1 passed
+  PASS    P10-W19  Two projects' Workers cannot reach each other's context, contract, or artifacts  1 passed
+  PASS    P10-W20  No run bypasses the Worker that owns it                           1 passed
+
+40/40 demonstrated, 0 failed, 0 skipped, 0 missing (pytest exit 0)
+```
+
+One row is expensive. `P10-17` is a live, unattended run of a whole project
+against real model turns, and on this machine it takes about twenty minutes and
+a real bill; it is the only item here that cannot be answered by reading code.
+Its most recent run ended `FAILED` in 20:12, with `executed_by` naming both
+`compute-worker` and `experimental-worker` and the two backends `mock-compute`
+and `mock-lab`. What a live run *cannot* end as, and why, is stated in
+`acceptance/PHASE10_ACCEPTANCE.md` under P10-17 and in `KNOWN_LIMITATIONS.md`
+L-19 — a COMPLETED ending would require a live Review to accept a `simulated`
+artifact as a real measurement, and it does not.
 
 ## 4. What used to be skipped, and now runs
 
@@ -212,6 +285,13 @@ output.
   of credentials. Re-running on a different network, a different DeepSeek
   account, or a different DSH release may surface different behavior.
 - The project loop has been observed with a real model in the DSH spike tests,
-  but a long-running autonomous project driven entirely by live Master/Review
-  turns has not been stress-tested end to end. The acceptance items verify the
-  policy and sequencing; prolonged autonomy is a separate question.
+  and as of Phase 10 it has also been observed as `P10-17`: one unattended run
+  of a whole project, twenty minutes, five live seats, ending `FAILED`. That is
+  one run, not stress-testing. Repetition, runs of hours rather than minutes,
+  and the endings that need a non-mock backend to reach are all outside what has
+  been measured. `KNOWN_LIMITATIONS.md` L-19 says so in the same words.
+- `40/40 demonstrated` is a claim about the tests that ran, not about the
+  science. Every live run of `P10-17` ends `FAILED`, `INCONCLUSIVE` or
+  `CANCELLED`, because V0's backends are mocks and a live Review will not accept
+  a `simulated` artifact as a measurement; a run reaching an ending says the
+  architecture carried the project there, not that the hypothesis was answered.

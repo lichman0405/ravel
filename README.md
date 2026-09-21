@@ -30,22 +30,25 @@ RAVEL V0 是一个运行在单台 Ubuntu 24.04 CVM 上的自主科研执行 Runt
 
 ## 项目现状
 
-**V0 实现完整，验收完整：27/27 项通过，0 skip。**
+**V0 实现完整，验收完整：27/27 项通过，0 skip；Phase 10 的 40 项同样 40/40 通过。**
 
 在填好 `.env` 里的 `DEEPSEEK_API_KEY` 与 `RAVEL_RESEARCH_CONTACT_EMAIL` 后，本机跑出的结果是：
 
 | 验证内容 | 结果 |
 |---|---|
 | `make acceptance`（A01–A20 + 7 个额外 gates） | 43 通过，0 skip |
+| `make phase10-acceptance`（P10-01–20 + 20 个 worker 项） | 56 通过，0 skip |
 | 真实模型做 Master/Review 决策（`tests/dsh`） | 11 通过，0 skip |
 | 真实文献 / 网页抓取（`tests/live_research`） | 13 通过，0 skip |
-| 结构性验证（unit / integration / e2e） | 752 / 537 / 20 通过 |
+| 结构性验证（unit / integration / e2e） | 803 / 538 / 20 通过 |
 
 让 RAVEL 区别于普通编排器的两件事 —— **模型真的做科研决策**、**真的读原始文献** —— 已经在这台机器上验证通过。详见 `TEST_REPORT.md`。
 
 **但 V0 还不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口（如 L-08 DNS rebinding、L-14 浏览器路径）。请先读它们，再决定把 RAVEL 暴露到哪里。默认所有端口只绑 `127.0.0.1`。
 
-> **唯一未完成的可选项：** DSH spike 已用真模型跑过，但“一个 Project 从头到尾每一轮 Master replan 和 Review verdict 都由真模型连续驱动直到结束”的长程自治 stress test 还没专门跑。这是 `KNOWN_LIMITATIONS.md` L-19 的剩余部分，不影响 V0 功能 completeness。
+> **长程自治已经跑通（Phase 10）。** `tests/acceptance/test_phase10_live.py::test_p10_17` 让一个 Project 从被 Supervisor 发现，一路走到 A20 的四种结局之一：全程无人值守、五个席位都是真实 DSH 会话、每一轮都是真实模型调用。最近一次跑了 20 分钟 —— 两个 Worker 各自驱动了一次真实执行（`mock-compute` 与 `mock-lab`），Review 在每个节点的 PRE_RUN 与 FINAL checkpoint 都给出了真实判决，Master 读了失败节点的判决后重规划、最后按自己冻结的 success contract 选择了结局。`KNOWN_LIMITATIONS.md` L-19 由此关闭。
+>
+> 一个必须说清楚的边界：V0 的两个 backend 都是 mock，mock 产物带 `simulated` 标记，真实 Review 会因此拒绝让它满足“真实测量”类的验收标准。**这是设计如此**，不是缺陷；代价是任何 live run 都只能以 FAILED 或 INCONCLUSIVE 收尾，不会 COMPLETED。
 
 ---
 
@@ -152,10 +155,20 @@ scripts/run_v0.sh --project <project_id>
 
 # 单独启动某个组件
 make gateway     # Gateway + hot-reload
-make worker      # Temporal 执行 worker
+make worker      # Temporal Execution Worker（不是 Agent，见下）
 make supervisor  # 无人值守 Project Supervisor
 make tui         # 纯 TUI 客户端（需 Gateway 已在运行）
 ```
+
+**退出 TUI 不会停止 RAVEL。** TUI 只是客户端：关闭它之后，Project Supervisor 仍然在发现并推进 ACTIVE 的 Project，直到项目自己结束。停止整个部署的是 `run_v0.sh` 上的 `Ctrl-C`。
+
+### 三个不能混为一谈的名字
+
+| 名字 | 是什么 |
+|---|---|
+| **Worker Agent** | 持有某个角色工具的 DSH session，即 Compute Worker Agent 与 Experimental Worker Agent。它按冻结的 Execution Contract 执行，不做任何科研决策。 |
+| **Temporal Execution Worker** | 托管 Temporal activity 的进程（`make worker`）。属于基础设施，没有任何权限，不属于五类 Agent。 |
+| **Backend** | 真正干活的东西。V0 里两个都是 mock：`MockComputeBackend` 与 `MockLabBackend`。 |
 
 ### 服务与端口（全部绑在 127.0.0.1）
 
@@ -227,9 +240,9 @@ make supervisor
 Supervisor 会：
 
 - 定期轮询 PostgreSQL，发现所有未结束且未暂停的 Project；
-- 为每个 Project 创建 Master、Review、Compute Worker、Experimental Worker 的 DSH session；
-- 进入 loop：启动运行、等待结果、在需要决策/评审/Worker 沟通时调用对应 Agent；
-- 直到 Project 结束或连续多轮无进展。
+- 为每个 Project 创建五类 Agent 的 DSH session：Master、Review、Compute Worker、Experimental Worker、Research；
+- 进入 loop：把每个节点交给 `NODE_EXECUTOR` 指定的席位（计算/实验交给两个 Worker，`RESEARCH` 节点交给 Research Agent），等待结果，在需要决策/评审/Worker 沟通时调用对应 Agent；
+- 直到 Project 结束或连续多轮无进展：一个没人回答的问题最多被问 `max_turns_per_question`（默认 3）次，之后 loop 停止发问并 halt，supervisor 在下一次 tick 重试——重试是有限次数的重试，不是每轮一次模型调用。
 
 如需只驱动单个 Project（例如调试或 CI）：
 
@@ -303,7 +316,8 @@ make test-integration # 需要先 make dev-up
 make test-e2e         # headless loop + TUI
 make test-dsh         # Phase 0 harness gate，需要 DEEPSEEK_API_KEY
 make test-live        # 真实网络研究，需要 RAVEL_RESEARCH_CONTACT_EMAIL
-make acceptance       # A01–A20 + 7 个额外 gate，打印 pass/fail 矩阵
+make acceptance          # A01–A20 + 7 个额外 gate，打印 pass/fail 矩阵
+make phase10-acceptance  # P10-01–P10-20 + 20 个 worker-level item，同一张矩阵
 ```
 
 `make lint` 里的 `pyright` 是 Node 工具，不在 venv 里。如未安装：
@@ -313,6 +327,8 @@ npm install -g pyright
 ```
 
 `make acceptance` 是 V0 最终门禁：它不仅报告“多少测试通过”，还会按 A01–A20 每个 item 打印矩阵，没有对应测试的 item 会被标为失败而不是空白。
+
+`make phase10-acceptance` 是同一件事的 Phase 10 版本：读 `acceptance/PHASE10_ACCEPTANCE.md`，打印 P10-01–P10-20 以及 20 个 worker-level item 的矩阵。Phase 10 的规定是**任何 SKIP / MISSING / FAIL 都不算完成**，所以它默认把两个需要真实模型的 item（P10-17 / P10-18）也算在内——没有 `DEEPSEEK_API_KEY` 时它们显示为 SKIP，而不是被隐藏到另一条命令里。
 
 ### 完整默认测试链
 

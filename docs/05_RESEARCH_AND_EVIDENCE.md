@@ -163,6 +163,15 @@ If inaccessible:
 
 Never invent missing text.
 
+What the implementation stores is narrower than the list above in one respect, and
+it is worth knowing before relying on it: the readable text kept for a source is a
+verbatim excerpt of at most 600 characters, produced only for HTML, and no tool
+reads a stored snapshot back. So RAVEL can prove which page it read — URL, time,
+hash, tier, access status — and cannot read that page again. A live Research
+session found the edge of this by identifying the single source carrying the
+answer to its question and being unable to read a word of it;
+`KNOWN_LIMITATIONS.md` L-25 has the evidence and the two candidate designs.
+
 ## 11. Research Completion Contract
 
 A RESEARCH node cannot be COMPLETE unless:

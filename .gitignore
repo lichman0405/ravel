@@ -88,6 +88,14 @@ tmp/
 .tmp/
 .cache/
 
+# ── Working notes that are not published ───────────────────────────────────
+# Raw live-run records and seat designs: written for the people doing the work,
+# quoted by KNOWN_LIMITATIONS.md and docs/ in substance rather than by citation,
+# and deliberately not part of what this repository publishes. They stay on disk;
+# they do not enter Git.
+PHASE10_LIVE_FINDINGS.md
+PHASE10_RESEARCH_SEAT_DESIGN.md
+
 # ── Editors / OS ───────────────────────────────────────────────────────────
 .idea/
 .vscode/

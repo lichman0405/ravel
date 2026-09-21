@@ -30,22 +30,25 @@ The only underlying harness is **DeepSeek Harness (DSH)**, pinned at `dsh-v0.1.5
 
 ## Project Status
 
-**V0 implementation is complete and fully accepted: 27/27 items passed, 0 skipped.**
+**V0 implementation is complete and fully accepted: 27/27 items passed, 0 skipped — and Phase 10's 40 items at 40/40.**
 
 After filling in `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL` in `.env`, this machine produced:
 
 | Verification | Result |
 |---|---|
 | `make acceptance` (A01–A20 + 7 extra gates) | 43 passed, 0 skipped |
+| `make phase10-acceptance` (P10-01–20 + 20 worker items) | 56 passed, 0 skipped |
 | Real model in Master/Review seats (`tests/dsh`) | 11 passed, 0 skipped |
 | Real literature / web retrieval (`tests/live_research`) | 13 passed, 0 skipped |
-| Structural verification (unit / integration / e2e) | 752 / 537 / 20 passed |
+| Structural verification (unit / integration / e2e) | 803 / 538 / 20 passed |
 
 The two things that distinguish RAVEL from an ordinary orchestrator — **a model that really makes scientific decisions** and **real reading of primary sources** — have been verified on this machine. See `TEST_REPORT.md` for details.
 
 **However, V0 is not yet a production-ready artifact for public deployment.** `SECURITY_NOTES.md` and `KNOWN_LIMITATIONS.md` record gaps that are not yet fixed (e.g., L-08 DNS rebinding, L-14 browser path). Please read them before deciding where to expose RAVEL. By default all ports bind to `127.0.0.1`.
 
-> **The only remaining optional item:** the DSH spike has already been run with a real model, but a long-running autonomous stress test in which every Master replanning decision and every Review verdict is driven by a live model turn until the project ends has not been run specifically. This is the remaining part of `KNOWN_LIMITATIONS.md` L-19 and does not affect V0 functional completeness.
+> **Long-running autonomy now runs (Phase 10).** `tests/acceptance/test_phase10_live.py::test_p10_17` drives a project from the Supervisor discovering it to one of A20's four endings: unattended throughout, all five seats real DSH sessions, every turn a real model call. The most recent run took 20 minutes — both Workers drove a real execution (`mock-compute` and `mock-lab`), Review returned a live verdict at both the PRE_RUN and FINAL checkpoints, and Master read the verdict on a failed node, replanned, and chose the ending by the success contract it had frozen before any work ran. This closes `KNOWN_LIMITATIONS.md` L-19.
+>
+> One boundary has to be stated plainly: both V0 backends are mocks, mock output carries the `simulated` mark, and a live Review therefore refuses to let it satisfy a criterion written for a real measurement. **That is by design**, not a defect; the cost is that no live run can end COMPLETED — only FAILED or INCONCLUSIVE.
 
 ---
 
@@ -152,10 +155,22 @@ scripts/run_v0.sh --project <project_id>
 
 # Start individual components
 make gateway     # Gateway with hot-reload
-make worker      # Temporal execution worker
+make worker      # Temporal Execution Worker (not an agent — see below)
 make supervisor  # Unattended Project Supervisor
 make tui         # TUI client only (requires Gateway already running)
 ```
+
+**Closing the TUI does not stop RAVEL.** The console is a client: the Project
+Supervisor keeps discovering and driving active projects after you quit it.
+`Ctrl-C` on `run_v0.sh` is what stops the deployment.
+
+### Three names that are not the same thing
+
+| Name | What it is |
+|---|---|
+| **Worker Agent** | A DSH session holding a role's tools — the Compute Worker Agent or the Experimental Worker Agent. It acts under a frozen Execution Contract and decides no science. |
+| **Temporal Execution Worker** | The process hosting Temporal activities (`make worker`). Infrastructure, with no authority; not one of the five agents. |
+| **Backend** | The thing that does the work. In V0 both are mocks — `MockComputeBackend` and `MockLabBackend`. |
 
 ### Services and ports (all bound to 127.0.0.1)
 
@@ -227,9 +242,9 @@ make supervisor
 The Supervisor will:
 
 - Poll PostgreSQL periodically and discover every Project that is not ended and not paused;
-- Create DSH sessions for Master, Review, Compute Worker, and Experimental Worker for each Project;
-- Enter the loop: start runs, wait for results, and call the right Agent when a decision, review, or Worker communication is needed;
-- Continue until the Project ends or stalls for multiple rounds.
+- Create DSH sessions for all five agent roles — Master, Review, Compute Worker, Experimental Worker, and Research — for each Project;
+- Enter the loop: hand each node to the seat `NODE_EXECUTOR` names for it (computations and experiments to the two Workers, a `RESEARCH` node to the Research Agent), wait for results, and call the right Agent when a decision, review, or Worker communication is needed;
+- Continue until the Project ends or stalls for multiple rounds. A question nobody answers is asked at most `max_turns_per_question` times (three by default); the loop then stops asking and halts, and the supervisor retries on its next tick — a bounded retry, not a model call per round.
 
 To drive a single Project manually (for debugging or CI):
 
@@ -303,7 +318,8 @@ make test-integration # Requires make dev-up first
 make test-e2e         # Headless loop + TUI
 make test-dsh         # Phase 0 harness gate, requires DEEPSEEK_API_KEY
 make test-live        # Real network research, requires RAVEL_RESEARCH_CONTACT_EMAIL
-make acceptance       # A01–A20 + 7 extra gates, prints pass/fail matrix
+make acceptance          # A01–A20 + 7 extra gates, prints the pass/fail matrix
+make phase10-acceptance  # P10-01–P10-20 + 20 worker-level items, same matrix
 ```
 
 `make lint` uses `pyright`, which is a Node tool and not in the venv. If it is missing:
@@ -313,6 +329,8 @@ npm install -g pyright
 ```
 
 `make acceptance` is the final V0 gate: it not only reports how many tests passed, but also prints a matrix by A01–A20 item, and marks an item with no test as a failure rather than blank.
+
+`make phase10-acceptance` is the Phase 10 version of the same thing: it reads `acceptance/PHASE10_ACCEPTANCE.md` and prints the matrix for P10-01–P10-20 plus the twenty worker-level items. Phase 10's rule is that **any SKIP / MISSING / FAIL means the phase is not complete**, so the two items that need a live model (P10-17 / P10-18) are part of this run rather than behind a second command — without `DEEPSEEK_API_KEY` they show as SKIP.
 
 ### Full default test chain
 

@@ -329,51 +329,90 @@ command they will find.
 ## L-18 — The loop is a process, not a service
 
 - **Since:** Phase 9
-- **Where:** `src/ravel/execution/loop.py`; `scripts/run_project.py`
+- **Updated in Phase 10:** a loop now has something that starts it again —
+  `ProjectSupervisor` (`src/ravel/execution/supervisor.py`), started by
+  `scripts/run_v0.sh` or `make supervisor`.
+- **Where:** `src/ravel/execution/loop.py`; `src/ravel/execution/supervisor.py`;
+  `scripts/run_project.py`
 
-`make project PROJECT=<id>` drives one project until it ends or stops moving.
-There is no scheduler, and nothing restarts the loop if it exits: a project that
-should keep going is a project somebody runs the loop for again.
+`make project PROJECT=<id>` drives one project until it ends or stops moving,
+and `ProjectSupervisor` does the same for every active project without being
+told which. What has not changed is that both are *processes*: there is no
+service manager, no lease, and no queue of projects. A supervisor that exits —
+a crashed host, an operator's `Ctrl-C` — leaves its projects exactly where
+PostgreSQL says they are, and nothing starts it again until somebody does.
 
 `ProjectLoop` is deterministic RAVEL software — it reads state, starts runs,
-notices endings — and the two seats that require judgement are filled by agents
-on the pinned harness. That division is deliberate and is why there is no
-agent-shaped scheduler: which projects run is an operator's decision, not a
-model's.
+notices endings — and the seats that require judgement are filled by agents on
+the pinned harness. That division is deliberate and is why there is no
+agent-shaped scheduler: which projects run is a deployment's configuration, not
+a model's decision, and the supervisor decides nothing about the science.
 
-**Do not conclude** that a project is lost when the loop stops. Everything the
+**Do not conclude** that a project is lost when a loop stops. Everything the
 loop reads is in PostgreSQL and everything it started is in Temporal, so
 starting it again continues the project rather than restarting it — and
 `LoopHalted` is reported as "the project has not ended" rather than as a
-failure. What is missing is somebody to type the command, and in V0 that
-somebody is a person.
+failure. What a stopped loop needs is a process, and after Phase 10 that process
+is the supervisor rather than a person.
 
-## L-19 — Master and Review have made real decisions in the DSH spike, but not in a long-running autonomous project
+**Do not conclude** either that the supervisor makes a project move that does
+not want to. It re-drives a halted loop on its next tick, which is a retry, not
+progress: a project whose Master or Review has stopped answering is asked the
+same question again, costs what L-23 says it costs, and halts again.
+
+
+## L-19 — Live agents now drive a whole project, rather than only the DSH spike
 
 - **Since:** Phase 9
-- **Resolved in part:** 2026-09-19, when `DEEPSEEK_API_KEY` was supplied and
-  `tests/dsh/test_spike.py` passed against the pinned runtime with real model
-  turns.
-- **Where:** `tests/dsh/test_spike.py`; `scripts/run_project.py`
+- **Resolved:** 2026-09-21. `tests/acceptance/test_phase10_live.py::test_p10_17`
+  drives a project from discovery to one of A20's four endings with all five
+  seats as live DSH sessions, unattended, in about twenty minutes.
+- **Where:** `tests/acceptance/test_phase10_live.py`; `tests/dsh/test_spike.py`
 
-The DSH spike tests now exercise a real DeepSeek model in Master and Research
-seats: the runtime starts, calls RAVEL tools, refuses cross-role tools, and
-recovers Master state from PostgreSQL rather than from harness session context.
-Those are real decisions made by a real model through the same `HarnessAgent`
-class that the acceptance suite drives through real MCP stdio.
+The DSH spike tests had already shown that a real model could start a runtime,
+call RAVEL's tools, be refused a tool it does not hold, and recover Master state
+from PostgreSQL rather than from harness session context. What was unmeasured was
+the *composition*: many consecutive model turns, every replanning decision and
+every verdict live, until a project ended — and that is the thing a spike cannot
+show, because the failure modes that matter only appear once a plan is long
+enough to go wrong.
 
-What has **not** been stress-tested is a long-running autonomous project in
-which every Master replanning decision and every Review verdict comes from a
-live model turn, one after another, until the project reaches an ending. The
-acceptance items A05, A09, A12, A17, A20 still use `ScriptedMaster` and
-`ScriptedReview` to verify sequencing, failure handling, and authorization —
-because those items are about the loop's correctness, not about the model's
-reasoning quality.
+It has now been measured, twice, and the second time it passed. Both runs are
+recorded in working notes this repository does not publish, so what they showed
+is stated here rather than cited; between them the live Master cancelled a node
+its own failure had orphaned while quoting that node's required outputs by name,
+committed four replacement threads with parameters pre-registered in their own
+criteria, adapted a research task to a read ceiling nobody had told it about, and
+then chose between INCONCLUSIVE and FAILED by quoting the unresolved-uncertainty
+policy it had frozen before any work ran. That last paragraph is the one worth
+reading: *"every failure criterion in the contract is a claim about evidence of
+absence ... nothing supports the negative claim any more than it supports the
+positive one."*
 
-**Do not conclude** that the model cannot drive the loop. The wiring, the tool
-server, the state readback, and the harness runtime have all been verified with
-a live model. What is unmeasured is the *composition* of those pieces over many
-consecutive turns, which is a different claim from "the pieces fit together".
+What remains scripted is deliberate and is not this limitation. A05, A09, A12,
+A17 and A20 still use `ScriptedMaster` and `ScriptedReview`, because those items
+are about the loop's *correctness* — does a blocked node propagate, is an
+out-of-scope tool refused, does a join wait for every branch — and a live model
+is the wrong instrument for a question whose answer must not vary with the
+model's mood. The split is: scripted seats test the machinery, and `test_p10_17`
+tests whether the machinery is worth anything when the seats are real.
+
+**Do not conclude** that this makes a live run reproducible. It does not, and
+P10-17 is written knowing that: it asserts the *shape* of a run — a terminal
+ending, every seat reached, a plan, a verdict, an Execution Record — and not
+which ending or which plan, because those belong to the science. A passing live
+run is evidence that RAVEL can do this, not a guarantee about what it will do
+next time.
+
+**Do not conclude** either that a passing run means the science succeeded. Under
+V0's mock backends a COMPUTATION or EXPERIMENT node cannot pass a live Review —
+the artifacts are marked `simulated` and the judge declines to let them satisfy a
+criterion written for a real measurement — so every live run so far has ended
+FAILED or INCONCLUSIVE. That is the simulated marking doing its job, and the
+live Review's own words are where it is visible: the backend is `mock-compute`,
+every artifact carries the note *"produced by a mock backend; not a measurement
+and not admissible as evidence"*, and the judge declined to let the system's own
+disclaimer satisfy criteria written against real outputs.
 
 ## L-20 — The live-research suite now runs with a contact address
 
@@ -406,7 +445,8 @@ it as such.
 
 - **Since:** Phase 6
 - **Where:** `MockComputeBackend` / `MockLabBackend` in
-  `src/ravel/backends/mocks.py`; `--compute-scenario` in `scripts/run_worker.py`
+  `src/ravel/backends/mocks.py`; `--compute-scenario` in
+  `scripts/run_temporal_worker.py` (named `run_worker.py` before Phase 10)
 
 The scenario is fixed when the backend is constructed, and one backend instance
 serves every COMPUTATION node in the deployment. So a worker started with
@@ -428,3 +468,185 @@ either.
 **Do not conclude** that the mock is per-node-configurable and merely defaults
 to success. It is not configurable per node at all, and `--compute-scenario` is
 a property of the process.
+
+## L-22 — Every backend in V0 is a mock, and Phase 10 did not add a real one
+
+- **Since:** Phase 4, restated in Phase 10
+- **Where:** `src/ravel/backends/mocks.py` (`MockComputeBackend`,
+  `MockLabBackend`); the registry `scripts/run_temporal_worker.build_registry`
+  builds; `tests/acceptance/test_phase10_backends.py`
+
+Phase 10 put a live agent in each Worker seat, and the work those agents drive
+still runs on mocks. That is the phase's design, not an unfinished corner: V0's
+question is whether the *architecture* holds — five agents, separated powers, a
+durable run, an authoritative record — and a real instrument would answer a
+question about instruments while making every one of those harder to see.
+
+Written out, because "we only run mocks" is the kind of sentence that gets
+softer every time it is paraphrased:
+
+```text
+MockComputeBackend = YES
+MockLabBackend     = YES
+
+Real Slurm         = NO
+Real VASP          = NO
+Real LAMMPS        = NO
+Real GROMACS       = NO
+Real RASPA         = NO
+Real laboratory    = NO
+Real LIMS          = NO
+Robot lab          = NO
+```
+
+This is asserted rather than intended. The deployment's registry is checked to
+hold exactly those two classes, and the whole `ravel` package is walked for
+anything else with a backend's shape — a name and the five calls the durable
+layer makes — so an adapter that was written and never registered fails the
+same case as one that was registered.
+
+**Do not conclude** that a real backend is a configuration change away. It is a
+`WorkBackend` implementation *plus* the property that makes it safe to retry:
+`submit` must be idempotent in `(project_id, node_id, attempt)` (see L-01), and
+a real instrument is exactly where that is hard. The port is the easy half.
+
+**Do not conclude** either that a mock result is a result. Every artifact a mock
+produces is marked `simulated` in a column, and the Evidence Ledger refuses a
+simulated artifact as a source — so mock output can drive the loop without ever
+becoming a finding RAVEL cites.
+
+## L-23 — A question nobody answers stops the project, and the retry repeats
+
+- **Since:** Phase 10
+- **Where:** `src/ravel/execution/loop.py`
+  (`ProjectLoop.max_turns_per_question`, `_ask`); `src/ravel/execution/supervisor.py`
+
+Four of the loop's dispatches are questions rather than turns on a node's
+episode: whether the project can be ended, whether a result passes, whether a
+node may run, and what Master decides. Each is asked again while its condition
+holds, and asked at most `max_turns_per_question` times (three by default).
+After that the loop stops asking, counts its rounds as unmoved, and its stall
+detector ends the run as halted.
+
+That is the whole of the escalation. There is no backoff, no notification, and
+no fifth agent to notice: the supervisor's next tick re-drives the halted loop,
+which asks the same question three more times and halts again. A project in that
+state does not progress and does not end; it costs three model turns per
+attempt, and each attempt is `max_stalled_rounds` rounds of polling (sixty at
+the loop's default, so about thirty seconds at the deployment's half-second
+poll).
+
+**Do not conclude** that this bounds an unattended deployment's cost to a
+constant. It bounds it *per question per attempt* — the defect it replaced was
+one model call per round forever, measured at 4,756 turns in a minute — but a
+project whose seat has stopped answering is retried indefinitely, because
+stopping the retry would need a policy about how long a research project may
+wait, and V0 does not have one. What an operator has is the log line the loop
+writes once per exhausted question, and the project's status, which stays
+non-terminal.
+
+**Do not conclude** either that RAVEL cannot tell "stuck" from "working". It can,
+and reports the difference as a halt with the question named. What it does not
+do is *write* that into the project: a "stuck" status would put a runtime's
+problem into the scientific record, and whether a project that has stopped
+moving should be replanned, narrowed, or abandoned is a decision for a person —
+or for Master, once somebody tells it what happened.
+
+## L-24 — A run whose workflow dies leaves the node RUNNING, and nothing ends it
+
+- **Since:** Phase 10, found by a live run of `test_p10_17`
+- **Where:** `src/ravel/execution/temporal/workflows.py`
+  (`NodeRunWorkflow.run`, `_ACTIVITY_RETRY`); `src/ravel/execution/loop.py`
+  (`Situation.in_flight`, the stall counter in `ProjectLoop.run`)
+
+Every step of a run after planning is an activity — `start_job`, `check_job`,
+`finish_node_run` — and each is retried five times
+(`RetryPolicy(maximum_attempts=5)`) before the workflow fails. The last of them
+is the one that writes: `finish_node_run` records the Execution Record, the
+artifacts and the node's move to REVIEWING. If it exhausts its retries, the
+workflow ends as FAILED, the activity error is logged by the Temporal worker,
+and **PostgreSQL is left holding a node in RUNNING for a run that no longer
+exists.**
+
+Nothing recovers from that state, and the reason is the loop's own deliberate
+rule: a run in flight is not a stall, so rounds spent on it do not count toward
+`max_stalled_rounds` (`loop.py:482`). The supervisor re-drives a project that is
+not terminal, the loop reads the same RUNNING node, takes no turn that could move
+it, and waits again. A node in this state is not slow — it is unreachable, and
+the project cannot reach an ending while it holds one.
+
+Seen once, in a live run: a plan whose required output was a sentence rather
+than a file name made `finish_node_run` raise
+`ValueError` on all five attempts, and the item then spent forty-five minutes
+waiting for a workflow that had already died. The plan-side cause is fixed at the
+planning gate; this hole is not, because closing it is a design rather than a
+fix.
+
+**Do not conclude** that the fix is "catch the error in the activity". Catching
+it would hide the fault and still leave the node RUNNING. What recovery needs is
+three things RAVEL does not have. First, a liveness fact PostgreSQL can read: a
+stuck node has a status and nothing else — no Execution Record, since
+`finish_node_run` is what writes one and it never succeeded — and while the
+workflow id is derivable from the node and its contract version, "is this run
+still alive" can only be answered by asking Temporal, which the loop does not
+do and holds no client for. Second, a rule about who may write an Execution
+Record for a run that never reported: that write is a Worker's act in every
+other path, and `run once` for a node. Third, a termination vocabulary for it —
+`TerminationStatus` has no value for "RAVEL lost this run", and `FAILED` would
+attribute to the backend a failure that was RAVEL's own. Re-running is not the
+answer either: Temporal's workflow id carries `REJECT_DUPLICATE`, so a dead run
+cannot simply be started again, and running the work a second time is a decision
+that opens a new node or a new contract version.
+
+**Do not conclude** either that this is the same as L-23. L-23 is a question a
+seat does not answer, and the loop *does* notice it — it halts and says so. This
+is a run nothing can notice: the loop's answer to "what is this node waiting
+for" is `in_flight`, which is true and useless. Phase 11 should open with it.
+
+## L-25 — RAVEL keeps what it reads and gives no seat a way to read it back
+
+- **Since:** Phase 9, when the source gateway was built; found by a live run of
+  `test_p10_17` in Phase 10
+- **Where:** `src/ravel/research/fetching.py` (`EXCERPT_CHARS`, `excerpt_of`);
+  `src/ravel/mcp/tools/research.py` (`open_source`, `register_source`); the
+  absence of any tool that reads an artifact
+
+A source RAVEL opens is fetched for real, capped at `MAX_INLINE_BYTES = 8 MiB`,
+hashed, tiered, and written to the object store as a snapshot. What any session
+ever sees of it is `excerpt_of`'s output: at most `EXCERPT_CHARS = 600`
+characters, and only when the media type is HTML or XHTML — for a PDF, JSON,
+XML, or plain text it is the empty string. Of the thirty-one registered tools,
+not one returns stored bytes; `ArtifactStore` is reached only by
+`register_source`, to write.
+
+That is not an oversight in the excerpt. Its comment states the intent — *"enough
+to see that the page is about what the lead claimed; short enough that the
+excerpt is never mistaken for the source"* — and for its purpose it is right. The
+limitation is that it is the only reading surface there is. RAVEL can prove it
+read a page and cannot read the page.
+
+What it costs was measured in the live run this phase ended on: a RESEARCH node
+whose six frozen acceptance criteria asked for a solubility bound and a measured
+undoped baseline — two numbers that live in papers — found ten real sources,
+opened the ones that were open, and could produce neither, because the one source
+carrying the answer was behind a paywall and the rest were longer than six
+hundred characters of visible text. The verdict failed the node and said, in
+writing, that the access layer explained the failure without excusing it, which
+is the correct call. The science did not happen.
+
+One related mismatch lives beside it: `required_outputs` on a RESEARCH node names
+files, and the Research seat holds no tool that writes one, so those entries can
+never be artifacts. The live run's Review seat judged the delivered dossier on its
+content instead and said so — so the system absorbs it — but a contract field that
+nothing can satisfy is worse than an absent one.
+
+**Do not conclude** that the fix is to raise `EXCERPT_CHARS`. Six hundred
+characters is a considered number for a provenance excerpt, and what is missing is
+a *different* surface — a tool through which a seat can read a region of a
+snapshot it has already registered, bounded so that a session's context stays
+bounded. PDF text extraction is a separate decision with a dependency behind it.
+Nor is it obvious that a Research seat should be able to write files: giving it
+that tool and removing `required_outputs` from research contracts are two answers
+to one question about what that seat is for, and the live Review seat named both.
+Phase 10 wired the seat in and proved it takes real turns against the real
+Internet; what it may do with what it finds is Phase 11's.
