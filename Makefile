@@ -20,6 +20,7 @@ WITH_ENV := set -a; . ./.env 2>/dev/null || true; set +a;
 .PHONY: help bootstrap env-check dev-up dev-down migrate test test-unit \
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
         typecheck gateway tui acceptance-matrix acceptance-raw clean \
+        phase10-acceptance phase10-acceptance-raw \
         up worker project account
 
 help: ## Show this help
@@ -74,6 +75,20 @@ acceptance-matrix: acceptance ## Print the A01-A20 pass/fail matrix
 acceptance-raw: ## Run the acceptance suite, no matrix
 	$(VENV)/bin/pytest tests/acceptance -m acceptance
 
+# Phase 10's gate is the same shape over a second document: P10-01..P10-20, then
+# the twenty worker-level items, which are decided by the same rule — a worker
+# item nobody wrote a case for prints as MISSING rather than as nothing.
+#
+# The live items are in this run, not beside it. Two of the twenty are about
+# live agents and a live Internet, so they skip without `DEEPSEEK_API_KEY`; a
+# SKIP row is what the Phase 10 document says is not completion, and hiding them
+# behind a second command would make that easy to forget.
+phase10-acceptance: ## Run P10-01..P10-20 and the worker items, print the matrix
+	$(WITH_ENV) $(PY) scripts/acceptance_matrix.py --phase phase10
+
+phase10-acceptance-raw: ## Run the Phase 10 acceptance suite, no matrix
+	$(WITH_ENV) $(VENV)/bin/pytest tests/acceptance -m phase10
+
 # The checks that decide whether the tree is acceptable: the linter for style
 # and likely mistakes, and the type checker for the interfaces between modules.
 # `ruff format` is deliberately not one of them — the wrapping in this codebase
@@ -97,12 +112,17 @@ tui: ## Run the local Textual TUI
 	$(VENV)/bin/python -m ravel.tui
 
 # The four below are how a deployment is run rather than tested. `up` is the
-# whole of V0: infrastructure, migrations, the Gateway, the execution worker,
-# and the console a person sits at.
-up: ## Start RAVEL V0 on this machine (infra, Gateway, worker, TUI)
+# whole of V0: infrastructure, migrations, the Gateway, the Temporal Execution
+# Worker, and the console a person sits at. Closing that console leaves the rest
+# running, which is the point of having a supervisor.
+up: ## Start RAVEL V0 on this machine (infra, Gateway, Temporal Execution Worker, TUI)
 	scripts/run_v0.sh
 
-worker: ## Run the Temporal execution worker; V0 registers the mock compute and lab backends
+# The Temporal Execution Worker hosts activities. It is **not** an agent: RAVEL's
+# Compute Worker and Experimental Worker are DSH sessions that act under a
+# frozen contract, and this process has no authority at all. Named in full
+# wherever it is described, because "the worker" is two other things.
+worker: ## Run the Temporal Execution Worker (not an agent); V0 registers the mock compute and lab backends
 	$(PY) scripts/run_temporal_worker.py
 
 supervisor: ## Run the unattended project supervisor

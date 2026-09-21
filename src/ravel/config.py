@@ -21,6 +21,44 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+#: Settings that never travel to a tool server, named by field prefix.
+#:
+#: These configure the process that launches a session — the model client and
+#: the HTTP gateway — and a tool server is neither: the harness spawns it to
+#: answer tool calls over stdio, and it never speaks to a model or serves a
+#: request. The model credential is the harness's own, resolved per request
+#: from the launching process's environment, and a process that has no use for
+#: a secret should not be holding one.
+_LAUNCHER_ONLY = ("dsh_", "deepseek_", "gateway_")
+
+
+def _env_name(field_name: str, alias: str | None) -> str:
+    """The environment variable one settings field is read from.
+
+    The alias when the field has one, because two fields are not spelled the
+    way their variable is: the DSN override and the model key, whose names are
+    fixed by `POSTGRES_DSN` and by the harness's `apiKeyEnv` rather than by
+    this class's prefix.
+    """
+    return alias or f"RAVEL_{field_name.upper()}"
+
+
+def _env_value(value: object) -> str:
+    """One settings value, as an environment variable holds it.
+
+    `None` becomes the empty string: that is how `.env.example` ships an unset
+    optional key, and `Settings` reads a blank back as unset rather than as an
+    empty string. Booleans are spelled the way every other layer spells them,
+    so that a value read here and a value read from `.env` are the same string.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
 
 class Settings(BaseSettings):
     """RAVEL runtime configuration, resolved once per process."""
@@ -165,6 +203,47 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    def tool_server_env(self) -> dict[str, str]:
+        """The `RAVEL_*` variables a role's tool server must be launched with.
+
+        A tool server is a separate process: it does not inherit this object, it
+        reads the environment, and what it reads decides which PostgreSQL holds
+        the state the agent is acting on. Left to the environment alone it falls
+        back to `.env`, which is correct only while every process in a
+        deployment happens to read the same file — and wrong in exactly the case
+        that matters, where a supervising process was configured with
+        coordinates of its own. A session that read a different database than
+        its supervisor would be every authority rule in RAVEL read the wrong way
+        round: the tools would answer about a project that is not the one being
+        driven. A session that started its work on a different *task queue* is
+        the same fault one layer down, and quieter: the run is accepted, no
+        worker is listening for it, and the node waits forever on a node that
+        never starts.
+
+        Stated here rather than in the launcher because this is the object that
+        knows the answer, and stated as the *effective* values: the DSN override
+        is passed explicitly, as the empty string when there is none, so that an
+        ambient override in a developer's shell cannot outrank the settings the
+        parent process is using. The research contact address travels for the
+        same reason read the other way: a Research session fetches under
+        RAVEL's own User-Agent, and the address it names has to be the one this
+        deployment decided on.
+
+        The set is *derived* from the settings rather than written out, and the
+        rule is inverted on purpose: everything travels except what belongs to
+        the process that launches a session at all — see `_LAUNCHER_ONLY`. A
+        written list has to be remembered every time a setting is added, and
+        both failures this method exists for were a coordinate that decided
+        where a session's work landed and did not travel: the database first,
+        the task queue second. A list that is wrong by default is the one thing
+        this cannot be, so the default is that a new setting travels.
+        """
+        return {
+            _env_name(name, field.alias): _env_value(getattr(self, name))
+            for name, field in type(self).model_fields.items()
+            if not name.startswith(_LAUNCHER_ONLY)
+        }
 
     @staticmethod
     def _path_component(part: str) -> str:

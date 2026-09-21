@@ -24,7 +24,9 @@ from sqlalchemy.orm import Session
 from ravel.domain.contracts import AcceptanceCriterion, CriterionProvenance
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import Confidence, DecisionType, JoinPolicy, NodeType
+from ravel.domain.project import RoadmapPhase
 from ravel.mcp.context import ToolContext, as_json, require_master
+from ravel.state.repositories.projects import RoadmapRepository
 from ravel.state.services.dag import DagMutationService, DecisionDraft
 from ravel.state.services.terms import commit_terms
 
@@ -80,7 +82,13 @@ def _terms(spec: dict[str, Any]) -> NodeTermsSpec:
     return NodeTermsSpec(
         criteria=criteria,
         allowed_actions=tuple(str(action) for action in spec.get("allowed_actions") or ()),
-        required_outputs=tuple(str(name) for name in spec.get("required_outputs") or ()),
+        # Stripped because a name is a name: a stray space around one is a
+        # typo, not a different deliverable. Whether what is left could be a
+        # file name at all is `commit_terms`'s question, and it is asked there
+        # so that both contract writers go through it.
+        required_outputs=tuple(
+            str(name).strip() for name in spec.get("required_outputs") or ()
+        ),
         allowed_retries=int(retries),
         procedure=str(spec.get("procedure") or ""),
     )
@@ -277,8 +285,11 @@ def add_dag_node(context: ToolContext) -> Any:
         (`metric`, `threshold`, `provenance_ref` and `notes` are optional);
         `allowed_actions` is what the Worker may do without asking (an action
         that is not listed is refused, not assumed), `required_outputs` is what
-        the run must deliver for the result to be complete, and `allowed_retries`
-        is how many times an infrastructure failure may be retried.
+        the run must deliver for the result to be complete — each entry the
+        *name of a file*, such as `conductivity_vs_x.csv`, since that name is
+        what the run writes and the artifact is stored under — and
+        `allowed_retries` is how many times an infrastructure failure may be
+        retried.
 
         `roadmap_phase` must be a stage within the planning horizon; adding work
         to a stage further ahead is refused, and the refusal says which stages
@@ -319,6 +330,95 @@ def add_dag_node(context: ToolContext) -> Any:
     return add_dag_node
 
 
+def commit_roadmap_phase(context: ToolContext) -> Any:
+    """Write one stage of the roadmap: the plan above the DAG."""
+
+    async def commit_roadmap_phase(
+        name: str,
+        order: int,
+        intent: str,
+    ) -> dict[str, Any]:
+        """Add one stage to this project's roadmap.
+
+        The roadmap is the coarse half of the plan: the stages the project goes
+        through, in order, before any of them is detailed. A node is committed
+        as work for a stage by name, and `expand_dag_phase` can only expand a
+        stage that exists — so on a project with no roadmap this is the first
+        planning act, and nothing else can happen until it has been done.
+
+        `order` is the stage's position, counting from 0; it is how the horizon
+        is read, and the stage the project is on is the first one that is not
+        settled. `intent` says what the stage is for, in the terms the plan is
+        argued in — it is what a later reader has instead of the conversation.
+
+        A stage is deliberately coarse: RAVEL commits detailed work only to the
+        current stage and the two after it, so the rest of the roadmap is a
+        direction rather than a promise. Write the stages you can defend now;
+        the ones after the next results can be added later.
+
+        Returns the stage as written, together with the roadmap and the stages
+        that may now be expanded.
+        """
+        require_master(context, "commit_roadmap_phase")
+        phase_name = name.strip()
+        if not phase_name:
+            raise ValueError("a roadmap stage needs a name; a node names its stage by name")
+        if order < 0:
+            raise ValueError(f"a stage's order counts from 0; got {order}")
+        stated_intent = intent.strip()
+        if not stated_intent:
+            raise ValueError(
+                f"stage {phase_name!r} states no intent. Say what the stage is for: "
+                "a stage remembered only by its name is a plan nobody can argue with"
+            )
+        # Read before writing so the refusal names what the project already has.
+        # The uniqueness is a constraint on the table as well — this is the
+        # message, not the rule.
+        with context.read() as session:
+            existing = RoadmapRepository(session, context.project_id).phases()
+        taken = {phase.name: phase for phase in existing}
+        if phase_name in taken:
+            duplicate = taken[phase_name]
+            raise ValueError(
+                f"this project already has a stage named {phase_name!r} (order "
+                f"{duplicate.order}); it has {_stage_names(existing)}. Add work to it "
+                "with expand_dag_phase, or name a different stage"
+            )
+        if any(phase.order == order for phase in existing):
+            holder = next(phase for phase in existing if phase.order == order)
+            raise ValueError(
+                f"order {order} is already {holder.name!r}; it has {_stage_names(existing)}"
+            )
+        phase = RoadmapPhase(
+            project_id=context.project_id,
+            name=phase_name,
+            order=order,
+            intent=stated_intent,
+        )
+        # No Decision Record: a decision records what changed among the *nodes*,
+        # and a stage on its own commits none. The decision comes when the stage
+        # is expanded, and that is where the plan becomes checkable.
+        with context.write() as session:
+            written = RoadmapRepository(session, context.project_id).register(
+                phase, role=context.role
+            )
+            horizon = DagMutationService(session, context.project_id).horizon()
+        return {
+            "phase": as_json(written),
+            "roadmap": [as_json(item) for item in horizon.phases],
+            "current_phase": horizon.current.name if horizon.current else None,
+            "expandable_phases": list(horizon.reachable_names),
+        }
+
+    return commit_roadmap_phase
+
+
+def _stage_names(phases: Any) -> str:
+    """The stages a project has, for a refusal that has to be actionable."""
+    names = [f"{phase.name!r} (order {phase.order})" for phase in phases]
+    return ", ".join(names) if names else "no stages yet"
+
+
 def expand_dag_phase(context: ToolContext) -> Any:
     """Commit a stage's worth of nodes under one decision."""
 
@@ -335,8 +435,8 @@ def expand_dag_phase(context: ToolContext) -> Any:
         optionally `ref`, `dependencies`, `join_policy`, `join_threshold`, and
         the terms the node runs under: `criteria` (required for COMPUTATION and
         EXPERIMENT nodes — a list of objects with a `statement` and a
-        `provenance`), `allowed_actions`, `required_outputs`, `allowed_retries`
-        and `procedure`.
+        `provenance`), `allowed_actions`, `required_outputs` (each entry the
+        name of a file the run delivers), `allowed_retries` and `procedure`.
 
         A node's `dependencies` name nodes that already exist, or siblings in
         this same call — by the `ref` given to them here, since ids are not
@@ -422,6 +522,7 @@ def cancel_dag_node(context: ToolContext) -> Any:
 
 
 IMPLEMENTATIONS: dict[str, Any] = {
+    "commit_roadmap_phase": commit_roadmap_phase,
     "add_dag_node": add_dag_node,
     "expand_dag_phase": expand_dag_phase,
     "cancel_dag_node": cancel_dag_node,

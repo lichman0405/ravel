@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ravel.domain.roles import AgentRole
+from ravel.execution.node_runs import ExecutionService
 from ravel.mcp.scope import ToolScope
 from ravel.state.database import Database
 
@@ -33,17 +34,31 @@ class ToolContext:
 
     scope: ToolScope
     database: Database
+    #: The Execution Service, for the two roles whose tools may begin work.
+    #: Held rather than connected: a Worker session that only ever reads its
+    #: contract never opens a Temporal connection, and the one that starts a
+    #: run opens it on the call that needs it. A test passes its own, because
+    #: it is the settings that name the task queue the run must land on.
+    execution: ExecutionService | None = None
 
     @classmethod
     def from_environment(cls, environ: dict[str, str] | None = None) -> ToolContext:
         """Build the context this process was launched with.
 
+        The Execution Service comes with it for every role. Which roles may
+        *reach* it is the roster's answer rather than this class's — a Master
+        session holds no tool that starts a run, so its service is never
+        called, and branching here on the role would put a second copy of the
+        roster where nobody would think to look for it.
+
         Raises:
             ScopeError: The scope environment is missing or names an unknown role.
         """
+        database = Database.from_settings()
         return cls(
             scope=ToolScope.from_environment(environ),
-            database=Database.from_settings(),
+            database=database,
+            execution=ExecutionService(database=database),
         )
 
     @property

@@ -190,12 +190,19 @@ def _mounted_server(patch: list[dict[str, object]]) -> dict[str, Any]:
 
 
 def _composition(role: AgentRole, project_id: str, tmp_path: Path) -> RoleComposition:
-    """One role's runtime composition, built the way the pool builds it."""
+    """One role's runtime composition, built the way the pool builds it.
+
+    Settings and all: the state coordinates are part of the grant, so a
+    composition built without them would be a slightly different overlay from
+    the one a deployment writes, and this gate is about the one it writes.
+    """
+    settings = Settings()
     return RoleComposition.for_scope(
         project_id=project_id,
         role=role,
         mcp_command=sys.executable,
         brief_path=tmp_path / f"{role.value}.brief.json",
+        tool_server_env=settings.tool_server_env(),
     )
 
 

@@ -29,6 +29,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import pytest
 import uvicorn
@@ -90,22 +91,24 @@ from ravel.domain.project import Project, RoadmapPhase
 from ravel.domain.roles import AgentRole
 from ravel.execution.backends import BackendRegistry
 from ravel.execution.loop import ProjectLoop, ProjectRun, Situation
-from ravel.execution.node_runs import TemporalNodeRuns
+from ravel.execution.node_runs import ExecutionService
 from ravel.execution.temporal.client import NodeRunClient
 from ravel.gateway.app import create_app
 from ravel.gateway.auth.tokens import TokenService
 from ravel.gateway.conversation import Answer
 from ravel.gateway.stream import Cadence
 from ravel.master import ENDING_DECISION, MasterService, ReviseContract
+from ravel.mcp.context import ToolContext
+from ravel.mcp.scope import ToolScope
+from ravel.mcp.tools import IMPLEMENTATIONS
 from ravel.review import ReviewService
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
     ExecutionContractRepository,
-    SuccessContractRepository,
 )
 from ravel.state.repositories.dag import DagRepository
-from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
+from ravel.state.repositories.projects import RoadmapRepository
 from ravel.state.repositories.records import DeviationRepository, RecordRepositories
 from ravel.state.services.dag import DagMutationService, DecisionDraft
 from ravel.state.services.terms import commit_terms
@@ -213,31 +216,30 @@ class ScriptedMaster:
     def _plan(self, session: Session, situation: Situation) -> None:
         """Freeze what success means, start the project, commit the first stage.
 
-        Three moves, and the first two are the registry's: a project is CREATED
+        Two moves, and the first is the production one: a project is CREATED
         until something says what would make it succeed, and it cannot reach a
-        terminal status from CREATED — so a Master that planned without them
-        would build a DAG in a project that could never end.
+        terminal status from CREATED — so a Master that planned without it would
+        build a DAG in a project that could never end. `define_success` is the
+        act, through the same service the `commit_success_contract` tool calls,
+        because a script that wrote the row and moved the status by hand would
+        be covering for the product rather than exercising it: that is exactly
+        how the act came to exist in a fixture and nowhere else, and a live run
+        found the gap.
+
+        The move to EXECUTING is not here at all. It belongs to the first node
+        entering RUNNING, which is the DAG's statement that the project has
+        begun, and this script no longer makes it on the project's behalf.
         """
-        if situation.project.status.value == "CREATED":
-            SuccessContractRepository(session, self.project_id).add_version(
+        if situation.project.status is ProjectStatus.CREATED:
+            MasterService(session, self.project_id).define_success(
                 ProjectSuccessContract(
                     project_id=self.project_id,
                     success_criteria=("The dopant series shows a 15% conductivity gain.",),
                     failure_criteria=("No sample exceeds the control beyond noise.",),
                     unresolved_uncertainty_policy="Conclude inconclusive rather than guess.",
-                )
+                ),
+                role=AgentRole.MASTER,
             )
-            registry = ProjectRegistry(session)
-            for status, reason in (
-                (ProjectStatus.CONTRACT_DEFINED, "Success and failure criteria are frozen."),
-                (ProjectStatus.EXECUTING, "The first stage is ready to run."),
-            ):
-                registry.transition(
-                    self.project_id,
-                    status,
-                    actor_id=AgentRole.MASTER.value,
-                    reason=reason,
-                )
             self.trace.append("contract_defined")
 
         RoadmapRepository(session, self.project_id).register(
@@ -437,6 +439,50 @@ class ScriptedReview:
 
 
 @dataclass
+class ScriptedWorker:
+    """A Worker seat whose turns are scripted, over a real tool context.
+
+    Phase 10H makes the Worker Agent the entry point for work, which means an
+    end-to-end test that wants a node to run has to have a seat that starts it.
+    This is that seat, and it starts the run the way a live session does —
+    through `start_execution`, with the role check, the DAG's preconditions and
+    the Execution Service all real. Nothing below the seat is doubled, and no
+    scientific decision is scripted here: `start` decides nothing, and `act`
+    does nothing, which is exactly what a Worker that has found nothing to say
+    does.
+    """
+
+    project_id: str
+    role: AgentRole
+    context: ToolContext
+    #: The nodes it was asked to begin, and the live nodes it was handed.
+    started: list[str] = field(default_factory=list)
+    turns: list[tuple[str, str]] = field(default_factory=list)
+
+    #: The tool each role begins a task through, which is the same act under a
+    #: different name: a Worker hands its node to the Execution Service, and
+    #: Research takes its node into its own hands. Both refuse a node the DAG
+    #: has not cleared, and neither is a decision.
+    BEGIN: ClassVar[dict[AgentRole, str]] = {
+        AgentRole.COMPUTE_WORKER: "start_execution",
+        AgentRole.EXPERIMENTAL_WORKER: "start_execution",
+        AgentRole.RESEARCH: "begin_research",
+    }
+
+    async def start(self, node: DagNode) -> None:
+        self.started.append(node.node_id)
+        tool = self.BEGIN[self.role]
+        await IMPLEMENTATIONS[tool](self.context)(node_id=node.node_id)
+
+    async def act(self, node: DagNode, situation: Situation) -> None:
+        _ = situation
+        self.turns.append((node.node_id, node.status.value))
+
+    def close(self) -> None:
+        """The seat holds a tool context, not a runtime; nothing to release."""
+
+
+@dataclass
 class Headless:
     """A project the loop drives, with everything below the two agents real."""
 
@@ -447,6 +493,8 @@ class Headless:
     registry: BackendRegistry
     worker: RunningWorker
     client: NodeRunClient
+    #: The two Worker seats this project's loop drives, made on first use.
+    seats: dict[AgentRole, ScriptedWorker] = field(default_factory=dict)
 
     @classmethod
     async def start(
@@ -470,15 +518,23 @@ class Headless:
             client=client,
         )
 
-    def compute(self, scenario: str) -> None:
-        """Send computation nodes to the real mock, playing a named scenario."""
+    def compute(self, scenario: str, *, step_seconds: float = 0.2) -> None:
+        """Send computation nodes to the real mock, playing a named scenario.
+
+        `step_seconds` is how long the mock holds each state of the scenario, so
+        it is what decides when a run finishes: at the default, `COMPUTE_SUCCESS`
+        is RUNNING for under half a second. A case about a task that is *still
+        in flight* — a seat serving it, a restart happening around it — passes a
+        longer step, because "the computation is running" has to still be true
+        when the case looks.
+        """
         self.registry.register(
             NodeType.COMPUTATION,
             MockComputeBackend(
                 database=self.database,
                 store=self.store,
                 scenario=scenario,
-                step_seconds=0.2,
+                step_seconds=step_seconds,
             ),
         )
 
@@ -526,12 +582,37 @@ class Headless:
             project_id=self.project.project_id,
             master=master,
             review=review,
-            execution=await TemporalNodeRuns.connect(self.database, self.settings),
+            compute_worker=self.worker_seat(AgentRole.COMPUTE_WORKER),
+            experimental_worker=self.worker_seat(AgentRole.EXPERIMENTAL_WORKER),
+            research=self.worker_seat(AgentRole.RESEARCH),
             poll_seconds=poll_seconds,
             max_rounds=max_rounds,
             max_stalled_rounds=max_stalled_rounds,
         )
         return await loop.run()
+
+    def worker_seat(self, role: AgentRole) -> ScriptedWorker:
+        """One Worker seat over the real tools, memoized per role.
+
+        Memoized because a seat is per project and per role, and a second one
+        for the same project would be a second Worker: the point of the
+        `(project, role)` scope is that there is exactly one.
+        """
+        seat = self.seats.get(role)
+        if seat is None:
+            seat = ScriptedWorker(
+                project_id=self.project.project_id,
+                role=role,
+                context=ToolContext(
+                    scope=ToolScope(project_id=self.project.project_id, role=role),
+                    database=self.database,
+                    execution=ExecutionService(
+                        database=self.database, settings=self.settings
+                    ),
+                ),
+            )
+            self.seats[role] = seat
+        return seat
 
     def status_of(self, node: DagNode) -> NodeStatus:
         """A node's status, read fresh. The loop's own view of the project."""

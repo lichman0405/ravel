@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import CheckConstraint, inspect, text
@@ -42,12 +43,15 @@ from ravel.domain.contracts import (
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import ReviewRecord
 from ravel.domain.enums import (
+    AccessStatus,
+    EvidenceSourceTier,
     NodeStatus,
     NodeType,
     ReviewCheckpoint,
     ReviewOutcome,
     UserRole,
 )
+from ravel.domain.evidence import EvidenceSource
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import requires_frozen_criteria
@@ -63,6 +67,7 @@ from ravel.state.repositories.contracts import (
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
 from ravel.state.repositories.projects import ProjectRegistry
+from ravel.state.repositories.research import EvidenceSourceRepository
 from ravel.state.store import S3ArtifactStore
 from ravel.state.tables import Base
 
@@ -486,6 +491,47 @@ def prepare(database: Database, project: Project) -> Callable[..., Prepared]:
     return build
 
 
+#: When the sources these tests write were read. Fixed rather than `utcnow()`,
+#: so that a claim's `retrieved_at` is compared against a value the test chose
+#: instead of against whatever the clock said while it was running.
+READ_AT = datetime(2026, 9, 19, 12, 0, tzinfo=UTC)
+
+
+def a_source(
+    database: Database,
+    project_id: str,
+    *,
+    url: str,
+    tier: EvidenceSourceTier | None,
+    access_status: AccessStatus = AccessStatus.OK,
+) -> EvidenceSource:
+    """One source row, written through the repository the gateway writes through.
+
+    A source that was read carries a hash and the moment it was read; one RAVEL
+    could not open carries neither, which is the distinction the ledger is built
+    on and the one the domain type refuses to let anybody blur.
+
+    Shared by the two suites that need a ledger with something in it — the
+    Research one, where a claim is rated by its sources, and the Review one,
+    where a record has to have been assembled from some. Offline either way:
+    opening a URL is the live suite's job, and a rule that only holds when the
+    network is up is not a rule.
+    """
+    read = access_status is AccessStatus.OK
+    source = EvidenceSource(
+        project_id=project_id,
+        url=url,
+        title=url.rstrip("/").rsplit("/", 1)[-1],
+        access_status=access_status,
+        retrieved_at=READ_AT if read else None,
+        content_hash=f"sha256:{'ab' * 32}" if read else None,
+        media_type="text/html" if read else None,
+        tier=tier,
+    )
+    with database.transaction() as session:
+        return EvidenceSourceRepository(session, project_id).record(source)
+
+
 @pytest.fixture
 def research_task(
     database: Database, project: Project, prepare: Callable[..., Prepared]
@@ -500,9 +546,15 @@ def research_task(
     A RESEARCH node has no acceptance criteria: that is what `with_acceptance`
     is off for. What it runs under is the Execution Contract, which `prepare`
     freezes.
+
+    Written through `commit` rather than `add`, so the fixture goes through the
+    door Master's tool goes through. This row used to have no writer in the
+    product at all — only fixtures — which is how a live Research seat came to
+    be refused the terms of its own task; a fixture that could still write one
+    by a path nothing else uses would be keeping that gap open.
     """
     with database.transaction() as session:
-        ResearchContractRepository(session, project.project_id).add(
+        ResearchContractRepository(session, project.project_id).commit(
             ResearchContract(
                 project_id=project.project_id,
                 original_user_goal="Find a dopant that survives 500 hours under load.",
@@ -512,7 +564,8 @@ def research_task(
                 acceptance_strategy="Measure the series and compare against the baseline.",
                 known_constraints=("Bench time is limited.",),
                 prohibited_actions=("No testing on live reactors.",),
-            )
+            ),
+            role=AgentRole.MASTER,
         )
     return prepare(node_type=NodeType.RESEARCH, with_acceptance=False)
 

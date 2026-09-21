@@ -1,24 +1,36 @@
-"""Starting a node's run, as the project loop's execution port.
+"""Starting a node's run: the Execution Service, and the port under it.
 
-`ProjectLoop` sequences a project without executing anything; this is what it
-calls when the next thing to happen is that a node runs. The work itself
-happens in Temporal, in `NodeRunWorkflow`, and the durable layer already owns
-everything about it — the retry policy, the long waits, the activity that talks
-to a backend. What is added here is one method and one decision: that starting a
-run is not an error when a run of that node already exists.
+**Who starts a run.** The Worker Agent whose node it is — that is Phase 10H's
+chain, and it is why `ProjectLoop` holds no execution power at all:
 
-That is not a defensive special case. The loop reads the DAG, sees a node READY,
-and starts it; the node becomes RUNNING when the run's own activity writes the
-transition, which is a moment later. A loop that came round again in between
+    Supervisor → Worker Agent → authorized Worker tool → Execution Service
+    → Temporal → MockComputeBackend
+
+The Worker's tool handler calls `ExecutionService.start`; this module is what
+carries that call to Temporal. `TemporalNodeRuns` is the deployment's own
+handle, held by a process that already has a Temporal client; the service is
+what a caller holds when it may start a run but must not hold a client of its
+own — a Worker's tool server, which the harness spawns per session and which
+connects on the first call that needs one.
+
+Nothing here decides *whether* a node may run. That is the DAG's answer
+(`DagNode.can_enter_running`), checked by the tool handler before it gets here,
+because a service that also judged would be a second place where "this node may
+run" is decided.
+
+**A refusal is not an error.** The caller reads the DAG, sees a node READY, and
+starts it; the node becomes RUNNING when the run's own activity writes the
+transition, which is a moment later. A caller that came round again in between
 would see READY again, and a second start would be refused by Temporal — with
 the node running perfectly well. So a refusal is read for what it is: the work
-is under way, which is what the caller wanted.
+is under way, which is what the caller wanted, and `start` says so rather than
+raising.
 
 **A run is identified by the node and by the terms it executes.** The version
 travels with the start because the id Temporal will refuse a duplicate of is
-made of both, and the port is where the reading happens: the loop hands this
-class a node, and which contract governs that node is a fact PostgreSQL holds.
-Two starts of the same node under the same version are one run; a node whose
+made of both, and this module is where the reading happens: the caller hands it
+a node, and which contract governs that node is a fact PostgreSQL holds. Two
+starts of the same node under the same version are one run; a node whose
 contract Master revised runs again under the new version, which is what
 answering an escalation with a revision means. That run's attempts are numbered
 from one, because they are the attempts of the work *that version* describes.
@@ -26,8 +38,9 @@ from one, because they are the attempts of the work *that version* describes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ravel.config import Settings
 from ravel.domain.dag import DagNode
@@ -37,17 +50,17 @@ from ravel.state.repositories.contracts import ExecutionContractRepository
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["TemporalNodeRuns"]
+__all__ = ["ExecutionService", "TemporalNodeRuns"]
 
 
 @dataclass
 class TemporalNodeRuns:
-    """The loop's `ExecutionPort`, over Temporal."""
+    """The deployment's `ExecutionPort`, over Temporal."""
 
     database: Database
     client: NodeRunClient
-    #: Recorded on every run this port starts, so a reader can tell a node the
-    #: scheduler began from one a human did.
+    #: Recorded on every run this port starts, so a reader can tell which role
+    #: began a node from the actor on the run itself.
     actor_id: str = "scheduler"
 
     @classmethod
@@ -57,8 +70,13 @@ class TemporalNodeRuns:
         """Connect a client, with the converter both ends must agree on."""
         return cls(database=database, client=await NodeRunClient.connect(settings))
 
-    async def start(self, node: DagNode, *, actor_id: str | None = None) -> None:
-        """Begin this node's run, or note that one is already under way."""
+    async def start(self, node: DagNode, *, actor_id: str | None = None) -> bool:
+        """Begin this node's run, or say that one is already under way.
+
+        Returns:
+            True if this call started the run, False if the node already had
+            one under the same terms.
+        """
         try:
             await self.client.start_node_run(
                 project_id=node.project_id,
@@ -71,8 +89,11 @@ class TemporalNodeRuns:
                 "node %s already has a run under way; leaving it alone",
                 node.display_id,
             )
-            return
-        logger.info("started a run of node %s", node.display_id)
+            return False
+        logger.info(
+            "started a run of node %s as %s", node.display_id, actor_id or self.actor_id
+        )
+        return True
 
     def contract_version(self, node: DagNode) -> int:
         """Which version of the node's contract this run executes.
@@ -93,3 +114,62 @@ class TemporalNodeRuns:
                 .for_node(node.node_id)
                 .version
             )
+
+
+@dataclass
+class ExecutionService:
+    """Starting a node's run, for a caller that holds no Temporal client.
+
+    A Worker acts through tools, and its tools run in a server the harness
+    spawns for one session. That process is not the deployment: it should not
+    need a Temporal connection to answer a question about a contract, and most
+    of what a Worker asks never reaches execution at all. So the client is made
+    on the first call that needs one, and a session that only ever reads its
+    contract never opens a connection.
+
+    The connection is made once and kept, because a Worker's turns are spread
+    over the life of its task and reconnecting per call would pay setup on
+    every retry. Closing is the owner's: a process that made a connection is
+    the one that knows when it is done with it.
+    """
+
+    database: Database
+    #: The deployment's settings, or `None` to read them from the environment.
+    #: A test hands its own in, because it is the settings that name the task
+    #: queue the run must be started on for that test's worker to pick it up.
+    settings: Settings | None = None
+    _runs: TemporalNodeRuns | None = field(default=None, init=False, repr=False)
+    _connecting: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+
+    async def start(self, node: DagNode, *, actor_id: str) -> bool:
+        """Begin this node's run.
+
+        Returns:
+            True if this call started the run, False if one was already under
+            way under the same terms.
+        """
+        return await (await self.port()).start(node, actor_id=actor_id)
+
+    async def port(self) -> TemporalNodeRuns:
+        """The port, connecting on first use.
+
+        The lock is for the case a caller runs two of a Worker's turns at once:
+        without it both would connect, and the second client would replace the
+        first without ever being closed.
+        """
+        if self._runs is None:
+            async with self._connecting:
+                if self._runs is None:
+                    self._runs = await TemporalNodeRuns.connect(self.database, self.settings)
+        return self._runs
+
+    async def close(self) -> None:
+        """Give up the connection, if this service ever opened one.
+
+        Nothing is torn down, because there is nothing to tear down: the
+        Temporal client this SDK hands back has no shutdown of its own, and its
+        channel closes with the process. What this releases is the reference —
+        the port is made again on the next call that needs one — which is what
+        a caller that is finishing with a Worker's scope actually wants.
+        """
+        self._runs = None

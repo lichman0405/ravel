@@ -19,11 +19,12 @@ from typing import Any
 
 import pytest
 from tests.dsh.mcp_probe import probe
+from tests.integration.conftest import Prepared, a_source
 from tests.integration.roles.conftest import RoleEnvironment
 
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import ReviewRecord
-from ravel.domain.enums import NodeStatus, ReviewCheckpoint
+from ravel.domain.enums import EvidenceSourceTier, NodeStatus, ReviewCheckpoint
 from ravel.domain.roles import AgentRole
 from ravel.mcp.registry import DAG_MUTATION_TOOLS
 from ravel.state.database import Database
@@ -195,6 +196,98 @@ async def test_the_package_carries_the_criteria_a_verdict_must_answer(
     assert call.payload["execution"] is None
     assert call.payload["artifacts"] == []
     assert call.payload["reviews"] == []
+    assert call.payload["research"] == {
+        "records": [],
+        "claims": [],
+        "sources": [],
+        "conflicts": [],
+    }, "a node that ran was given a research delivery to judge"
+
+
+async def test_a_research_node_is_judged_on_the_record_it_handed_over(
+    role_environment: RoleEnvironment,
+    project: Any,
+    database: Database,
+    research_task: Prepared,
+) -> None:
+    """P10-03: what a research task delivered is in the package that judges it.
+
+    A task whose work is reading owes no Execution Record and produces no
+    artifacts, so four of the package's keys are empty or `null` for one — and
+    the row that says what it *did* deliver was, until this key existed, in none
+    of them. A live Review seat judged a completed task from exactly those four
+    empty fields and wrote "the node was handed over with a null Execution
+    Record, an empty artifact list, no reviews, and no deviations"; it was
+    reading its package correctly. Review holds three tools and this is the only
+    per-node view, so a delivery missing here is a delivery no verdict can ever
+    see.
+
+    The delivery is produced by the seat that owns it, over stdio, and read back
+    by the seat that judges it, over stdio. Nothing in between is a fixture.
+    """
+    source = a_source(
+        database,
+        project.project_id,
+        url="https://example.org/niobium",
+        tier=EvidenceSourceTier.A,
+    )
+    research = await probe(
+        role_environment.for_project(project, AgentRole.RESEARCH),
+        calls=(
+            ("begin_research", {"node_id": research_task.node_id}),
+            (
+                "record_evidence",
+                {
+                    "node_id": research_task.node_id,
+                    "statement": "Niobium doping held conductivity above the threshold.",
+                    "claim_class": "FACT",
+                    "source_refs": [source.source_id],
+                },
+            ),
+            (
+                "submit_research_record",
+                {
+                    "node_id": research_task.node_id,
+                    "question": research_task.contract.objective,
+                    "recommended_followups": ["Measure the series at 500 hours."],
+                    "report": "The series held.",
+                },
+            ),
+        ),
+    )
+    handed_over = research.calls[-1]
+    assert not handed_over.failed, handed_over.error
+    assert handed_over.payload is not None
+    assert handed_over.payload["handed_over"] is True
+
+    judged = await probe(
+        role_environment.for_project(project, AgentRole.REVIEW),
+        calls=(("read_review_package", {"node_id": research_task.node_id}),),
+    )
+
+    call = judged.calls[0]
+    assert not call.failed, call.error
+    assert call.payload is not None
+    assert call.payload["checkpoints"] == ["FINAL"]
+
+    # The two keys a reviewer would otherwise read as "nothing was delivered".
+    assert call.payload["execution"] is None
+    assert call.payload["artifacts"] == []
+
+    delivery = call.payload["research"]
+    assert [record["research_id"] for record in delivery["records"]] == [
+        handed_over.payload["record"]["research_id"]
+    ], "the record the seat handed over is not the record the judge was given"
+    assert delivery["records"][0]["completion_status"] == (
+        handed_over.payload["completion_status"]
+    ), "the judge was given a different completeness answer than RAVEL computed"
+    assert [claim["statement"] for claim in delivery["claims"]] == [
+        "Niobium doping held conductivity above the threshold."
+    ]
+    assert [entry["source_id"] for entry in delivery["sources"]] == [source.source_id]
+    assert delivery["sources"][0]["tier"] == EvidenceSourceTier.A.value, (
+        "a criterion about provenance cannot be answered without the tier"
+    )
 
 
 # ── What a verdict does ─────────────────────────────────────────────────────

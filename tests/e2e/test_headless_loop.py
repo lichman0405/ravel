@@ -38,7 +38,6 @@ from ravel.domain.enums import (
 )
 from ravel.domain.roles import AgentRole
 from ravel.execution.loop import ProjectLoop
-from ravel.execution.node_runs import TemporalNodeRuns
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.repositories.records import DecisionRepository, RecordRepositories
@@ -412,7 +411,9 @@ async def test_a_project_that_cannot_move_halts_rather_than_spinning(
         project_id=headless.project.project_id,
         master=master,
         review=headless.review(),
-        execution=await TemporalNodeRuns.connect(headless.database, headless.settings),
+        compute_worker=headless.worker_seat(AgentRole.COMPUTE_WORKER),
+        experimental_worker=headless.worker_seat(AgentRole.EXPERIMENTAL_WORKER),
+        research=headless.worker_seat(AgentRole.RESEARCH),
         poll_seconds=0.01,
         max_stalled_rounds=5,
     )

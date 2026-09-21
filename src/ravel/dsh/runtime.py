@@ -178,6 +178,13 @@ class RoleRuntime:
             role=role,
             mcp_command=_interpreter(),
             brief_path=brief_path,
+            # The tool server is a separate process and reads the environment
+            # rather than these settings, so the database it must read is
+            # passed to it here. Without this it would fall back to `.env` and
+            # could serve a project out of a database this process is not
+            # driving — the same project id, the same role, and none of the
+            # state.
+            tool_server_env=settings.tool_server_env(),
         ).write(work_dir / ROLE_PATCH_NAME)
 
         api_key = (

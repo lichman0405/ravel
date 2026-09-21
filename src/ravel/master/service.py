@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from ravel.domain.contracts import ExecutionContract
+from ravel.domain.contracts import ExecutionContract, ProjectSuccessContract
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import AffectedNodes, DecisionRecord
 from ravel.domain.enums import (
@@ -413,6 +413,38 @@ class MasterService:
         )
 
     # ── A20: declaring the project over ─────────────────────────────────────
+
+    def define_success(
+        self,
+        contract: ProjectSuccessContract,
+        *,
+        role: AgentRole,
+        decision: DecisionDraft | None = None,
+    ) -> ProjectSuccessContract:
+        """Freeze what this project's success means, and start it going.
+
+        The first version needs nothing behind it: a project that has not said
+        what answering would look like has to be able to say it. A later
+        version is a different act — the project was aiming somewhere and now
+        aims somewhere else — and that is a decision, so it arrives with one
+        and the record points at it. `SuccessContractRepository` refuses the
+        write without it as well, because the repository is what every caller
+        goes through and a rule enforced only here is a rule with a way round
+        it.
+
+        This is also the act `ProjectStatus.CONTRACT_DEFINED` is named for;
+        the repository performs the move, in the same transaction as the write.
+        """
+        record = (
+            self._record(decision, role=role, affected=AffectedNodes())
+            if decision is not None
+            else None
+        )
+        return self.success.commit(
+            contract,
+            role=role,
+            decision_ref=record.decision_id if record is not None else None,
+        )
 
     def conclude(
         self,

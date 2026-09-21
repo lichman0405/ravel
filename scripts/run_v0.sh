@@ -7,16 +7,21 @@
 #   scripts/run_v0.sh --no-tui           the same without the console (a server)
 #
 # Four processes by default, and the order matters only in that the Gateway and
-# the worker both need the database to be reachable. Everything else about them
-# is independent: the Gateway serves the console, the worker executes nodes, the
-# supervisor discovers and drives active projects, and the TUI is the console a
-# person sits at. Stopping this script stops the children it started; the
-# containers are `scripts/dev_down.sh`'s.
+# the Temporal worker both need the database to be reachable. Everything else
+# about them is independent: the Gateway serves the console, the Temporal
+# Execution Worker hosts the activities, the supervisor discovers and drives
+# active projects, and the TUI is the console a person sits at.
+#
+# **The console is a client, not the thing that runs.** Closing it leaves the
+# supervisor, the Gateway and the Temporal worker up, which is Phase 10's
+# headline: a person creates a project and walks away from it. Ctrl-C is what
+# stops a deployment — it takes down the children this script started, and
+# nothing else; the containers are `scripts/dev_down.sh`'s.
 #
 # With `--project` the script drives a single named project through
-# `scripts/run_project.py`. Without `--project` it starts the unattended
-# `scripts/run_supervisor.py`, which discovers every active project and drives
-# each one until it ends.
+# `scripts/run_project.py`, which is a debugging entry point. Without
+# `--project` it starts the unattended `scripts/run_supervisor.py`, which
+# discovers every active project and drives each one until it ends.
 
 set -euo pipefail
 
@@ -116,8 +121,23 @@ printf '\n'
 
 if [[ $WITH_TUI -eq 1 ]]; then
     step "Console"
-    printf '  quitting the console stops the services this script started\n\n'
+    printf '  closing the console does not stop RAVEL; Ctrl-C does\n\n'
     "$REPO_ROOT/.venv/bin/python" -m ravel.tui || true
+
+    # **Leaving the console is not stopping RAVEL.** That is the thing the
+    # supervisor exists for, and the headline claim a person checks first: they
+    # create a project, close the console, and the project runs. So this script
+    # stays in the foreground holding the services, and the trap above is what
+    # ends them — which makes Ctrl-C the one gesture that stops a deployment.
+    #
+    # `wait` rather than `wait -n` here, deliberately: one service dying is not
+    # a reason to tear down the four others and the projects they are driving,
+    # and the log the script wrote says which one it was.
+    printf '\033[1mThe console is closed; RAVEL is not.\033[0m\n'
+    printf '  the supervisor is still discovering and driving active projects\n'
+    printf '  logs      runtime/logs/\n'
+    printf '  Ctrl-C to stop\n\n'
+    wait || true
 else
     printf '  Ctrl-C to stop\n\n'
     wait -n || true

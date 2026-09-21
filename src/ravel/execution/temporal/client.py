@@ -37,7 +37,7 @@ class RunAlreadyStarted(RuntimeError):
 
 @dataclass
 class NodeRunClient:
-    """The handle Master starts node runs through."""
+    """The handle an authorized caller starts node runs through."""
 
     settings: Settings
     client: Client

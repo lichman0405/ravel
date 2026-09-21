@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
-"""The Temporal execution worker process, for a deployment rather than a test.
+"""Temporal Execution Worker — not a RAVEL Agent.
 
     .venv/bin/python scripts/run_temporal_worker.py
     .venv/bin/python scripts/run_temporal_worker.py --compute-scenario COMPUTE_FAILURE
+
+**This process is not one of the five agents.** RAVEL's agents are Master,
+Research, Review, Compute Worker and Experimental Worker, and every one of them
+is a DSH session that holds a role's tools. This is infrastructure: it is where
+Temporal's activities run, and the three names are worth keeping apart —
+
+    Worker Agent             a DSH session that acts under a frozen contract
+    Temporal Worker Process  this process: the activity host, no authority
+    Backend                  the thing that actually does the work
+
+The name is Phase 10's, and the old one (`run_worker.py`) is why: it read as
+"the worker", which is the Compute Worker's and the Experimental Worker's name
+in this codebase, and a process that hosts activities has nothing in common
+with either. It decides nothing. What it does is offer a task queue for the
+durable layer to hand work to, and call whichever backend is registered for a
+node's type.
 
 Temporal is durable execution and RAVEL is the record: this process holds
 nothing that a restart would lose. Kill it mid-run and a replacement picks up

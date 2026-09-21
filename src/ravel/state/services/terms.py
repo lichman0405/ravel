@@ -33,6 +33,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from ravel.domain.artifacts import unusable_filename_reason
 from ravel.domain.contracts import (
     AcceptanceContract,
     AcceptanceCriterion,
@@ -82,11 +83,20 @@ def commit_terms(
     records them: a HYPOTHESIS node may be given something to be judged
     against, and refusing it would be this function inventing a rule.
 
+    `required_outputs` are file names, and each is refused here if it could not
+    be one. The check is not about tidiness: the backend names what it writes
+    after the requirement, the completeness check compares the two by equality,
+    and the storage key is built from the name — so an output that is really a
+    sentence about the deliverable becomes an activity failing five retries
+    deep, where the seat that wrote it cannot see it and nothing in the project
+    says why the node never ended.
+
     Raises:
         ValueError: A node that must be measured against something was given
-            nothing to be measured against — work that could never start, which
-            is worth refusing at the moment it is planned rather than at the
-            moment the scheduler finds it stuck.
+            nothing to be measured against, or a required output could not be
+            an artifact's name — work that could never start, or could start and
+            never deliver. Both are worth refusing at the moment they are
+            planned rather than at the moment the scheduler finds them stuck.
     """
     if requires_frozen_criteria(node.node_type) and not criteria:
         raise ValueError(
@@ -95,6 +105,18 @@ def commit_terms(
             "is measured against criteria frozen before the run, and a run with "
             "nothing to be measured against is not evidence of anything"
         )
+
+    for output in required_outputs:
+        problem = unusable_filename_reason(output)
+        if problem is not None:
+            raise ValueError(
+                f"node {node.display_id!r} requires an output named {output!r}, "
+                f"which is not a file name: {problem}. A required output is the "
+                "name of a file the run delivers — 'conductivity_vs_x.csv' rather "
+                "than a description of it — because that name is what the run "
+                "writes, what the completeness check compares against, and what "
+                "the artifact is stored under"
+            )
 
     dag = DagRepository(session, project_id)
     acceptance = (

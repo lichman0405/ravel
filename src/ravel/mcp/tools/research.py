@@ -6,6 +6,12 @@ whole design: the ledger has one entrance, this module is it, and there is no
 handler that writes a source row from anything other than a retrieval the
 gateway produced.
 
+The flow has two ends as well as a middle. `begin_research` is the way a task
+starts — the Research seat's own act, the counterpart of a Worker's
+`start_execution` — and `submit_research_record` is the hand-over: the record
+is written and the node goes to REVIEWING in one transaction, where the FINAL
+checkpoint judges it.
+
 Three properties the handlers enforce rather than describe:
 
 - **A lead is not evidence and cannot become any.** `search_sources` and
@@ -22,7 +28,10 @@ Three properties the handlers enforce rather than describe:
   requirements that are unmet. INCOMPLETE with a list of what is missing is the
   answer the contract is designed to produce.
 
-Nothing here writes a DAG node, a Decision Record, or a contract. Research
+Nothing here creates, cancels or re-points a node, writes a Decision Record, or
+writes a contract. The two status moves that do happen — into RUNNING at the
+start, into REVIEWING at the hand-over — go through the same life-cycle path
+every other node takes, so neither is a second way to move one. Research
 produces evidence and advice; what the project does about either is Master's.
 """
 
@@ -35,7 +44,15 @@ from ravel.config import get_settings
 from ravel.domain.clock import json_iso
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import AccessStatus, ClaimClass, Confidence, EvidenceSourceTier, NodeType
+from ravel.domain.enums import (
+    AccessStatus,
+    ClaimClass,
+    Confidence,
+    EvidenceSourceTier,
+    NodeStatus,
+    NodeType,
+    ReviewOutcome,
+)
 from ravel.domain.evidence import (
     Evidence,
     EvidenceConflict,
@@ -43,6 +60,7 @@ from ravel.domain.evidence import (
     claim_access,
     claim_tier,
 )
+from ravel.domain.state_machines import ACTIVE_NODE_STATUSES
 from ravel.mcp.context import ToolContext, as_json, require_research
 from ravel.research import completion, sufficiency
 from ravel.research.gateway import ResearchSourceGateway, SourceRequest
@@ -58,6 +76,7 @@ from ravel.state.repositories.research import (
     EvidenceRepository,
     EvidenceSourceRepository,
     ResearchRecordRepository,
+    task_ledger,
 )
 from ravel.state.store import ArtifactStore, S3ArtifactStore
 
@@ -153,11 +172,7 @@ def read_research_task(context: ToolContext) -> Any:
             terms = ExecutionContractRepository(session, context.project_id).for_node(
                 node_id
             )
-            sources = EvidenceSourceRepository(session, context.project_id)
-            claims = EvidenceRepository(session, context.project_id).for_task(node_id)
-            conflicts = _conflicts_for(session, context.project_id, claims)
-            records = ResearchRecordRepository(session, context.project_id).for_node(node_id)
-            named = [sources.get(source_id=ref) for ref in _source_refs(claims)]
+            ledger = task_ledger(session, context.project_id, node_id)
 
         return {
             "node": as_json(node),
@@ -172,10 +187,10 @@ def read_research_task(context: ToolContext) -> Any:
             },
             "terms": _terms(terms),
             "ledger": {
-                "sources": [as_json(source) for source in named],
-                "claims": as_json(claims),
-                "conflicts": as_json(conflicts),
-                "records": as_json(records),
+                "sources": as_json(ledger.sources),
+                "claims": as_json(ledger.claims),
+                "conflicts": as_json(ledger.conflicts),
+                "records": as_json(ledger.records),
             },
         }
 
@@ -200,24 +215,114 @@ def _terms(contract: ExecutionContract) -> dict[str, Any]:
     }
 
 
-def _source_refs(claims: list[Evidence]) -> tuple[str, ...]:
-    """Every source any claim of this task rests on, each named once."""
-    return tuple(dict.fromkeys(ref for claim in claims for ref in claim.source_refs))
+def begin_research(context: ToolContext) -> Any:
+    """Begin the task this Research session was convened for."""
+
+    async def begin_research(node_id: str) -> dict[str, Any]:
+        """Begin this research task, and take it into your hands.
+
+        **This is where a research task begins.** A RESEARCH node runs because
+        the Research Agent whose node it is asked for it — the same chain the
+        Workers follow through `start_execution`, and the reason no other role
+        holds this tool: work begins as the act of the seat that executes it,
+        never as something done to the seat from outside.
+
+        **What it does not do is start anything for you.** A Worker's start
+        hands the work to RAVEL's Execution Service, which runs it durably on a
+        machine while the Worker goes back to watching. Research's work is the
+        reading itself, and the reading happens in this session: the searching,
+        the opening and the ledger writes are the tools in your roster. There is
+        no run to hand over and no workflow behind you, which is why this tool
+        moves the node and returns.
+
+        **A refusal is not a fault.** The DAG is the authority on whether this
+        node may run — it must be READY, with its Execution Contract bound —
+        and the answer says which condition was not met. Do not look for another
+        way to begin it; report the refusal and stop.
+
+        After this returns, do the task: read it with `read_research_task`,
+        gather the evidence, and finish with `submit_research_record`, which
+        hands the result over.
+        """
+        require_research(context, "begin_research")
+        with context.write() as session:
+            dag = DagRepository(session, context.project_id)
+            node = _research_node(session, context.project_id, node_id)
+            # The same two questions `start_execution` asks, read from the same
+            # places: may this node be RUNNING (`can_enter_running`, which is
+            # where the bound contract is checked), and is it waiting to begin
+            # at all — a run begins from READY, and the state machine's
+            # tolerance for a re-asserted status is not a second way in.
+            refusal = _may_this_task_begin(
+                node,
+                has_frozen_acceptance=dag.has_frozen_acceptance(node_id),
+                has_execution_contract=dag.has_execution_contract(node_id),
+                pre_run_outcome=dag.latest_pre_run_outcome(node_id),
+            )
+            if refusal is not None:
+                return {
+                    "node_id": node.node_id,
+                    "started": False,
+                    "refused": True,
+                    "reason": refusal,
+                    "node_status": node.status.value,
+                }
+            moved = dag.transition_node(
+                node_id, NodeStatus.RUNNING, actor_id=context.role.value
+            )
+        return {
+            "node_id": moved.node_id,
+            "node_status": moved.status.value,
+            "started": True,
+            "refused": False,
+            "what_happens_next": (
+                "The task is yours and nobody else will move it. Read it with "
+                "read_research_task, gather the evidence, and hand the result over "
+                "with submit_research_record."
+            ),
+        }
+
+    return begin_research
 
 
-def _conflicts_for(session: Any, project_id: str, claims: list[Evidence]) -> list[Any]:
-    """The conflict records that are about these claims.
+def _may_this_task_begin(
+    node: DagNode,
+    *,
+    has_frozen_acceptance: bool,
+    has_execution_contract: bool,
+    pre_run_outcome: ReviewOutcome | None,
+) -> str | None:
+    """Why this node may not begin, or `None` if it may.
 
-    Filtered here rather than queried by task, because a conflict has no task
-    of its own: it is about evidence rows, and which task those belong to is
-    the question being asked.
+    Two questions, asked in this order because the first is about the node's
+    place in its own life and the second about whether the DAG has cleared it.
+    **Is it waiting to begin** — a task enters RUNNING from READY, and a node
+    already in flight must not be "begun" a second time, which is why the
+    answer says what to read instead. **Does the DAG say it may run** — asked
+    through `DagNode.can_enter_running`, the same predicate every other entry
+    to RUNNING is checked against, so this tool cannot become a way round the
+    contract gate by being a different caller.
+
+    A reason rather than a bool: the model reads it, and "the contract is not
+    bound" is something it can report, while "no" is not.
     """
-    named = {claim.evidence_id for claim in claims}
-    return [
-        conflict
-        for conflict in EvidenceConflictRepository(session, project_id).all()
-        if named & set(conflict.evidence_refs)
-    ]
+    if node.status is not NodeStatus.READY:
+        return (
+            f"this task is {node.status.value}, and a task begins from READY. "
+            + (
+                "It is already in flight, so it is being worked on: read its "
+                "record and carry on with it rather than beginning it again."
+                if node.status in ACTIVE_NODE_STATUSES
+                else "It is not waiting to begin, so what happens to it next is "
+                "not yours to start."
+            )
+        )
+    check = node.can_enter_running(
+        has_frozen_acceptance=has_frozen_acceptance,
+        has_execution_contract=has_execution_contract,
+        pre_run_outcome=pre_run_outcome,
+    )
+    return None if check.allowed else check.reason
 
 
 def search_sources(context: ToolContext) -> Any:
@@ -579,26 +684,20 @@ def assess_evidence(context: ToolContext) -> Any:
         require_research(context, "assess_evidence")
         with context.read() as session:
             _research_node(session, context.project_id, node_id)
-            claims, sources, conflicts = _gathered(session, context.project_id, node_id)
-        assessment = sufficiency.assess(claims=claims, sources=sources, conflicts=conflicts)
+            ledger = task_ledger(session, context.project_id, node_id)
+        assessment = sufficiency.assess(
+            claims=list(ledger.claims),
+            sources=list(ledger.sources),
+            conflicts=list(ledger.conflicts),
+        )
         return {
             **_assessment(assessment),
             "rationale_note": rationale,
-            "sources_read": len([source for source in sources if source.was_read]),
-            "sources_named": len(sources),
+            "sources_read": len([source for source in ledger.sources if source.was_read]),
+            "sources_named": len(ledger.sources),
         }
 
     return assess_evidence
-
-
-def _gathered(
-    session: Any, project_id: str, node_id: str
-) -> tuple[list[Evidence], list[Any], list[EvidenceConflict]]:
-    """Everything this task has produced, as the assessment reads it."""
-    claims = EvidenceRepository(session, project_id).for_task(node_id)
-    sources = EvidenceSourceRepository(session, project_id)
-    named = [sources.get(source_id=ref) for ref in _source_refs(claims)]
-    return claims, named, _conflicts_for(session, project_id, claims)
 
 
 def _assessment(assessment: sufficiency.Assessment) -> dict[str, Any]:
@@ -652,12 +751,25 @@ def submit_research_record(context: ToolContext) -> Any:
 
         `report` is the human-readable projection. The structured record is the
         authoritative one; Master reads that first.
+
+        **Submitting hands the task over.** In the same transaction that writes
+        the record, the node moves from RUNNING to REVIEWING, where the FINAL
+        checkpoint judges it against the frozen terms. INCOMPLETE is handed over
+        like any other answer: whether the evidence is enough is Review's
+        question, and a task that could keep itself running until its author
+        felt finished would be holding its own finish line.
         """
         require_research(context, "submit_research_record")
         with context.write() as session:
+            dag = DagRepository(session, context.project_id)
             node = _research_node(session, context.project_id, node_id)
-            claims, sources, conflicts = _gathered(session, context.project_id, node_id)
-            assessment = sufficiency.assess(claims=claims, sources=sources, conflicts=conflicts)
+            ledger = task_ledger(session, context.project_id, node_id)
+            claims = list(ledger.claims)
+            sources = list(ledger.sources)
+            conflicts = list(ledger.conflicts)
+            assessment = sufficiency.assess(
+                claims=claims, sources=sources, conflicts=conflicts
+            )
             draft = completion.Draft(
                 question=question or node.objective,
                 claims=claims,
@@ -673,6 +785,18 @@ def submit_research_record(context: ToolContext) -> Any:
             judged = completion.judge(draft, assessment)
             record = completion.build(draft, assessment, project_id=context.project_id)
             written = ResearchRecordRepository(session, context.project_id).add(record)
+            # The hand-over, written in the same transaction as the record: a
+            # crash between the two would be a record nobody was told about.
+            # From RUNNING only, because that is where a task that is being
+            # worked on is — a node that is already REVIEWING has been handed
+            # over, and a node that never began is reported rather than moved
+            # into a checkpoint that would be judging work nobody started.
+            handed_over = node.status is NodeStatus.RUNNING
+            moved = node
+            if handed_over:
+                moved = dag.transition_node(
+                    node_id, NodeStatus.REVIEWING, actor_id=context.role.value
+                )
         return {
             "record": as_json(written),
             "completion_status": judged.status.value,
@@ -681,6 +805,17 @@ def submit_research_record(context: ToolContext) -> Any:
             "assessment": _assessment(assessment),
             "unmeasured": [item.value for item in completion.unmeasured(assessment)],
             "is_complete": judged.is_complete,
+            "handed_over": handed_over,
+            "node_status": moved.status.value,
+            "hand_over_reason": (
+                None
+                if handed_over
+                else (
+                    f"{node.display_id} is {node.status.value} and a research task is "
+                    "handed over from RUNNING. The record is written either way; call "
+                    "begin_research if the task has not been begun."
+                )
+            ),
         }
 
     return submit_research_record
@@ -731,6 +866,7 @@ def _confidence(value: str) -> Confidence:
 
 
 IMPLEMENTATIONS: dict[str, Any] = {
+    "begin_research": begin_research,
     "read_research_task": read_research_task,
     "search_sources": search_sources,
     "search_web": search_web,

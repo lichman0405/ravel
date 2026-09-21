@@ -51,10 +51,24 @@ NOT_A_WORKER = tuple(role for role in AgentRole if role not in WORKERS)
 
 #: What a Worker holds. The invocation, the waiting, the collection and the
 #: completeness check are the durable layer's, so what is left here is what a
-#: Worker genuinely does itself: read its terms, read what happened, ask, and
-#: (for the Experimental Worker) say one of four things to a lab.
+#: Worker genuinely does itself: begin the one task it was convened for, read
+#: its terms, read what happened, ask, and (for the Experimental Worker) say one
+#: of four things to a lab.
+#:
+#: `start_execution` is Phase 10's addition and the reason it is here rather
+#: than in the durable layer: work begins where the *execution role* is, and a
+#: Worker seat that only watched would leave the start with whatever scheduler
+#: happened to be nearest. It carries a node id and nothing else — no method, no
+#: parameter, no objective — and the DAG decides whether that node may run, so
+#: what the Worker holds is the door rather than the judgement.
 COMPUTE_TOOLS = frozenset(
-    {"whoami", "read_execution_contract", "read_execution_status", "request_action"}
+    {
+        "whoami",
+        "start_execution",
+        "read_execution_contract",
+        "read_execution_status",
+        "request_action",
+    }
 )
 
 #: A contract whose terms every test can rely on: one action, one range, one
@@ -92,7 +106,7 @@ def _ask(node_id: str, **question: Any) -> tuple[str, dict[str, Any]]:
 async def test_a_compute_worker_holds_only_what_it_acts_under(
     role_environment: RoleEnvironment, project: Project
 ) -> None:
-    """Two ways to read and one way to ask, and no way to change the plan."""
+    """One way to begin, two ways to read, one way to ask, and no way to plan."""
     result = await probe(
         role_environment.for_project(project, AgentRole.COMPUTE_WORKER)
     )
@@ -106,10 +120,11 @@ async def test_a_compute_worker_holds_only_what_it_acts_under(
 async def test_the_experimental_worker_adds_only_the_lab_voice(
     role_environment: RoleEnvironment, project: Project
 ) -> None:
-    """The same three, plus the four things a Worker may say to a lab.
+    """The same set, plus the four things a Worker may say to a lab.
 
     The difference between the two Workers is who they talk to, not what they
-    may decide: both act under a frozen contract, and neither may move a node.
+    may decide: both begin their own kind of task under a frozen contract, and
+    neither may move a node.
     """
     result = await probe(
         role_environment.for_project(project, AgentRole.EXPERIMENTAL_WORKER)

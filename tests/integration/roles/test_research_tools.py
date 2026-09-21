@@ -19,12 +19,11 @@ rule.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from tests.dsh.mcp_probe import probe
-from tests.integration.conftest import Prepared
+from tests.integration.conftest import Prepared, a_source
 from tests.integration.roles.conftest import RoleEnvironment
 
 from ravel.domain.enums import AccessStatus, CompletionStatus, EvidenceSourceTier
@@ -51,6 +50,10 @@ NOT_RESEARCH = tuple(role for role in AgentRole if role is not AgentRole.RESEARC
 RESEARCH_TOOLS = frozenset(
     {
         "whoami",
+        # The seat begins its own task, the way a Worker begins its run: the
+        # node moves to RUNNING because the role that serves it asked for it,
+        # and the DAG decides whether it may.
+        "begin_research",
         "read_research_task",
         "search_sources",
         "search_web",
@@ -62,41 +65,6 @@ RESEARCH_TOOLS = frozenset(
         "submit_research_record",
     }
 )
-
-
-#: When the sources these tests write were read. Fixed rather than `utcnow()`,
-#: so that a claim's `retrieved_at` is compared against a value the test chose
-#: instead of against whatever the clock said while it was running.
-_READ_AT = datetime(2026, 9, 19, 12, 0, tzinfo=UTC)
-
-
-def _source(
-    database: Database,
-    project_id: str,
-    *,
-    url: str,
-    tier: EvidenceSourceTier | None,
-    access_status: AccessStatus = AccessStatus.OK,
-) -> EvidenceSource:
-    """One source row, written through the repository the gateway writes through.
-
-    A source that was read carries a hash and the moment it was read; one RAVEL
-    could not open carries neither, which is the distinction the ledger is built
-    on and the one the domain type refuses to let anybody blur.
-    """
-    read = access_status is AccessStatus.OK
-    source = EvidenceSource(
-        project_id=project_id,
-        url=url,
-        title=url.rstrip("/").rsplit("/", 1)[-1],
-        access_status=access_status,
-        retrieved_at=_READ_AT if read else None,
-        content_hash=f"sha256:{'ab' * 32}" if read else None,
-        media_type="text/html" if read else None,
-        tier=tier,
-    )
-    with database.transaction() as session:
-        return EvidenceSourceRepository(session, project_id).record(source)
 
 
 def _claims(database: Database, project_id: str, node_id: str) -> list[Evidence]:
@@ -216,7 +184,7 @@ async def test_the_task_reports_what_has_already_been_recorded(
     research_task: Prepared,
 ) -> None:
     """A second pass reads the ledger rather than re-deriving what is in it."""
-    source = _source(
+    source = a_source(
         database, project.project_id, url="https://example.org/paper", tier=EvidenceSourceTier.A
     )
     await probe(
@@ -340,15 +308,15 @@ async def test_a_claim_is_rated_by_its_sources_rather_than_by_its_author(
     file a blog post as tier A, and every later reader — and the sufficiency
     assessment — would believe it.
     """
-    strong = _source(
+    strong = a_source(
         database, project.project_id, url="https://www.nature.com/articles/x",
         tier=EvidenceSourceTier.A,
     )
-    weak = _source(
+    weak = a_source(
         database, project.project_id, url="https://blog.example.org/x",
         tier=EvidenceSourceTier.D,
     )
-    unread = _source(
+    unread = a_source(
         database,
         project.project_id,
         url="https://pubs.acs.org/doi/10.1021/x",
@@ -396,7 +364,7 @@ async def test_a_fact_resting_on_a_source_that_was_not_read_is_refused(
     support for a fact, because RAVEL never read it. The same statement filed as
     a hypothesis is accepted, which is the difference the classes exist for.
     """
-    unread = _source(
+    unread = a_source(
         database,
         project.project_id,
         url="https://pubs.acs.org/doi/10.1021/x",

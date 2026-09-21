@@ -47,19 +47,47 @@ def is_simulated(kind: str) -> bool:
     return kind == SIMULATED_KIND
 
 
+def unusable_filename_reason(filename: str) -> str | None:
+    """Why `filename` cannot name an artifact, or `None` if it can.
+
+    Stated once here because two callers a long way apart have to agree on it:
+    `artifact_key` asks when bytes are stored, and a node's terms ask when the
+    task is planned. A name one accepts and the other rejects is a task that
+    runs and then cannot deliver, and the Worker that runs it can do nothing
+    about it — a live run failed an activity five retries deep on an output
+    whose name was a sentence containing a slash.
+
+    The rule is exactly what a storage key needs of a name, and no more. A
+    tighter one — no spaces, ASCII only, nothing a header would have to escape —
+    would be this function inventing a restriction the store does not have, and
+    it would refuse names that are perfectly good files; the surfaces that paste
+    a name into a header already answer for that themselves.
+    """
+    if not filename.strip():
+        return "it is empty"
+    if "/" in filename or "\\" in filename:
+        return "it contains a path separator"
+    if filename in {".", ".."}:
+        return "it names a directory rather than a file"
+    return None
+
+
 def artifact_key(project_id: str, artifact_id: str, version: int, filename: str) -> str:
     """The storage key for one artifact version.
 
     Raises:
-        ValueError: A component would escape its prefix in the key.
+        ValueError: A component would escape its prefix in the key, or the
+            filename is not one — see `unusable_filename_reason`.
     """
     for name, value in (
         ("project_id", project_id),
         ("artifact_id", artifact_id),
-        ("filename", filename),
     ):
         if not value or "/" in value or "\\" in value or value in {".", ".."}:
             raise ValueError(f"{name}={value!r} is not usable in a storage key")
+    problem = unusable_filename_reason(filename)
+    if problem is not None:
+        raise ValueError(f"filename={filename!r} is not usable in a storage key: {problem}")
     if version < 1:
         raise ValueError("artifact version starts at 1")
     return ARTIFACT_KEY_TEMPLATE.format(

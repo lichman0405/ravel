@@ -27,6 +27,8 @@ from ravel.domain.contracts import (
     ProjectSuccessContract,
     ResearchContract,
 )
+from ravel.domain.enums import ProjectStatus
+from ravel.domain.roles import AgentRole, require_role
 from ravel.state.mapping import from_row
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.tables import (
@@ -83,6 +85,34 @@ class ResearchContractRepository(ProjectScopedRepository[ResearchContract]):
     row_type = ResearchContractRow
     record_type = ResearchContract
 
+    def commit(self, contract: ResearchContract, *, role: AgentRole) -> ResearchContract:
+        """Write the project's research contract, once.
+
+        Written where the question is settled, which is Master's side of the
+        line: a Research session that could state its own question would be
+        stating the terms it is later measured against, and `docs/00` puts the
+        translation of a goal into a scientific problem on RAVEL's side of that
+        line rather than the researcher's.
+
+        No event, and no Decision Record. A decision records what changed among
+        the *nodes*, and this commits none of them; and the vocabulary in
+        `ProjectEventType` is closed with no member meaning "the question was
+        written down" — the row, with its `created_at`, is the record, the same
+        way a frozen contract's row is.
+
+        Raises:
+            PermissionError: The actor is not Master.
+            RuntimeError: The project already has a contract. A change to what
+                the user wants is a new project, not a second contract.
+        """
+        require_role(role, AgentRole.MASTER, "write the project's research contract")
+        if self.all():
+            raise RuntimeError(
+                f"project {self.project_id} already has a research contract; a change "
+                "to what the user asked for is a new project, not a second contract"
+            )
+        return self.add(contract)
+
     def current(self) -> ResearchContract:
         """The project's research contract.
 
@@ -109,6 +139,75 @@ class SuccessContractRepository(_Versioned):
     def add_version(self, contract: ProjectSuccessContract) -> ProjectSuccessContract:
         """Record a new version of the success definition."""
         return self.add(contract)
+
+    def commit(
+        self,
+        contract: ProjectSuccessContract,
+        *,
+        role: AgentRole,
+        decision_ref: str | None = None,
+    ) -> ProjectSuccessContract:
+        """Freeze what this project's success means, and start it going.
+
+        This is the act `ProjectStatus.CONTRACT_DEFINED` is named for. A new
+        project has been *asked* for something and has not yet said what would
+        count as answering — and until it says, every ending A20 names is a
+        claim with no frozen definition to measure it against, which is what
+        refuses them. Writing the first version is therefore what moves the
+        project on, and the move is in this transaction rather than in the tool
+        that calls it so that a project cannot end up holding a frozen
+        definition of success while its own status still says it has none.
+
+        The first version is written once and needs nothing behind it. A later
+        version is a change to what the project is aiming at, which
+        `ProjectSuccessContract` says is versioned *and* carries a Decision
+        Record: Master may revise where it is going, but a reader of the record
+        has to be able to find what made it revise.
+
+        Raises:
+            PermissionError: The actor is not Master.
+            ValueError: The version is not the next one, or a revision arrives
+                without the Decision Record that authorizes it.
+        """
+        require_role(role, AgentRole.MASTER, "freeze what this project's success means")
+        expected = self.next_version()
+        if contract.version != expected:
+            raise ValueError(
+                f"this is version {contract.version} and {self.project_id} is at "
+                f"version {expected}; a new success definition comes after the one "
+                "it replaces"
+            )
+        if expected > 1 and decision_ref is None:
+            raise ValueError(
+                "a later version of the success definition needs the Decision Record "
+                "that authorizes it; a project that quietly starts aiming at "
+                "something else is the failure this field exists to make visible"
+            )
+        written = self.add(contract)
+        self._define_the_contract(role=role)
+        return written
+
+    def _define_the_contract(self, *, role: AgentRole) -> None:
+        """Move a new project from CREATED to CONTRACT_DEFINED.
+
+        Imported here rather than at the top of the module: `projects` imports
+        `dag`, which imports this one, so the three form a cycle and the
+        registry has to be reached for at call time. Only a project that is
+        still CREATED moves — a second version of the contract is a project
+        already under way, and its status is about the work rather than about
+        the definition.
+        """
+        from ravel.state.repositories.projects import ProjectRegistry
+
+        registry = ProjectRegistry(self.session)
+        if registry.get(self.project_id).status is not ProjectStatus.CREATED:
+            return
+        registry.transition(
+            self.project_id,
+            ProjectStatus.CONTRACT_DEFINED,
+            actor_id=role.value,
+            reason="The project has a frozen definition of what success means.",
+        )
 
 
 class AuthorityEnvelopeRepository(_Versioned):

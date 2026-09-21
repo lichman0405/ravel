@@ -27,6 +27,7 @@ from __future__ import annotations
 # tree re-exports another suite's fixtures.
 # ruff: noqa: F811
 import pytest
+from tests.acceptance.phase10_support import ScriptedSeats
 from tests.e2e.conftest import (  # noqa: F401
     PASSWORD,
     SECRET,
@@ -107,12 +108,26 @@ from tests.live_research.conftest import (  # noqa: F401
     live_settings,
 )
 
+from ravel.config import Settings
+from ravel.state.database import Database
+
 pytestmark = pytest.mark.acceptance
 
 
 @pytest.fixture(autouse=True)
 def _isolated(clean: None) -> None:
     """Start every acceptance case from an empty database."""
+
+
+@pytest.fixture
+def seats(database: Database, execution_settings: Settings) -> ScriptedSeats:
+    """The five seats of every project a phase-10 supervisor drives, scripted.
+
+    The settings travel with them because a Worker's seat holds a real
+    Execution Service, and which task queue a run lands on is the deployment's
+    answer rather than the seat's.
+    """
+    return ScriptedSeats(database=database, settings=execution_settings)
 
 
 __all__ = [

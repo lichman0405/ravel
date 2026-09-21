@@ -12,19 +12,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from ravel.domain.enums import NodeStatus
+from ravel.domain.contracts import BudgetLimits, ProjectSuccessContract, ResearchContract
+from ravel.domain.decisions import ReviewRecord
+from ravel.domain.enums import DecisionType, NodeStatus, ProjectOutcome
 from ravel.domain.identity import MasterCheckpoint
 from ravel.domain.roles import AgentRole
+from ravel.master.service import ENDING_DECISION, MasterService
 from ravel.mcp.context import ToolContext, as_json, require_master
 from ravel.mcp.registry import tools_for
 from ravel.state.outbox import last_event_seq
+from ravel.state.repositories.contracts import ResearchContractRepository
 from ravel.state.repositories.identity import (
     AgentIdentityRepository,
     ApprovalRepository,
     CheckpointRepository,
 )
 from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
-from ravel.state.services.dag import DagMutationService
+from ravel.state.repositories.records import RecordRepositories
+from ravel.state.services.dag import DagMutationService, DecisionDraft
 
 #: The statuses counted separately in the state summary. Anything not listed is
 #: reported under its own name, so a new status cannot be silently folded into
@@ -73,6 +78,29 @@ def read_project_state(context: ToolContext) -> Any:
             nodes = service.dag.nodes()
             pending = ApprovalRepository(session, context.project_id).pending()
             checkpoint = CheckpointRepository(session, context.project_id).latest()
+            contracts = ResearchContractRepository(session, context.project_id).all()
+            # Read inside this transaction, like every other row here, and
+            # reduced to the one record the read reports rather than kept as a
+            # repository: a repository used after this block closes checks a
+            # connection back out of the pool for a query nobody commits, and
+            # that holds a read lock on everything it touched until the process
+            # ends — which is a database no other test can truncate. The newest
+            # version governs, and it is named as a version rather than taken
+            # from the end of the list, because the list is ordered by when a
+            # row was written.
+            successes = MasterService(session, context.project_id).success.all()
+            success = max(successes, key=lambda contract: contract.version, default=None)
+            # Why the stopped nodes are stopped, which is the half of that
+            # question the node's own status does not carry. A node waits on
+            # Master for at least two different reasons — a Worker asked for
+            # something its contract refused, or a Review withheld the
+            # pre-flight clearance — and the answer Master has to give is
+            # different for each. Without this, the one role that may change the
+            # plan is asked to change it without being told what went wrong.
+            # Latest per node, and the ordering is `all()`'s: oldest first.
+            latest: dict[str, ReviewRecord] = {}
+            for review in RecordRepositories(session, context.project_id).reviews.all():
+                latest[review.node_id] = review
             seq = last_event_seq(session, context.project_id)
 
         counts: dict[str, int] = {}
@@ -107,11 +135,172 @@ def read_project_state(context: ToolContext) -> Any:
                 "ready_to_run": [n.display_id for n in nodes if n.status is NodeStatus.READY],
             },
             "approvals_pending": len(pending),
+            # The nodes that are waiting on a decision, each with the verdict
+            # that put it there. BLOCKED is included because it is the same
+            # question from Master's side — nothing here may proceed until the
+            # plan changes — and it has no verdict, which is itself the answer:
+            # a node whose dependencies cannot all be satisfied was stopped by
+            # the graph rather than by anyone's judgement.
+            "stopped": [
+                {
+                    "node": node.display_id,
+                    "node_type": node.node_type.value,
+                    "status": node.status.value,
+                    "objective": node.objective,
+                    "verdict": (
+                        {
+                            "checkpoint": latest[node.node_id].checkpoint.value,
+                            "outcome": latest[node.node_id].outcome.value,
+                            "diagnosis": latest[node.node_id].diagnosis,
+                            "recommendations": list(latest[node.node_id].recommendations),
+                        }
+                        if node.node_id in latest
+                        else None
+                    ),
+                }
+                for node in nodes
+                if node.status in (NodeStatus.WAITING_DECISION, NodeStatus.BLOCKED)
+            ],
+            # Whether the project has stated its own question, reported here
+            # because this is the read a session starts from: a contract that
+            # is missing is the first thing to write, and a session that had to
+            # discover that by having a research task refused would be
+            # discovering it from the wrong end of the project.
+            "research_contract": (
+                {
+                    "committed": True,
+                    "contract_id": contracts[0].contract_id,
+                    "scientific_problem": contracts[0].scientific_problem,
+                }
+                if contracts
+                else {
+                    "committed": False,
+                    "what_is_missing": (
+                        "this project has no research contract, so what it was asked "
+                        "for has not been written down; commit_research_contract is "
+                        "that act, and it comes before the plan"
+                    ),
+                }
+            ),
+            # The other contract the project has to state about itself, and
+            # reported for the same reason: until it exists the project cannot
+            # be concluded at all, and a session that learned that from a
+            # refusal at the end of the project would be learning it too late
+            # to do anything about it. `status` is here too because the two
+            # move together — the first version of this contract is what takes
+            # the project out of CREATED.
+            "success_contract": (
+                {
+                    "committed": True,
+                    "contract_id": success.contract_id,
+                    "version": success.version,
+                    "success_criteria": list(success.success_criteria),
+                }
+                if success is not None
+                else {
+                    "committed": False,
+                    "what_is_missing": (
+                        "this project has not said what would count as answering it, "
+                        "so none of A20's endings can be measured; "
+                        "commit_success_contract is that act, and it is what makes "
+                        "the project able to end at all"
+                    ),
+                }
+            ),
             "latest_checkpoint": as_json(checkpoint) if checkpoint is not None else None,
             "last_event_seq": seq,
         }
 
     return read_project_state
+
+
+def commit_research_contract(context: ToolContext) -> Any:
+    """Write down what this project was asked to do."""
+
+    async def commit_research_contract(
+        original_user_goal: str,
+        scientific_problem: str,
+        hypotheses: list[str] | None = None,
+        target_metrics: list[str] | None = None,
+        acceptance_strategy: str = "",
+        known_constraints: list[str] | None = None,
+        prohibited_actions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Write this project's research contract: what it is for, and what it is asking.
+
+        **This is the project's own statement of its question, and it is the
+        first thing a new project is missing.** `original_user_goal` is what was
+        asked for, in the words it was asked in — the record that a later
+        reader compares the work against. `scientific_problem` is that goal
+        turned into something a study can answer; the two are separate fields
+        because "find a better dopant" and "which dopant keeps conductivity
+        above the threshold" are not the same statement, and only the second
+        one can be planned against.
+
+        It is written once and never edited. A change to what the user wants is
+        a new project, not a second contract, so state it as the user's ask
+        rather than as your current reading of it.
+
+        Everything else is optional, and each part is used: `hypotheses` are
+        what the project will test, `target_metrics` are what would count as
+        answering it, `acceptance_strategy` is how a result is to be judged,
+        `known_constraints` are limits that are already given, and
+        `prohibited_actions` are things this project must not do. The Research
+        seat reads all of it as the terms its tasks are answered under, so what
+        is left out is a question nobody will be asked to answer.
+
+        It changes no node and commits no stage, so it is not a DAG mutation:
+        the plan that follows is still yours to write, with
+        `commit_roadmap_phase` and `expand_dag_phase`.
+        """
+        require_master(context, "commit_research_contract")
+        goal = original_user_goal.strip()
+        if not goal:
+            raise ValueError(
+                "a research contract records the goal as the user stated it; that "
+                "field is the record a later reader compares the work against"
+            )
+        problem = scientific_problem.strip()
+        if not problem:
+            raise ValueError(
+                f"the goal {goal!r} has not been turned into a scientific problem. "
+                "State what this project is trying to establish — a question that can "
+                "be answered by evidence, not the goal restated"
+            )
+        contract = ResearchContract(
+            project_id=context.project_id,
+            original_user_goal=goal,
+            scientific_problem=problem,
+            research_hypotheses=_stated(hypotheses),
+            target_metrics=_stated(target_metrics),
+            acceptance_strategy=acceptance_strategy.strip(),
+            known_constraints=_stated(known_constraints),
+            prohibited_actions=_stated(prohibited_actions),
+        )
+        with context.write() as session:
+            written = ResearchContractRepository(session, context.project_id).commit(
+                contract, role=context.role
+            )
+        return {
+            "contract": as_json(written),
+            "what_happens_next": (
+                "The project has a question. What it does about it is the plan: "
+                "commit_roadmap_phase writes the stages, and expand_dag_phase commits "
+                "the first stage's work."
+            ),
+        }
+
+    return commit_research_contract
+
+
+def _stated(items: list[str] | None) -> tuple[str, ...]:
+    """A list of statements, with blanks dropped and nothing reworded.
+
+    Blank entries are dropped rather than kept as empty strings: a contract
+    whose `prohibited_actions` contains `""` reads as a restriction that was
+    stated, and a reader counting them would count one that says nothing.
+    """
+    return tuple(stripped for item in items or () if (stripped := item.strip()))
 
 
 def list_pending_approvals(context: ToolContext) -> Any:
@@ -194,9 +383,172 @@ def read_master_checkpoint(context: ToolContext) -> Any:
     return read_master_checkpoint
 
 
+def commit_success_contract(context: ToolContext) -> Any:
+    """Write down what would count as answering this project."""
+
+    async def commit_success_contract(
+        success_criteria: list[str],
+        failure_criteria: list[str] | None = None,
+        termination_criteria: list[str] | None = None,
+        unresolved_uncertainty_policy: str = "",
+        budget_time_limits: dict[str, Any] | None = None,
+        rationale: str = "",
+    ) -> dict[str, Any]:
+        """Freeze what this project would have to show for itself to have succeeded.
+
+        **This is the definition every ending is measured against, and it is
+        frozen before any work runs.** A20's first three endings — success,
+        failure, and *inconclusive* — are all claims about results, and each is
+        refused while the project has no frozen definition to make the claim
+        against: a project that decides what success meant after seeing what it
+        got has not concluded anything. So this is written early, and the
+        project cannot be concluded without it.
+
+        `success_criteria` are what would count as answering the question;
+        `failure_criteria` are what would count as answering it the other way,
+        and are worth stating rather than leaving to be inferred;
+        `termination_criteria` are the conditions under which the project
+        should be stopped rather than finished — a budget, a deadline, a
+        result that would arrive too late to matter. `unresolved_uncertainty_
+        policy` says what to do when the evidence runs out: this is what an
+        INCONCLUSIVE ending is measured against, so a project whose policy is
+        "keep going" cannot record one.
+
+        It is a versioned record, not an editable one. The first version is
+        written once and is what moves the project out of CREATED. A later
+        version is a different act — the project was aiming somewhere and now
+        aims somewhere else — so it requires `rationale`, and the change is
+        recorded as a route change with that reasoning attached.
+
+        It changes no node and commits no stage, so it is not a DAG mutation.
+        """
+        require_master(context, "commit_success_contract")
+        criteria = _stated(success_criteria)
+        if not criteria:
+            raise ValueError(
+                "a success contract's whole purpose is the list of things that would "
+                "count as answering; stating it without any leaves every ending "
+                "unmeasurable, which is the state this contract exists to end"
+            )
+        contract = ProjectSuccessContract(
+            project_id=context.project_id,
+            success_criteria=criteria,
+            failure_criteria=_stated(failure_criteria),
+            termination_criteria=_stated(termination_criteria),
+            unresolved_uncertainty_policy=unresolved_uncertainty_policy.strip(),
+            budget_time_limits=(
+                BudgetLimits(**budget_time_limits) if budget_time_limits else BudgetLimits()
+            ),
+        )
+        with context.write() as session:
+            service = MasterService(session, context.project_id)
+            version = service.success.next_version()
+            contract = contract.model_copy(update={"version": version})
+            revision = version > 1
+            if revision and not rationale.strip():
+                raise ValueError(
+                    "this project already has a success contract; changing what it is "
+                    "aiming at is a different act from defining it, and it is recorded "
+                    "with the reasoning that made you change it"
+                )
+            written = service.define_success(
+                contract,
+                role=context.role,
+                decision=(
+                    DecisionDraft(
+                        decision_type=DecisionType.CHANGE_ROUTE,
+                        rationale=rationale,
+                    )
+                    if revision
+                    else None
+                ),
+            )
+        return {
+            "contract": as_json(written),
+            "revision": revision,
+            "what_happens_next": (
+                "Every ending is now measured against this. The plan comes next: "
+                "commit_roadmap_phase writes the stages, and the project becomes "
+                "EXECUTING when its first node starts running."
+                if not revision
+                else "The project is aiming somewhere else from here; the new version "
+                "supersedes the one it replaced, and a reader finds both."
+            ),
+        }
+
+    return commit_success_contract
+
+
+def conclude_project(context: ToolContext) -> Any:
+    """Record how the project ended."""
+
+    async def conclude_project(
+        outcome: str,
+        rationale: str,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """End this project, and record which of A20's four endings it is.
+
+        This is the last act of a project and it is Master's alone. Call it
+        when the loop reports that the project has stopped and only an ending
+        is left — that report means no node can move and none of the three
+        powers has anything to do, not that the project succeeded; whether what
+        stopped was a success is the judgement this tool records.
+
+        `outcome` is one of `SUCCESS`, `FAILED`, `INCONCLUSIVE` or
+        `TERMINATED`, and the four are not interchangeable. The first three are
+        *claims about results*, and each is refused while the answer is still
+        outstanding: work that has not ended could still change it, a deviation
+        nobody answered is a question the project left open, and a project with
+        no frozen success contract has nothing to measure the claim against.
+        `TERMINATED` is different — it is a statement about the work rather
+        than about the answer, it is available at any time, and it is the one
+        ending that cancels what is still running. It is what to record when
+        the project is being stopped rather than finished, and `reason` is
+        required for it so that a deliberate stop and a project that ran out of
+        road do not read the same.
+
+        `rationale` is the decision, and it is what a later reader uses to
+        understand why the project ended where it did. A refusal here is not a
+        formality: it names the nodes still unfinished, the deviations still
+        unanswered, or the contract still missing, and resolving those is
+        yours to do. If some of them can never finish, cancel them first and
+        then conclude — a node nothing can execute is still a node that has not
+        ended.
+        """
+        require_master(context, "conclude_project")
+        try:
+            ending = ProjectOutcome(outcome.strip().upper())
+        except ValueError as error:
+            raise ValueError(
+                f"{outcome!r} is not an ending. A20 names four: "
+                + ", ".join(member.value for member in ProjectOutcome)
+            ) from error
+        draft = DecisionDraft(
+            decision_type=ENDING_DECISION[ending],
+            rationale=rationale,
+        )
+        with context.write() as session:
+            conclusion = MasterService(session, context.project_id).conclude(
+                ending, role=context.role, decision=draft, reason=reason
+            )
+        return {
+            "project": as_json(conclusion.project),
+            "outcome": conclusion.outcome.value,
+            "status": conclusion.status.value,
+            "decision_id": conclusion.decision.decision_id,
+            "cancelled_nodes": list(conclusion.cancelled),
+        }
+
+    return conclude_project
+
+
 IMPLEMENTATIONS: dict[str, Any] = {
     "whoami": whoami,
     "read_project_state": read_project_state,
+    "commit_research_contract": commit_research_contract,
+    "commit_success_contract": commit_success_contract,
+    "conclude_project": conclude_project,
     "list_pending_approvals": list_pending_approvals,
     "write_master_checkpoint": write_master_checkpoint,
     "read_master_checkpoint": read_master_checkpoint,

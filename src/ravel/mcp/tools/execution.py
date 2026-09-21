@@ -32,9 +32,10 @@ from typing import Any
 
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus, WorkerMessageKind
+from ravel.domain.enums import NodeStatus, NodeType, ReviewOutcome, WorkerMessageKind
 from ravel.domain.execution import DeviationRecord, WorkerMessage
-from ravel.domain.state_machines import can_transition_node
+from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import ACTIVE_NODE_STATUSES, can_transition_node
 from ravel.execution.backends import DeviationReport
 from ravel.execution.worker_rules import adjudicate
 from ravel.mcp.context import ToolContext, as_json, require_worker
@@ -53,6 +54,146 @@ LIVE_STATUSES = (NodeStatus.READY, NodeStatus.RUNNING)
 #: and refusing it would be refusing the request for permission — which is the
 #: only route by which a contract is ever widened.
 UNCHECKED_KINDS = (WorkerMessageKind.ESCALATE,)
+
+
+def start_execution(context: ToolContext) -> Any:
+    """Begin the task this Worker was convened for."""
+
+    async def start_execution(node_id: str) -> dict[str, Any]:
+        """Begin this task's run, and hand the work to RAVEL's Execution Service.
+
+        **This is where work begins.** A Worker is the execution role, and a
+        node that is cleared to run starts because this Worker asked for it —
+        not because a scheduler ran something and told the Worker afterwards.
+        What the Execution Service does with the request is start a durable
+        workflow; that is why this returns immediately and why an answer here
+        means "the run exists", not "the run has finished".
+
+        **You are starting the contract's task, not choosing one.** The node,
+        its type and its frozen terms are all facts RAVEL holds; there is no
+        argument here through which a Worker could ask for different work, a
+        different method, or a different parameter. That is the same rule as
+        everywhere else in this surface: what a Worker may do is a lookup, not
+        a judgement.
+
+        **A refusal is not a fault.** The DAG is the authority on whether this
+        node may run — it must be READY, with its criteria frozen, its contract
+        bound, and any pre-flight review passed. A task this refuses is one the
+        project has not cleared, and the answer says which condition was not
+        met. Do not look for another way to start it; report the refusal and
+        stop. Widening what may run is Master's decision, not yours.
+        """
+        require_worker(context, "start_execution")
+        if context.execution is None:
+            raise RuntimeError(
+                "this tool server holds no Execution Service; a Worker that can "
+                "start work needs one, and starting without it would be the "
+                "bypass the Worker exists to close"
+            )
+        with context.read() as session:
+            dag = DagRepository(session, context.project_id)
+            node = dag.node(node_id)
+            # The same three preconditions `_apply_transition` checks on the way
+            # into RUNNING, read from the same place. A start that got past this
+            # and was then refused by the transition would be a Worker's turn
+            # ending in an exception rather than in an answer.
+            refusal = _may_this_worker_start(
+                context,
+                node,
+                has_frozen_acceptance=dag.has_frozen_acceptance(node_id),
+                has_execution_contract=dag.has_execution_contract(node_id),
+                pre_run_outcome=dag.latest_pre_run_outcome(node_id),
+            )
+            contract_version = ExecutionContractRepository(
+                session, context.project_id
+            ).for_node(node_id).version
+        if refusal is not None:
+            return {
+                "node_id": node.node_id,
+                "started": False,
+                "refused": True,
+                "reason": refusal,
+                "node_status": node.status.value,
+            }
+
+        started = await context.execution.start(node, actor_id=context.role.value)
+        return {
+            "node_id": node.node_id,
+            "node_status": node.status.value,
+            "contract_version": contract_version,
+            "started": started,
+            "refused": False,
+            "already_under_way": not started,
+            "what_happens_next": (
+                "RAVEL's Execution Service is running this task durably. The node "
+                "moves to RUNNING when the run's own activity writes it, which is "
+                "a moment later; until then a second start is the same one run."
+            ),
+        }
+
+    return start_execution
+
+
+def _may_this_worker_start(
+    context: ToolContext,
+    node: DagNode,
+    *,
+    has_frozen_acceptance: bool,
+    has_execution_contract: bool,
+    pre_run_outcome: ReviewOutcome | None,
+) -> str | None:
+    """Why this Worker may not start this node, or `None` if it may.
+
+    Two questions, asked in this order because the first is about the role and
+    the second about the work. **Is this task this Worker's kind of task** — a
+    Compute Worker starts computations and an Experimental Worker starts
+    experiments, and a Worker that could start either would be a Worker whose
+    scope is a formality. **Does the DAG say it may run** — asked through
+    `DagNode.can_enter_running`, which is the same predicate every other entry
+    to RUNNING is checked against, so this tool cannot become a way round the
+    frozen-criteria or pre-flight gates by being a different caller.
+
+    A reason rather than a bool: the model reads it, and "the contract is not
+    bound" is something it can report to Master, while "no" is not.
+
+    **Starting is what a READY task is for**, and that is a third question
+    rather than part of the second. `can_enter_running` answers *may this node
+    be RUNNING*, and a node that is already RUNNING answers yes — correctly, and
+    for a different reason: the state machine treats a status re-asserted as a
+    retried activity reporting where it already is, which must not be an error.
+    A run *beginning* is not that. The set this admits is the set the loop hands
+    to a Worker to begin (`Situation.runnable`), which is why it is stated here
+    rather than inferred from the transition table.
+    """
+    owned = {
+        AgentRole.COMPUTE_WORKER: NodeType.COMPUTATION,
+        AgentRole.EXPERIMENTAL_WORKER: NodeType.EXPERIMENT,
+    }.get(context.role)
+    if owned is None:
+        return f"{context.role.value} does not start tasks"
+    if node.node_type is not owned:
+        return (
+            f"this is a {node.node_type.value} task and this session serves as "
+            f"{context.role.display_name}, which starts {owned.value} tasks"
+        )
+    if node.status is not NodeStatus.READY:
+        return (
+            f"this task is {node.status.value}, and a run begins from READY. This "
+            "one is not waiting to begin"
+            + (
+                ", so a run of it is already under way: read that run's status "
+                "rather than starting another, and leave where it ends to the run."
+                if node.status in ACTIVE_NODE_STATUSES
+                else ", so it is not yours to start; what happens to it next is "
+                "Master's to decide."
+            )
+        )
+    check = node.can_enter_running(
+        has_frozen_acceptance=has_frozen_acceptance,
+        has_execution_contract=has_execution_contract,
+        pre_run_outcome=pre_run_outcome,
+    )
+    return None if check.allowed else check.reason
 
 
 def read_execution_contract(context: ToolContext) -> Any:
@@ -485,6 +626,7 @@ def _is_about_the_contract(contract: ExecutionContract, about: str) -> bool:
 
 
 IMPLEMENTATIONS: dict[str, Any] = {
+    "start_execution": start_execution,
     "read_execution_contract": read_execution_contract,
     "read_execution_status": read_execution_status,
     "request_action": request_action,

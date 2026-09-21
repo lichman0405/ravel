@@ -43,6 +43,15 @@ class DshRuntimePool:
     settings: Settings
     bindings: SessionBindingRegistry = field(default_factory=SessionBindingRegistry)
     _runtimes: dict[tuple[str, AgentRole], RoleRuntime] = field(default_factory=dict)
+    #: Turns served by runtimes that are no longer live, per scope. Reaping is
+    #: routine and silent — a scope idle past the timeout is closed and a fresh
+    #: runtime starts at `turns = 0` on its next turn — so without this the
+    #: only honest answer to "has this seat done anything" is "not recently".
+    #: Entries are never removed: they are the record of which seats have
+    #: worked on which projects, they cost a tuple and an int each, and the
+    #: number of scopes a deployment has ever had is not a number that grows
+    #: without bound in any way that matters.
+    _retired_turns: dict[tuple[str, AgentRole], int] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ── Runtimes ───────────────────────────────────────────────────────────
@@ -58,13 +67,23 @@ class DshRuntimePool:
         The brief is only written when a runtime is created: it describes the
         authority the process launched with, and rewriting it under a running
         agent would let the agent's view drift from its grant.
+
+        Idle scopes are reaped first, which is what makes a Worker's session
+        dormant rather than resident: a compute runtime that has not been asked
+        for anything in `dsh_idle_timeout_seconds` is closed here, and the next
+        turn for it starts a new one. That costs the session its short-term
+        memory and nothing else — the authoritative state is PostgreSQL — and
+        it is why this is safe to do on the acquire path. Reaping before the
+        lock rather than inside it, because `reap_idle` takes the same lock.
         """
+        self.reap_idle()
         key = (project_id, role)
         with self._lock:
             existing = self._runtimes.get(key)
             if existing is not None and not existing.is_closed:
                 return existing
             if existing is not None:
+                self._retire_locked(existing)
                 del self._runtimes[key]
             runtime = RoleRuntime.create(self.settings, project_id, role, brief)
             self._runtimes[key] = runtime
@@ -81,6 +100,33 @@ class DshRuntimePool:
         with self._lock:
             runtime = self._runtimes.get((project_id, role))
         return runtime if runtime is not None and not runtime.is_closed else None
+
+    def turns_served(self, project_id: str, role: AgentRole) -> int:
+        """How many turns a scope's sessions have taken, live runtime included.
+
+        Counted across every runtime the scope has had, not just the one that
+        happens to be alive now. That distinction is the whole reason this
+        method exists rather than a caller reading `live_runtime(...).turns`:
+        reaping is routine, so a seat that worked for an hour and has since
+        been idle for `dsh_idle_timeout_seconds` has no live runtime and would
+        otherwise be indistinguishable from a seat that was never asked to do
+        anything.
+        """
+        key = (project_id, role)
+        with self._lock:
+            retired = self._retired_turns.get(key, 0)
+            runtime = self._runtimes.get(key)
+        return retired + (runtime.turns if runtime is not None else 0)
+
+    def _retire_locked(self, runtime: RoleRuntime) -> None:
+        """Fold a departing runtime's turns into its scope's running total.
+
+        Called with `_lock` held, at the single moment a runtime leaves
+        `_runtimes` — whichever of the five paths removed it — so that a turn is
+        counted exactly once whether it was served a second ago or an hour ago.
+        """
+        key = (runtime.project_id, runtime.role)
+        self._retired_turns[key] = self._retired_turns.get(key, 0) + runtime.turns
 
     def start_session(
         self,
@@ -129,10 +175,12 @@ class DshRuntimePool:
         with self._lock:
             for key, runtime in list(self._runtimes.items()):
                 if runtime.is_closed:
+                    self._retire_locked(runtime)
                     del self._runtimes[key]
                     continue
                 if runtime.last_used_at < cutoff and runtime._lock.acquire(blocking=False):
                     if runtime.last_used_at < cutoff:
+                        self._retire_locked(runtime)
                         del self._runtimes[key]
                         doomed.append(runtime)
                     runtime._lock.release()
@@ -152,6 +200,8 @@ class DshRuntimePool:
         """Shut down one scope's runtime, returning whether one was live."""
         with self._lock:
             runtime = self._runtimes.pop((project_id, role), None)
+            if runtime is not None:
+                self._retire_locked(runtime)
         if runtime is None:
             return False
         runtime.close()
@@ -163,6 +213,8 @@ class DshRuntimePool:
         with self._lock:
             doomed = [key for key in self._runtimes if key[0] == project_id]
             runtimes = [self._runtimes.pop(key) for key in doomed]
+            for runtime in runtimes:
+                self._retire_locked(runtime)
         for runtime in runtimes:
             runtime.close()
         self.bindings.release_project(project_id)
@@ -172,6 +224,8 @@ class DshRuntimePool:
         """Shut down every runtime. Safe to call more than once."""
         with self._lock:
             runtimes = list(self._runtimes.values())
+            for runtime in runtimes:
+                self._retire_locked(runtime)
             self._runtimes.clear()
         for runtime in runtimes:
             try:
@@ -193,11 +247,18 @@ class DshRuntimePool:
     # ── Introspection ──────────────────────────────────────────────────────
 
     def stats(self) -> PoolStats:
-        """A snapshot of live runtimes and sessions."""
+        """A snapshot of live runtimes and sessions, and the turns served.
+
+        `total_turns` is every turn the pool has served, including those served
+        by runtimes it has since reaped; the live counts beside it answer the
+        different question of what is running right now.
+        """
         with self._lock:
             live = [r for r in self._runtimes.values() if not r.is_closed]
             scopes = tuple(sorted((r.project_id, r.role.value) for r in live))
-            turns = sum(r.turns for r in live)
+            turns = sum(self._retired_turns.values()) + sum(
+                r.turns for r in self._runtimes.values()
+            )
         return PoolStats(
             live_runtimes=len(live),
             live_sessions=len(self.bindings),

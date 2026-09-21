@@ -41,7 +41,7 @@ from ravel.review.checkpoints import (
 from ravel.review.service import ReviewService
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.records import RecordRepositories, ReviewRepository
-from ravel.state.repositories.research import ArtifactRepository
+from ravel.state.repositories.research import ArtifactRepository, task_ledger
 
 
 def _holds_up_the_project(node: DagNode, reviews: list[ReviewRecord]) -> bool:
@@ -203,10 +203,26 @@ def read_review_package(context: ToolContext) -> Any:
         criteria by `criterion_id` in your verdict, and report a final verdict
         on every one of them.
 
+        What that means depends on the checkpoint. At PRE_RUN the criteria are
+        read for whether they say something checkable, not for whether they were
+        met — the run has not happened, and the node owes no Execution Record
+        and no artifacts at this point. `execution` being null on a node still
+        READY is what a node that has not run looks like, not an incomplete
+        delivery.
+
         `execution` is the immutable record of what actually ran, including
         every attempt, what was delivered against what was required, and how
         the run ended. `artifacts` is what the node produced, with the hash and
         size of each version, so a claim about a result can be traced to bytes.
+
+        `research` is the delivery of a node whose work was reading: the
+        Research Records it submitted, the claims it recorded, the sources
+        those rest on, and any conflict between them. Empty for every other
+        node type, as `execution` is null for this one — a research task runs
+        nothing and produces no artifacts, so judging it by those two would be
+        judging it by what it never owed. Its completeness answer is the
+        `completion_status` on the record, which RAVEL computed rather than the
+        researcher asserted.
 
         Read this before submitting anything: a verdict that reports on a
         criterion this node never had is refused, and the refusal is the whole
@@ -234,6 +250,7 @@ def read_review_package(context: ToolContext) -> Any:
                 for deviation in records.deviations.all()
                 if deviation.node_id == node_id
             ]
+            research = task_ledger(session, context.project_id, node_id)
 
         return {
             "node": as_json(node),
@@ -247,6 +264,12 @@ def read_review_package(context: ToolContext) -> Any:
             "unreviewable": unreviewable,
             "execution": as_json(execution) if execution is not None else None,
             "artifacts": produced,
+            "research": {
+                "records": as_json(research.records),
+                "claims": as_json(research.claims),
+                "sources": as_json(research.sources),
+                "conflicts": as_json(research.conflicts),
+            },
             "reviews": as_json(reviews),
             "deviations": as_json(deviations),
         }

@@ -16,6 +16,7 @@ checkable.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, select
@@ -187,6 +188,68 @@ class ResearchRecordRepository(ProjectScopedRepository[ResearchRecord]):
     def for_node(self, node_id: str) -> list[ResearchRecord]:
         """Every record produced for one DAG node."""
         return self.all(node_id=node_id)
+
+
+@dataclass(frozen=True)
+class TaskLedger:
+    """Everything one research task produced, read as one thing.
+
+    The four parts are only meaningful together: a claim without its sources
+    cannot be checked, a source no claim rests on is a lead rather than
+    evidence, a conflict is about claims rather than owned by one, and a record
+    is the answer assembled from all three. Reading them separately is how a
+    reader ends up with the record and none of what it rests on.
+
+    The Research seat reads this to continue its own task. Review reads it to
+    judge one — the same rows, so the seat that produced the answer and the
+    seat that judges it are looking at the same delivery. That is the whole
+    reason it is here rather than in either tool module.
+    """
+
+    claims: tuple[Evidence, ...]
+    sources: tuple[EvidenceSource, ...]
+    conflicts: tuple[EvidenceConflict, ...]
+    records: tuple[ResearchRecord, ...]
+
+
+def task_ledger(session: Session, project_id: str, node_id: str) -> TaskLedger:
+    """The ledger for one research node: its claims, sources, conflicts, records.
+
+    Keyed by the node rather than by the task id, because that is the identity
+    both readers hold: a research task *is* a DAG node, and Review is given a
+    node to judge rather than a task to continue.
+    """
+    claims = EvidenceRepository(session, project_id).for_task(node_id)
+    sources = EvidenceSourceRepository(session, project_id)
+    named = [sources.get(source_id=ref) for ref in source_refs(claims)]
+    return TaskLedger(
+        claims=tuple(claims),
+        sources=tuple(named),
+        conflicts=tuple(conflicts_for(session, project_id, claims)),
+        records=tuple(ResearchRecordRepository(session, project_id).for_node(node_id)),
+    )
+
+
+def source_refs(claims: Iterable[Evidence]) -> tuple[str, ...]:
+    """Every source any of these claims rests on, each named once."""
+    return tuple(dict.fromkeys(ref for claim in claims for ref in claim.source_refs))
+
+
+def conflicts_for(
+    session: Session, project_id: str, claims: Iterable[Evidence]
+) -> list[EvidenceConflict]:
+    """The conflict records that are about these claims.
+
+    Filtered rather than queried by task, because a conflict has no task of its
+    own: it is about evidence rows, and which task those belong to is the
+    question being asked.
+    """
+    named = {claim.evidence_id for claim in claims}
+    return [
+        conflict
+        for conflict in EvidenceConflictRepository(session, project_id).all()
+        if named & set(conflict.evidence_refs)
+    ]
 
 
 class ArtifactRepository(ProjectScopedRepository[Artifact]):

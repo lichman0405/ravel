@@ -1,9 +1,11 @@
-"""The two agent powers, reached as DSH sessions.
+"""The agent powers, reached as DSH sessions.
 
 `ProjectLoop` sequences a project and holds none of the powers it sequences.
-Two of the three are agents — Master, who decides, and Review, who judges — and
-this module is what connects them: a harness runtime scoped to
-`(project_id, role)`, one session, and a turn per round.
+All three of them are agents, and all three are here: Master, who decides;
+Review, who judges; and the execution seats — the two Workers and Research —
+whose node runs under the terms Master froze. What this module is, for each of
+them, is a harness runtime scoped to `(project_id, role)`, one session, and a
+turn per round.
 
 **A turn's input is the situation, written out.** The agent is told what
 PostgreSQL says: where the project is, which nodes are in which state, and what
@@ -53,7 +55,13 @@ from ravel.execution.loop import Situation
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["HarnessAgent", "MasterConversation", "RoleSession", "WorkerAgent"]
+__all__ = [
+    "HarnessAgent",
+    "MasterConversation",
+    "ResearchAgent",
+    "RoleSession",
+    "WorkerAgent",
+]
 
 
 @dataclass
@@ -150,8 +158,7 @@ class HarnessAgent(RoleSession):
             # and the loop counts those. Raising here would end a project
             # because a model timed out on one round.
             logger.warning(
-                "harness turn did not complete: project=%s role=%s session=%s "
-                "finish_reason=%s",
+                "harness turn did not complete: project=%s role=%s session=%s finish_reason=%s",
                 self.project_id,
                 self.role.value,
                 self.session_id,
@@ -176,8 +183,9 @@ class HarnessAgent(RoleSession):
             case AgentRole.REVIEW:
                 return self._review_prompt(situation)
         raise ValueError(
-            f"{self.role.value} is not a role the project loop calls; the loop "
-            "sequences Master and Review, and workers are reached by their runs"
+            f"{self.role.value} is not a role the loop hands a situation to; it "
+            "sequences Master and Review, and the execution seats are reached by "
+            "the node each one is serving"
         )
 
     def _master_prompt(self, situation: Situation) -> str:
@@ -251,6 +259,13 @@ class HarnessAgent(RoleSession):
                 [
                     "Nothing runs until each of these has a PRE_RUN verdict, so a "
                     "node held back is a node waiting on this turn.",
+                    "A PRE_RUN verdict is not a verdict on results: a node that has "
+                    "not run has none, and owes no Execution Record and no "
+                    "artifacts yet. It asks whether the node is fit to be run and "
+                    "measured afterwards — its frozen criteria exist and say "
+                    "something checkable. PASS clears it to run; anything else "
+                    "parks it at WAITING_DECISION, which hands the plan back to "
+                    "Master rather than judging the work.",
                 ]
             )
         if final:
@@ -264,9 +279,8 @@ class HarnessAgent(RoleSession):
         lines.extend(
             [
                 "",
-                "Judge against the frozen criteria the node carries, criterion by "
-                "criterion, and diagnose rather than only scoring. Your verdict is "
-                "recorded as it is written; nothing here reads your prose.",
+                "Diagnose rather than only scoring. Your verdict is recorded as it "
+                "is written; nothing here reads your prose.",
             ]
         )
         return "\n".join(lines)
@@ -290,8 +304,11 @@ class HarnessAgent(RoleSession):
         for node in situation.nodes:
             if node.status is NodeStatus.WAITING_DECISION:
                 waiting.append(
-                    f"- {node.display_id} stopped and is waiting for a decision "
-                    f"about its contract"
+                    f"- {node.display_id} stopped and is waiting on your decision "
+                    f"about what happens to it next. Why it stopped is the verdict "
+                    f"that stopped it: `read_project_state` reports it under "
+                    f"`stopped`, and a node a Worker's contract stopped and a node "
+                    f"a Review would not clear are different problems."
                 )
             elif node.status is NodeStatus.BLOCKED:
                 waiting.append(
@@ -332,7 +349,9 @@ class HarnessAgent(RoleSession):
             "Each has handed its result over and is holding there until a verdict "
             "moves it. A PASS lets the branch behind it proceed; FAIL and PARTIAL "
             "are outcomes Master replans around, and neither is a reason to soften "
-            "the criteria."
+            "the criteria. A final verdict is the one measured criterion by "
+            "criterion: it must answer every frozen criterion the node carries, "
+            "and it is the one that ends the node."
         )
         return lines
 
@@ -352,13 +371,41 @@ class WorkerAgent(RoleSession):
     the work and survives this agent being restarted.
     """
 
+    async def start(self, node: DagNode) -> None:
+        """Run the turn that begins this node's run.
+
+        The other half of the Worker's life, and a different turn from `act`:
+        the node is READY, nothing has happened yet, and what this turn does is
+        use `start_execution` to hand the work to the Execution Service. The
+        turn is worth its own method rather than a branch inside `act` because
+        the two are different episodes with different prompts — a Worker told
+        "here is a task in flight" and a Worker told "here is a task that may
+        begin" are being asked different things, and a model asked the wrong
+        one does the wrong one.
+
+        A turn that failed is not raised. The node stays READY, and the loop's
+        next round hands it over again; ending the project because a model
+        timed out on one turn would put the durability in the wrong place.
+        """
+        await self._turn(self._start_prompt(node), verb="start", node=node)
+
     async def act(self, node: DagNode, situation: Situation) -> None:
         """Run one monitoring or communication turn for the given node."""
-        outcome = await self.run(self._prompt(node, situation))
+        await self._turn(self._prompt(node, situation), verb="monitor", node=node)
+
+    async def _turn(self, prompt: str, *, verb: str, node: DagNode) -> None:
+        """Run one turn and log what it was.
+
+        The two turns differ only in what they are told and in what a reader
+        needs to see afterwards, so the running and the logging live here and
+        the prompts stay apart.
+        """
+        outcome = await self.run(prompt)
         if not outcome.completed:
             logger.warning(
-                "worker turn did not complete: project=%s role=%s node=%s session=%s "
-                "finish_reason=%s",
+                "worker %s turn did not complete: project=%s role=%s node=%s "
+                "session=%s finish_reason=%s",
+                verb,
                 self.project_id,
                 self.role.value,
                 node.display_id,
@@ -366,13 +413,47 @@ class WorkerAgent(RoleSession):
                 outcome.finish_reason,
             )
         logger.info(
-            "worker turn: project=%s role=%s node=%s turns=%d tool_calls=%d completed=%s",
+            "worker %s turn: project=%s role=%s node=%s turns=%d tool_calls=%d completed=%s",
+            verb,
             self.project_id,
             self.role.value,
             node.display_id,
             self._turns,
             len(outcome.tool_calls),
             outcome.completed,
+        )
+
+    def _start_prompt(self, node: DagNode) -> str:
+        """What the Worker is told when the task is its to begin.
+
+        Narrower than a monitoring turn on purpose: the node is READY, so there
+        is no record to read and nothing in flight to weigh. The turn has one
+        job, and the prompt says which tool does it and what the tool will do
+        about a task that may not run — because a Worker that did not know the
+        answer was a refusal would read it as a fault and try something else.
+        """
+        return "\n".join(
+            [
+                f"A turn of yours. You are serving as {self.role.display_name}.",
+                "",
+                f"Node: {node.display_id} ({node.node_type.value})",
+                f"Node ID: {node.node_id}",
+                f"Status: {node.status.value}",
+                f"Objective: {node.objective}",
+                f"Execution contract: {node.execution_contract_ref}",
+                "",
+                "This task is ready to run and has not started. It is yours to begin.",
+                "",
+                "What to do this turn:",
+                "1. Read the frozen Execution Contract for this node.",
+                "2. Call start_execution with this node's id.",
+                "3. Report what it answered and stop.",
+                "",
+                "start_execution hands the work to RAVEL's Execution Service, which "
+                "runs it durably. You are starting the task the contract describes; "
+                "you are not choosing what it does, and a refusal means the DAG has "
+                "not cleared this node to run rather than that something went wrong.",
+            ]
         )
 
     def _prompt(self, node: DagNode, situation: Situation) -> str:
@@ -417,6 +498,155 @@ class WorkerAgent(RoleSession):
 
 
 @dataclass
+class ResearchAgent(RoleSession):
+    """A research task reached as a DSH session.
+
+    The third execution seat, and the one whose work is not handed to anything
+    else. A Worker begins a run that Temporal carries out and then reads it
+    back; Research begins a task that is *read* — the searching, the opening,
+    and the registering happen in this session, with the tools in this
+    session's roster — and what it hands over at the end is the record the
+    Evidence Ledger was built from. So `start` calls `begin_research`, which
+    moves the node into this seat's hands, and the rest of the turn is the work
+    itself.
+
+    Nothing here decides anything. What the task is asking was fixed by the
+    contract Master wrote, a source's standing is derived from what RAVEL
+    actually opened, and whether the result is enough is Review's at the FINAL
+    checkpoint. This agent reads, records, and hands over.
+    """
+
+    async def start(self, node: DagNode) -> None:
+        """Run the turn that begins this node's task.
+
+        Two things happen in it, in this order and for a reason: the task is
+        begun through `begin_research` — the only way a node enters RUNNING is
+        the act of the seat that executes it — and then it is researched.
+        Splitting them across two turns would cost the task a turn it does not
+        have, because the loop serves a live node once.
+
+        A turn that failed is not raised. The node stays READY and the loop's
+        next round hands it over again, which is the same recovery the Workers
+        get and the same reason: a model timing out on one turn is not a fact
+        about the project.
+        """
+        await self._turn(self._start_prompt(node), verb="start", node=node)
+
+    async def act(self, node: DagNode, situation: Situation) -> None:
+        """Run one turn on a research task that is already under way."""
+        await self._turn(self._prompt(node, situation), verb="monitor", node=node)
+
+    async def _turn(self, prompt: str, *, verb: str, node: DagNode) -> None:
+        """Run one turn and log what it was, as the Worker seats do."""
+        outcome = await self.run(prompt)
+        if not outcome.completed:
+            logger.warning(
+                "research %s turn did not complete: project=%s role=%s node=%s "
+                "session=%s finish_reason=%s",
+                verb,
+                self.project_id,
+                self.role.value,
+                node.display_id,
+                self.session_id,
+                outcome.finish_reason,
+            )
+        logger.info(
+            "research %s turn: project=%s role=%s node=%s turns=%d tool_calls=%d completed=%s",
+            verb,
+            self.project_id,
+            self.role.value,
+            node.display_id,
+            self._turns,
+            len(outcome.tool_calls),
+            outcome.completed,
+        )
+
+    def _start_prompt(self, node: DagNode) -> str:
+        """What Research is told when the task is its to begin.
+
+        The turn carries the whole task rather than a first step, because the
+        seat is served once while the node is live: an agent that began the
+        task and stopped to ask what to do next would leave a RUNNING node
+        nobody is working on. What the prompt therefore has to say is that the
+        work and the hand-over both belong to this turn.
+        """
+        return "\n".join(
+            [
+                f"A turn of yours. You are serving as {self.role.display_name}.",
+                "",
+                f"Node: {node.display_id} ({node.node_type.value})",
+                f"Node ID: {node.node_id}",
+                f"Status: {node.status.value}",
+                f"Objective: {node.objective}",
+                f"Execution contract: {node.execution_contract_ref}",
+                "",
+                "This task is ready to run and has not started. It is yours to begin.",
+                "",
+                "What to do this turn:",
+                "1. Call read_research_task with this node's id. It returns the frozen "
+                "terms, the project's Research Contract, and everything the ledger "
+                "already holds.",
+                "2. Call begin_research with this node's id. That puts the task in your "
+                "hands; a refusal means the DAG has not cleared this node to run, not "
+                "that something went wrong.",
+                "3. Research the question, and keep going while you are here: search, "
+                "open the original sources, register the ones you actually read, and "
+                "record the claims they support.",
+                "4. Call submit_research_record before you stop. An INCOMPLETE record "
+                "with its gaps named is a real answer; a turn that submits nothing "
+                "leaves the task running with nobody on it.",
+                "",
+                "Work in this turn rather than describing the work. A turn that says "
+                "which search you intend to run has left the task where it found it, "
+                "and the loop reads a turn that changed nothing as exactly that.",
+            ]
+        )
+
+    def _prompt(self, node: DagNode, situation: Situation) -> str:
+        """What Research is told at the start of its turn.
+
+        The same facts as a Worker's turn and a different job: there is no
+        service to hand the work to and no contract question to ask, because
+        the task *is* the reading. So the prompt points at the ledger — what is
+        already recorded, so a second pass adds to it — and at the one act that
+        ends this seat's part.
+        """
+        project = situation.project
+        return "\n".join(
+            [
+                f"A turn of yours. Project {project.display_id} ({project.status.value}).",
+                f"You are serving as {self.role.display_name} for one task.",
+                "",
+                f"Node: {node.display_id} ({node.node_type.value})",
+                f"Node ID: {node.node_id}",
+                f"Status: {node.status.value}",
+                f"Objective: {node.objective}",
+                f"Execution contract: {node.execution_contract_ref}",
+                "",
+                "This task is in your hands and has not been handed over. Nothing "
+                "else will move it: the record is what moves it.",
+                "",
+                "What to do this turn:",
+                "1. Call read_research_task. Read the terms you are answering under and "
+                "the ledger as it stands before searching again, so that this pass "
+                "adds evidence rather than re-deriving what is already recorded.",
+                "2. Continue where the task actually is: open a lead you have not "
+                "opened, register a source you read, record the claims it supports, or "
+                "write down two claims that disagree.",
+                "3. Call submit_research_record when the question is answered as far as "
+                "the evidence allows — including when the honest answer is a list of "
+                "what you could not establish. The completion contract judges the "
+                "record, not your opinion of it, and INCOMPLETE is a real answer.",
+                "",
+                "Do not change the plan, do not decide whether the evidence is good "
+                "enough, and do not treat a search result, a snippet or your own "
+                "recollection as a source: RAVEL records what it opened, and nothing "
+                "else is provenance.",
+            ]
+        )
+
+
+@dataclass
 class MasterConversation(RoleSession):
     """A person talking to Master, with the project state in front of it.
 
@@ -451,8 +681,7 @@ class MasterConversation(RoleSession):
             # transcript should show one that did not finish rather than the
             # request failing after the question was already recorded.
             logger.warning(
-                "master conversation turn did not complete: project=%s session=%s "
-                "finish_reason=%s",
+                "master conversation turn did not complete: project=%s session=%s finish_reason=%s",
                 self.project_id,
                 self.session_id,
                 outcome.finish_reason,
@@ -476,8 +705,7 @@ class MasterConversation(RoleSession):
         """
         project = situation.project
         lines = [
-            f"Somebody is talking to you. Project {project.display_id} "
-            f"({project.status.value}).",
+            f"Somebody is talking to you. Project {project.display_id} ({project.status.value}).",
             f"Objective: {project.objective}",
             "",
             "* What the project state holds",

@@ -10,6 +10,7 @@ from ravel.domain.artifacts import (
     ArtifactRegistration,
     ArtifactVersion,
     artifact_key,
+    unusable_filename_reason,
 )
 from ravel.domain.clock import utcnow
 from ravel.domain.decisions import (
@@ -170,6 +171,46 @@ def test_a_storage_key_refuses_to_escape_its_prefix(
 def test_versions_start_at_one() -> None:
     with pytest.raises(ValueError, match="starts at 1"):
         artifact_key("proj-a", "art-1", 0, "f.csv")
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["", "   ", "a/b.csv", "a\\b.csv", ".", "..", "../../escape.csv"],
+)
+def test_a_name_a_file_could_not_have_is_reported_as_such(filename: str) -> None:
+    """The reason is a sentence, because two callers state it to a model.
+
+    `artifact_key` asks it when bytes are stored and the terms of a node ask it
+    when the task is planned; a live run failed an activity five retries deep
+    because only the first of those asked.
+    """
+    assert unusable_filename_reason(filename) is not None
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "conductivity.csv",
+        "transport proxy.csv",
+        "应变_vs_x.csv",
+        "notes.json",
+        # Printable-ness is not this rule's business. A name that would have to
+        # be escaped into a header is the Gateway's problem and the Gateway
+        # answers for it — `test_a_filename_cannot_talk_its_way_out_of_the_header`
+        # is that answer — so a domain rule that refused it here would be a
+        # second, stricter opinion about uploads that no storage key needs.
+        're"port\nX-Evil: yes',
+    ],
+)
+def test_a_name_a_file_could_have_is_accepted(filename: str) -> None:
+    """Spaces and non-ASCII are names; the rule is about what cannot be stored.
+
+    A tighter rule — no spaces, ASCII only — would be this function inventing a
+    restriction the storage layer does not have, and it would refuse names a
+    scientist working in another language would write.
+    """
+    assert unusable_filename_reason(filename) is None
+    assert artifact_key("proj-a", "art-1", 1, filename).endswith(f"/{filename}")
 
 
 def _artifact() -> Artifact:

@@ -39,9 +39,27 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "list_pending_approvals": frozenset({MASTER}),
     "read_master_checkpoint": frozenset({MASTER}),
     "write_master_checkpoint": frozenset({MASTER}),
+    # What the project is for is Master's to write and nobody else's, for the
+    # reason the DAG is: it is the statement every later judgement is made
+    # against. Deliberately *not* a DAG mutation — see `DAG_MUTATION_TOOLS`.
+    "commit_research_contract": frozenset({MASTER}),
+    # What would count as answering the question, which is the other half of
+    # what a project has to say about itself before anything runs. Also not a
+    # DAG mutation, for the same reason: it commits no node and moves no edge.
+    # It is, however, what takes the project out of CREATED — see
+    # `SuccessContractRepository.commit`.
+    "commit_success_contract": frozenset({MASTER}),
+    "commit_roadmap_phase": frozenset({MASTER}),
     "add_dag_node": frozenset({MASTER}),
     "expand_dag_phase": frozenset({MASTER}),
     "cancel_dag_node": frozenset({MASTER}),
+    # The last act of a project, and Master's alone for the reason every other
+    # ending rule is: which of A20's four endings this is, is a scientific
+    # judgement about what the project established, and there is no other role
+    # that may make it. Not a DAG mutation either — it *cancels* nodes when the
+    # ending is a termination, and the cancellation is RAVEL applying a
+    # recorded decision rather than Master editing the graph by hand.
+    "conclude_project": frozenset({MASTER}),
     # ── Review: judging work against the criteria it was frozen against ─────
     #
     # Review reads the record and writes a verdict, and that is the whole of
@@ -58,6 +76,12 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     # tools are all Research's. A source row is a statement that RAVEL read
     # something, and the role that makes it is the role whose task asked the
     # question — which is why no other role holds any of these.
+    #
+    # `begin_research` is here for the same reason `start_execution` is on the
+    # Workers: a task begins because the seat that executes it asked for it.
+    # What it cannot do is decide whether the node may run — it asks the DAG,
+    # and the answer is the one every other path into RUNNING gets.
+    "begin_research": frozenset({RESEARCH}),
     "read_research_task": frozenset({RESEARCH}),
     "search_sources": frozenset({RESEARCH}),
     "search_web": frozenset({RESEARCH}),
@@ -67,13 +91,21 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "record_conflict": frozenset({RESEARCH}),
     "assess_evidence": frozenset({RESEARCH}),
     "submit_research_record": frozenset({RESEARCH}),
-    # ── Workers: what they act under, and what they may say ────────────────
+    # ── Workers: what they act under, what they begin, and what they say ───
     #
-    # Both Workers hold the same three, because both act under a frozen
-    # Execution Contract and both may find that it does not name what they have
-    # been asked for. `send_message` is the Experimental Worker's alone: it is
-    # the role that talks to a lab, and the four permitted kinds are the whole
-    # of what a Worker may say to one.
+    # Both Workers hold the same four, because both act under a frozen
+    # Execution Contract, both begin the task that contract describes, and both
+    # may find that it does not name what they have been asked for.
+    # `send_message` is the Experimental Worker's alone: it is the role that
+    # talks to a lab, and the four permitted kinds are the whole of what a
+    # Worker may say to one.
+    #
+    # `start_execution` is here rather than on Master because a node runs
+    # because the Worker whose node it is asked for it — see the chain in
+    # `ravel.execution.node_runs`. What it cannot do is decide *whether* a node
+    # may run: it asks the DAG, and the answer is the same one every other path
+    # into RUNNING gets.
+    "start_execution": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
     "read_execution_contract": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
     "read_execution_status": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
     "request_action": frozenset({COMPUTE_WORKER, EXPERIMENTAL_WORKER}),
@@ -86,8 +118,15 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
 #: these, and that the ones Master's server registers refuse a non-Master scope
 #: even if they were ever reachable.
 DAG_MUTATION_TOOLS: frozenset[str] = frozenset(
-    {"add_dag_node", "expand_dag_phase", "cancel_dag_node"}
+    {"commit_roadmap_phase", "add_dag_node", "expand_dag_phase", "cancel_dag_node"}
 )
+
+#: A writing tool Master holds that is deliberately not in the set above.
+#: `commit_research_contract` records what the project was asked for, which is
+#: the ground the plan is made on rather than a change to the plan: no node is
+#: created, no dependency moves, and the DAG after it is the DAG before it. It
+#: is named here so that its absence from `DAG_MUTATION_TOOLS` reads as the
+#: decision it is.
 
 #: Which role may hold which writing tool — the record each is the author of.
 #:
@@ -109,10 +148,17 @@ DAG_MUTATION_TOOLS: frozenset[str] = frozenset(
 #: `request_action` is held by both Workers, and this table is where that is
 #: stated rather than where it is discovered.
 WRITE_AUTHORSHIP: dict[AgentRole, frozenset[str]] = {
-    MASTER: DAG_MUTATION_TOOLS | {"write_master_checkpoint"},
+    MASTER: DAG_MUTATION_TOOLS
+    | {
+        "write_master_checkpoint",
+        "commit_research_contract",
+        "commit_success_contract",
+        "conclude_project",
+    },
     REVIEW: frozenset({"submit_review"}),
     RESEARCH: frozenset(
         {
+            "begin_research",
             "register_source",
             "record_evidence",
             "record_conflict",
@@ -154,6 +200,41 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "waiting on, and which decisions a successor should read — so a replacement session "
         "can continue after this one is gone."
     ),
+    "commit_research_contract": (
+        "Write down what this project was asked for: the goal in the words it was "
+        "asked in, and the scientific problem that goal was turned into. A project "
+        "starts with none, so on a new project this comes first — the Research seat "
+        "reads the contract as the terms its work is answered under, and until it is "
+        "written there is nothing for a research task to be about. It is written "
+        "once: a change to what the user wants is a new project."
+    ),
+    "commit_success_contract": (
+        "Freeze what would count as this project having answered its question: the "
+        "criteria for success, for failure, and for stopping it early, plus what to do "
+        "when the evidence runs out. A project starts with none, and until it has one "
+        "it cannot be concluded at all — the endings that claim something about results "
+        "are refused while there is no frozen definition to measure the claim against. "
+        "Write it before the work runs, not after seeing what the work produced. A "
+        "later version is a change of what the project is aiming at and needs the "
+        "reasoning behind it."
+    ),
+    "conclude_project": (
+        "End this project and record which ending it is: SUCCESS, FAILED, INCONCLUSIVE "
+        "or TERMINATED. Call it when the loop tells you the project has stopped and has "
+        "nothing left to do — that means nothing can move, not that the project won; "
+        "whether what stopped was a success is your judgement to record here. Success, "
+        "failure and inconclusive are claims about results and are refused while work "
+        "is unfinished, a deviation is unanswered, or no success contract exists. "
+        "TERMINATED states that the work was stopped rather than finished, is available "
+        "at any time, needs a reason, and cancels whatever is still running."
+    ),
+    "commit_roadmap_phase": (
+        "Add one stage to the project's roadmap: a name, its position counting from 0, "
+        "and what the stage is for. The roadmap is the coarse plan above the DAG, and a "
+        "project starts with none — so on a new project this is the first planning act, "
+        "and a stage has to exist before work can be committed to it. Keep the stages "
+        "coarse: only the current one and the two after it may be expanded into nodes."
+    ),
     "add_dag_node": (
         "Add one node to the Scientific DAG with the reason it is being added, and with "
         "the terms it will run under. The node is recorded against a decision that "
@@ -166,7 +247,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Commit the concrete work a roadmap stage consists of, as one decision, each "
         "node with the criteria it will be measured against and the terms it runs "
         "under. Use this to turn the current stage into executable nodes; nodes in one "
-        "call may depend on each other."
+        "call may depend on each other. The stage must already be on the roadmap — "
+        "commit_roadmap_phase is how it gets there."
     ),
     "cancel_dag_node": (
         "Cancel a node that should not happen, recording the decision that ended it. This is "
@@ -191,6 +273,14 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "becomes PASSED, FAILED or PARTIAL and stays that way. A RUNTIME verdict is advice "
         "and moves nothing. Report a final verdict on every frozen criterion one by one, "
         "with what you observed; a verdict that leaves one out is refused."
+    ),
+    "begin_research": (
+        "Begin the research task you are serving, and take it into your hands. Call it "
+        "once, for a task that is ready and has not started. It starts the task the "
+        "frozen terms describe and nothing else — and if the project has not cleared "
+        "this node to run, it says which condition is unmet rather than beginning it. "
+        "After it returns, do the work itself: read, open, register, and finish with "
+        "submit_research_record."
     ),
     "read_research_task": (
         "Read the research task you are serving: what it is answering, the terms it runs "
@@ -251,6 +341,13 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "ranges and substitutions permitted, the outputs you owe, and when to stop. This "
         "is the whole of your authority. An action it does not name is forbidden, not "
         "merely unmentioned."
+    ),
+    "start_execution": (
+        "Begin your task's run and hand it to RAVEL's Execution Service, which runs it "
+        "durably. Call it once for a task that is ready and has not started. It starts "
+        "the task the frozen contract describes and nothing else — and if the project "
+        "has not cleared this node to run, it says which condition is unmet rather than "
+        "starting it. A refusal is an answer, not a fault: report it and stop."
     ),
     "read_execution_status": (
         "Read the record of what actually happened on your task: the job in flight, the "

@@ -31,6 +31,7 @@ from ravel.domain.enums import (
     FailurePolicy,
     NodeStatus,
     NodeType,
+    ProjectStatus,
     ReviewCheckpoint,
     ReviewOutcome,
 )
@@ -459,7 +460,44 @@ class DagRepository(ProjectScopedRepository[DagNode]):
                 "decision_ref": decision_ref,
             },
         )
+        if target is NodeStatus.RUNNING:
+            self._project_has_started(actor_id=actor_id)
         return moved
+
+    def _project_has_started(self, *, actor_id: str) -> None:
+        """Move the project to EXECUTING when its first node starts running.
+
+        The second half of a project's own life cycle, and the half with no
+        actor of its own: nothing *decides* that a project has begun, it
+        begins. Read off the DAG rather than asked of Master, because a status
+        somebody had to remember to set is a status that is wrong exactly when
+        it matters — and this one is what makes any of A20's endings reachable:
+        COMPLETED, FAILED and INCONCLUSIVE are all moves from EXECUTING.
+
+        A project still CREATED is left where it is. It has no frozen
+        definition of what success means yet, and moving it on would say it had
+        somewhere to be going when nobody has said where.
+
+        Called from the one place a node's status is written, so that every
+        path into RUNNING — the Research seat's `begin_research` and the
+        Temporal run the Workers start — has the same effect on the project
+        without either of them knowing about it.
+
+        The registry is imported here rather than at the top of the module:
+        `projects` imports this module, so importing it back at module level
+        would be a cycle.
+        """
+        from ravel.state.repositories.projects import ProjectRegistry
+
+        registry = ProjectRegistry(self.session)
+        if registry.get(self.project_id).status is not ProjectStatus.CONTRACT_DEFINED:
+            return
+        registry.transition(
+            self.project_id,
+            ProjectStatus.EXECUTING,
+            actor_id=actor_id,
+            reason="The first node of the plan has started running.",
+        )
 
     def record_artifact(self, node_id: str, artifact_id: str) -> DagNode:
         """Attach an artifact to a node's references.

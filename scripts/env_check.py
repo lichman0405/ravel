@@ -137,7 +137,12 @@ async def check_dsh() -> None:
     )
 
     config = DeepSeekHarnessConfig()
-    binary = config.resolve_binary() if hasattr(config, "resolve_binary") else None
+    # The pinned SDK resolves the runtime binary itself and only some versions of
+    # it expose a way to ask where. `getattr` rather than a typed call, so this
+    # keeps working at the pin it is written for and at the next one.
+    resolver = getattr(config, "resolve_binary", None)
+    resolved: object = resolver() if callable(resolver) else None
+    binary = str(resolved) if isinstance(resolved, (str, Path)) else None
     record(
         "DSH runtime binary",
         binary is None or Path(binary).exists(),

@@ -4,12 +4,16 @@
     .venv/bin/python scripts/run_project.py --project <project_id>
     .venv/bin/python scripts/run_project.py --project <project_id> --max-rounds 40
 
-RAVEL's own software sequences a project — reading state, starting runs,
-noticing endings — and the two seats that require judgement are filled by agents
-on the pinned harness. That division is the point: the loop is deterministic
-code, and what it asks for is a decision, never an execution. `ProjectLoop` is
-the first half and `HarnessAgent` the second, and both already exist; this
-script is the composition, which until now lived only in the end-to-end tests.
+RAVEL's own software sequences a project — reading state, noticing endings — and
+all five seats are filled by agents on the pinned harness. That division is the
+point: the loop is deterministic code, and what it asks a seat for is a turn,
+never an execution. `ProjectLoop` is one half and the agents the other, and both
+already exist; this script is the composition.
+
+**This is a debugging entry point, and Phase 10K is why.** A project is meant to
+be driven by `scripts/run_supervisor.py`, which discovers the projects that are
+active and keeps going without anybody at a terminal; running one by hand is how
+a single project is watched closely, not how RAVEL is operated.
 
 **It needs a model credential.** Every round that has something to decide asks
 Master or Review, and a turn on the pinned harness reaches a real provider. With
@@ -37,10 +41,9 @@ import sys
 
 from ravel.config import Settings
 from ravel.domain.roles import AgentRole
-from ravel.dsh.agents import HarnessAgent, WorkerAgent
+from ravel.dsh.agents import HarnessAgent, ResearchAgent, WorkerAgent
 from ravel.dsh.pool import create_pool
 from ravel.execution.loop import ProjectLoop
-from ravel.execution.node_runs import TemporalNodeRuns
 from ravel.state.database import Database
 from ravel.state.repositories.projects import ProjectRegistry
 
@@ -80,7 +83,9 @@ async def drive(args: argparse.Namespace, settings: Settings) -> int:
     experimental_worker = WorkerAgent(
         pool=pool, project_id=project.project_id, role=AgentRole.EXPERIMENTAL_WORKER
     )
-    execution = await TemporalNodeRuns.connect(database, settings)
+    research = ResearchAgent(
+        pool=pool, project_id=project.project_id, role=AgentRole.RESEARCH
+    )
 
     print(
         f"\n  project  {project.display_id}  ({project.project_id})\n"
@@ -93,9 +98,9 @@ async def drive(args: argparse.Namespace, settings: Settings) -> int:
             project_id=project.project_id,
             master=master,
             review=review,
-            execution=execution,
             compute_worker=compute_worker,
             experimental_worker=experimental_worker,
+            research=research,
             poll_seconds=args.poll_seconds,
             max_rounds=args.max_rounds,
         ).run()
@@ -106,6 +111,7 @@ async def drive(args: argparse.Namespace, settings: Settings) -> int:
         review.close()
         compute_worker.close()
         experimental_worker.close()
+        research.close()
         database.dispose()
 
     if run.halted:
