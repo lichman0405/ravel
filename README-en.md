@@ -30,25 +30,13 @@ The only underlying harness is **DeepSeek Harness (DSH)**, pinned at `dsh-v0.1.5
 
 ## Project Status
 
-**V0 implementation is complete and fully accepted: 27/27 items passed, 0 skipped — and Phase 10's 40 items at 40/40.**
+**Phase 10 is complete.** V0 and Phase 10 acceptance are fully green (27/27 + 40/40). See `TEST_REPORT.md`.
 
-After filling in `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL` in `.env`, this machine produced:
+The two things that distinguish RAVEL from an ordinary orchestrator — **a model that really makes scientific decisions** and **real reading of primary sources** — have been verified against a live model and real sources.
 
-| Verification | Result |
-|---|---|
-| `make acceptance` (A01–A20 + 7 extra gates) | 43 passed, 0 skipped |
-| `make phase10-acceptance` (P10-01–20 + 20 worker items) | 56 passed, 0 skipped |
-| Real model in Master/Review seats (`tests/dsh`) | 11 passed, 0 skipped |
-| Real literature / web retrieval (`tests/live_research`) | 13 passed, 0 skipped |
-| Structural verification (unit / integration / e2e) | 803 / 538 / 20 passed |
+**However, V0 is not yet a production-ready artifact for public deployment.** `SECURITY_NOTES.md` and `KNOWN_LIMITATIONS.md` record gaps that are not yet fixed. Read them before deciding where to expose RAVEL. By default all ports bind to `127.0.0.1`.
 
-The two things that distinguish RAVEL from an ordinary orchestrator — **a model that really makes scientific decisions** and **real reading of primary sources** — have been verified on this machine. See `TEST_REPORT.md` for details.
-
-**However, V0 is not yet a production-ready artifact for public deployment.** `SECURITY_NOTES.md` and `KNOWN_LIMITATIONS.md` record gaps that are not yet fixed (e.g., L-08 DNS rebinding, L-14 browser path). Please read them before deciding where to expose RAVEL. By default all ports bind to `127.0.0.1`.
-
-> **Long-running autonomy now runs (Phase 10).** `tests/acceptance/test_phase10_live.py::test_p10_17` drives a project from the Supervisor discovering it to one of A20's four endings: unattended throughout, all five seats real DSH sessions, every turn a real model call. The most recent run took 20 minutes — both Workers drove a real execution (`mock-compute` and `mock-lab`), Review returned a live verdict at both the PRE_RUN and FINAL checkpoints, and Master read the verdict on a failed node, replanned, and chose the ending by the success contract it had frozen before any work ran. This closes `KNOWN_LIMITATIONS.md` L-19.
->
-> One boundary has to be stated plainly: both V0 backends are mocks, mock output carries the `simulated` mark, and a live Review therefore refuses to let it satisfy a criterion written for a real measurement. **That is by design**, not a defect; the cost is that no live run can end COMPLETED — only FAILED or INCONCLUSIVE.
+Both V0 backends are mocks; their output is marked `simulated` and a live Review will not accept it as a real measurement. A live run therefore cannot end `COMPLETED` — that boundary is by design, not a defect.
 
 ---
 

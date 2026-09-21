@@ -30,25 +30,13 @@ RAVEL V0 是一个运行在单台 Ubuntu 24.04 CVM 上的自主科研执行 Runt
 
 ## 项目现状
 
-**V0 实现完整，验收完整：27/27 项通过，0 skip；Phase 10 的 40 项同样 40/40 通过。**
+**Phase 10 已完成。** V0 与 Phase 10 验收全部通过（27/27 + 40/40），详见 `TEST_REPORT.md`。
 
-在填好 `.env` 里的 `DEEPSEEK_API_KEY` 与 `RAVEL_RESEARCH_CONTACT_EMAIL` 后，本机跑出的结果是：
+RAVEL 区别于普通编排器的两件事 —— **模型真的做科研决策**、**真的读原始文献** —— 已在真实模型和真实文献源上验证。
 
-| 验证内容 | 结果 |
-|---|---|
-| `make acceptance`（A01–A20 + 7 个额外 gates） | 43 通过，0 skip |
-| `make phase10-acceptance`（P10-01–20 + 20 个 worker 项） | 56 通过，0 skip |
-| 真实模型做 Master/Review 决策（`tests/dsh`） | 11 通过，0 skip |
-| 真实文献 / 网页抓取（`tests/live_research`） | 13 通过，0 skip |
-| 结构性验证（unit / integration / e2e） | 803 / 538 / 20 通过 |
+**但 V0 还不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口。请先读它们，再决定把 RAVEL 暴露到哪里。默认所有端口只绑 `127.0.0.1`。
 
-让 RAVEL 区别于普通编排器的两件事 —— **模型真的做科研决策**、**真的读原始文献** —— 已经在这台机器上验证通过。详见 `TEST_REPORT.md`。
-
-**但 V0 还不是可以公开部署的成品。** `SECURITY_NOTES.md` 与 `KNOWN_LIMITATIONS.md` 记录了尚未修补的缺口（如 L-08 DNS rebinding、L-14 浏览器路径）。请先读它们，再决定把 RAVEL 暴露到哪里。默认所有端口只绑 `127.0.0.1`。
-
-> **长程自治已经跑通（Phase 10）。** `tests/acceptance/test_phase10_live.py::test_p10_17` 让一个 Project 从被 Supervisor 发现，一路走到 A20 的四种结局之一：全程无人值守、五个席位都是真实 DSH 会话、每一轮都是真实模型调用。最近一次跑了 20 分钟 —— 两个 Worker 各自驱动了一次真实执行（`mock-compute` 与 `mock-lab`），Review 在每个节点的 PRE_RUN 与 FINAL checkpoint 都给出了真实判决，Master 读了失败节点的判决后重规划、最后按自己冻结的 success contract 选择了结局。`KNOWN_LIMITATIONS.md` L-19 由此关闭。
->
-> 一个必须说清楚的边界：V0 的两个 backend 都是 mock，mock 产物带 `simulated` 标记，真实 Review 会因此拒绝让它满足“真实测量”类的验收标准。**这是设计如此**，不是缺陷；代价是任何 live run 都只能以 FAILED 或 INCONCLUSIVE 收尾，不会 COMPLETED。
+V0 的 compute/lab backend 是 mock，产物带 `simulated` 标记，真实 Review 不会把它当真实测量。所以 live run 不会以 `COMPLETED` 结束——这是设计边界，不是缺陷。
 
 ---
 
