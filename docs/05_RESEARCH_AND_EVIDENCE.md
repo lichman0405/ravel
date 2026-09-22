@@ -164,13 +164,64 @@ If inaccessible:
 Never invent missing text.
 
 What the implementation stores is narrower than the list above in one respect, and
-it is worth knowing before relying on it: the readable text kept for a source is a
-verbatim excerpt of at most 600 characters, produced only for HTML, and no tool
-reads a stored snapshot back. So RAVEL can prove which page it read — URL, time,
-hash, tier, access status — and cannot read that page again. A live Research
-session found the edge of this by identifying the single source carrying the
-answer to its question and being unable to read a word of it;
-`KNOWN_LIMITATIONS.md` L-25 has the evidence and the two candidate designs.
+it is worth knowing before relying on it: the readable text an *opening* returns
+is a verbatim excerpt of at most 600 characters, produced only for HTML. The
+snapshot behind the row is the whole thing, though, and since Phase 11 the
+Research seat can read it again.
+
+The reading surface is three tools, all of them reads, all of them Research's:
+
+- **`source_metadata`** — what the ledger says about a source, whether its bytes
+  are available, and what kind of document they are. Returns no text, so a
+  session can decide whether to spend a read without spending one.
+- **`read_source`** — a bounded region: `start`/`length` in characters of the
+  document's text, or `pages` ("3", "3-5", "1,4,9-11") for a PDF. The result
+  carries where the region began and ended, how much there is in total, and the
+  arguments that read the next region.
+- **`search_source`** — a literal, case-insensitive search *inside* a source
+  already in hand, returning offsets into the same text `read_source` returns.
+  It is not a web search: nothing here establishes that a source exists or that
+  what it says is true.
+
+Reading is bounded in both directions. One read returns at most 24,000
+characters, a PDF at most five pages at a time, and a search walks at most
+forty pages of a PDF unless a range is named. The bound is on what the call
+costs as well as on what it returns: a PDF read extracts the pages it was asked
+for and no others.
+
+Formats: HTML, plain text, JSON and XML are read as their text, with a `note`
+saying what was removed (tags, comments, whether a re-indent happened) so the
+source's words are distinguishable from RAVEL's rendering of them; a PDF is
+read page by page; anything else is reported as a format with no words in it
+rather than returned as empty.
+
+**What it will not do is more important than what it does.** A scanned PDF —
+pages, no text layer — comes back with empty pages and a sentence saying that
+reading words out of images is OCR and RAVEL does not do it. An encrypted PDF
+says it is encrypted. A format with no text says so. A document that does not
+parse is reported as a fact about the source. Nothing in the path can produce
+text the source did not contain, which is the only property that makes the
+reading worth citing.
+
+Provenance stays where it was. The tools write nothing — no row, no counter, no
+artifact — and the `source` block they return *is* the ledger row: `source_id`,
+`content_hash`, `retrieved_at`, `snapshot_ref`, access status and tier. The
+bytes are read from the snapshot and hashed again before anybody sees them; if
+they do not hash to what the row records, the read is refused and the refusal
+names both hashes. A PDF's text is the paper's own, not a landing page and not a
+snippet: `search result/snippet is a lead` still holds, and what makes something
+evidence is that RAVEL opened and read it.
+
+Computation-methodology research — a functional, a force field, a charge method,
+a pseudopotential, a convergence criterion, a published parameter set — is
+reached the same way as anything else, out of the same ledger, with the same
+provenance. What a Research seat may do with it is establish and cite it;
+choosing which method a computation runs under is a scientific decision, and
+that is Master's.
+
+A deployment with no object store can read the ledger's metadata and not its
+bytes: the tools say which of the two is missing rather than failing. See
+`KNOWN_LIMITATIONS.md` L-25 for the history and the residual gap.
 
 ## 11. Research Completion Contract
 

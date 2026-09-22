@@ -44,6 +44,15 @@ from ravel.state.repositories.records import BackendJobRepository, RecordReposit
 
 pytestmark = pytest.mark.integration
 
+#: Every node type that is *not* executed as a durable run. Derived from the
+#: enum rather than listed, so that a node type added later is covered by
+#: `test_a_node_no_worker_runs_is_never_asked_about` without anybody
+#: remembering to add it — see that case for why a type nobody remembered
+#: would be probed by mistake.
+NON_WORKER_RUN_NODE_TYPES: tuple[NodeType, ...] = tuple(
+    sorted(set(NodeType) - set(WORKER_RUN_NODE_TYPES), key=lambda kind: kind.value)
+)
+
 
 @dataclass
 class ScriptedProbe:
@@ -701,10 +710,11 @@ async def test_recovery_does_not_depend_on_which_worker_run_it_is(
     assert read_state(database, lost)[0] is NodeStatus.WAITING_DECISION
 
 
+@pytest.mark.parametrize("node_type", NON_WORKER_RUN_NODE_TYPES)
 async def test_a_node_no_worker_runs_is_never_asked_about(
-    database: Database, prepare: Callable[..., Prepared]
+    database: Database, prepare: Callable[..., Prepared], node_type: NodeType
 ) -> None:
-    """A RESEARCH node in RUNNING has no workflow, so NOT_FOUND says nothing.
+    """A node an agent performs has no workflow, so NOT_FOUND says nothing.
 
     The live five-agent certification is where this came from: three research
     nodes were parked in `WAITING_DECISION` in the middle of their searches,
@@ -725,10 +735,18 @@ async def test_a_node_no_worker_runs_is_never_asked_about(
     written, and the probe was never asked. The second is the one that would
     have caught this before the live run — the reconciler had no business
     forming the question.
+
+    Asked of *every* node type a Worker does not run rather than of RESEARCH
+    alone, and the set is computed from the enum rather than written out, so a
+    node type added later is covered by this case the day it exists — which is
+    the day it would otherwise be probed by mistake. The bug this guards
+    against was never about research in particular; it was about a question
+    asked of a workflow that was never started, and any future agent-performed
+    node type is the same bug with a different name.
     """
     lost = start_a_run(
         database,
-        prepare(node_type=NodeType.RESEARCH, with_acceptance=False),
+        prepare(node_type=node_type, with_acceptance=False),
         job_state=None,
     )
     probe = ScriptedProbe(answer=WorkflowLiveness.NOT_FOUND)

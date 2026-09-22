@@ -96,6 +96,13 @@ from tests.integration.review.conftest import (  # noqa: F401
     submit,
 )
 
+# P11-02 reads sources out of MinIO rather than off the network, and most of
+# its cases therefore need no contact address — only the server a role is
+# launched with, pointed at this database. `live_role_environment` above is the
+# same builder on live settings, and is what the one case that does go out for a
+# paper uses.
+from tests.integration.roles.conftest import role_environment  # noqa: F401
+
 # A03 and A04 are live by definition — the item says "no mock search", and a
 # substituted source would satisfy every assertion about *shape* while proving
 # nothing. These two come from the suite that is never mocked, and they carry

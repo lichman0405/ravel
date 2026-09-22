@@ -336,6 +336,20 @@ URLs extracted from a page are filtered by `_absolute` before a research task
 ever sees them: non-http schemes are dropped rather than returned, so the
 caller cannot be handed a `javascript:` link to open.
 
+Since Phase 11, a PDF's bytes are parsed too — by `pypdf`, in
+`ravel/research/deepread.py`, when the Research seat reads back a source it
+already registered. Three things bound it. The bytes are the ones RAVEL stored
+and hashed, not bytes fetched at read time, so a document is parsed only after
+the ledger has a `content_hash` for it. The module is a pure function of those
+bytes: it holds no client, resolves nothing, and cannot reach the network from a
+PDF's contents — an embedded link or an external stream reference is text in the
+document, not a fetch. And every failure is caught and reported as a property of
+the document (unparseable, encrypted, page not extractable) rather than
+propagated, because a malformed paper arrives as a traceback otherwise, which is
+both a worse answer and a worse failure mode. Nothing extracted is executed:
+the text goes back to the model as data, and the HTML/XML path still strips
+markup rather than rendering it.
+
 ---
 
 ## 7. What the automated reviews found

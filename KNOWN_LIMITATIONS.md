@@ -414,6 +414,33 @@ every artifact carries the note *"produced by a mock backend; not a measurement
 and not admissible as evidence"*, and the judge declined to let the system's own
 disclaimer satisfy criteria written against real outputs.
 
+**Do not conclude** that "every seat reached" follows from the architecture
+alone. It follows from the architecture *and* from an objective that asks for
+work all three work seats can be given. A live run on 2026-09-23 is what showed
+the difference. Under the question-shaped objective the item then carried —
+"establish whether niobium doping raises the conductivity of titanium dioxide by
+at least 15% over the undoped baseline ... I will put the two together myself" —
+a live Master planned the literature first, two RESEARCH nodes were created, the
+two research records reported that the protocols could not be fixed from the
+sources that were retrievable, and Master
+concluded INCONCLUSIVE in a written Decision naming the missing stream and
+refusing to read the outcome as a negative result about niobium. Every turn in
+that run was correct, and it reached three of the five seats — because for a
+question the answer *is* the deliverable, and there is nothing left to compute
+or measure once Research reports that the literature does not settle it. The
+item asserted five seats regardless, and so failed a run whose plan was right.
+
+P10-17 is now two cases, and the split is the finding rather than a workaround.
+The certification case asks for three pieces of work, one per work seat, with
+each bench's inputs — the composition grid, the reference value, the specimen
+and conditions — written into the objective, so that no bench waits on what the
+literature did or did not yield, and asserts that all five seats took a live
+turn. The second case asks a question, asserts that the ending is the Decision
+Record naming it and that every node carried out was carried out by the seat
+that owns its type, and lets the ending be whichever of A20's four the evidence
+supports. Neither case mocks Research, loosens a Review, hides an evidence gap
+from Master, or asks any seat to behave unscientifically to make a row pass.
+
 ## L-20 — The live-research suite now runs with a contact address
 
 - **Since:** Phase 9
@@ -648,6 +675,24 @@ is any promise that the work comes back without someone deciding it should.
 
 - **Since:** Phase 9, when the source gateway was built; found by a live run of
   `test_p10_17` in Phase 10
+- **Resolved:** 2026-09-22, in Phase 11. The Research seat holds three reading
+  tools — `source_metadata`, `read_source`, `search_source` — and they read the
+  bytes RAVEL kept, out of the object store, by the `source_id` a row in the
+  Evidence Ledger already carries. `read_source` returns a bounded region of a
+  document's text and says where the next region starts; a PDF is addressed by
+  page instead of by character, and a scanned or encrypted one is reported as
+  having no text rather than guessed at. Every read re-hashes the stored bytes
+  against the `content_hash` the row records and refuses on a mismatch, so the
+  text and the provenance cannot come apart. No new provenance system exists:
+  the tools write nothing, add no row, and return the ledger's own fields as
+  `source`. See `ravel.research.deepread`, `src/ravel/mcp/tools/research.py`,
+  `tests/integration/research/test_deep_read.py`, and
+  `tests/acceptance/test_phase11_deepread.py`.
+- **Still open:** the `required_outputs` mismatch in the paragraph below — a
+  RESEARCH node's contract still names files, and the seat still has no tool
+  that writes one. And a deployment with no object store can read the ledger's
+  metadata and not its bytes: `source_metadata` says so rather than failing, and
+  the ten in-memory retrievals a session opened itself are readable either way.
 - **Where:** `src/ravel/research/fetching.py` (`EXCERPT_CHARS`, `excerpt_of`);
   `src/ravel/mcp/tools/research.py` (`open_source`, `register_source`); the
   absence of any tool that reads an artifact
@@ -657,8 +702,10 @@ hashed, tiered, and written to the object store as a snapshot. What any session
 ever sees of it is `excerpt_of`'s output: at most `EXCERPT_CHARS = 600`
 characters, and only when the media type is HTML or XHTML — for a PDF, JSON,
 XML, or plain text it is the empty string. Of the thirty-one registered tools,
-not one returns stored bytes; `ArtifactStore` is reached only by
-`register_source`, to write.
+not one returned stored bytes; `ArtifactStore` was reached only by
+`register_source`, to write. (The paragraph is written as the state of things
+before the resolution above; the excerpt is still the only thing an *opening*
+returns, and deliberately so.)
 
 That is not an oversight in the excerpt. Its comment states the intent — *"enough
 to see that the page is about what the lead claimed; short enough that the
@@ -691,3 +738,164 @@ that tool and removing `required_outputs` from research contracts are two answer
 to one question about what that seat is for, and the live Review seat named both.
 Phase 10 wired the seat in and proved it takes real turns against the real
 Internet; what it may do with what it finds is Phase 11's.
+
+## L-26 — A role session can be configured with the deployment's task queue
+
+- **Since:** Phase 10, when role tool servers began carrying the supervisor's
+  coordinates
+- **Where:** `tests/integration/conftest.py` (`integration_settings`);
+  `tests/integration/roles/conftest.py`; `tests/acceptance/test_project.py`;
+  `src/ravel/config.py` (`tool_server_env`); `tests/integration/temporal/conftest.py`
+  (`execution_settings`)
+
+This entry exists because a report said the opposite, and the check that refuted
+it is worth more than the claim was. The claim was that tests and the deployment
+share the Temporal task queue `ravel-v0`, which would let a workflow started by a
+test be delivered to the deployment's Execution Worker. **It does not hold for
+any suite that starts a run.** `execution_settings` — which `tests/e2e`'s
+`headless` is built on, and through it the Phase 10 and Phase 11 acceptance runs
+— overrides the queue with a private per-test name, and the run's own tool-server
+environment says so: the live five-agent certification launched its seats with
+`RAVEL_TEMPORAL_TASK_QUEUE=ravel-v0-test-731180fc92f04be59e5846c9895b2bab` and
+`RAVEL_POSTGRES_DB=ravel_test` (`dsh_cwd/<project>/*/ravel-role.cordis.patch.yml`
+under the run's `runtime_dir`). The database is separated the same way, by the
+`_test` suffix interlock in `tests/integration/conftest.py`.
+
+What is true is narrower. A role environment built straight from
+`integration_settings` — `tests/integration/roles/conftest.py`, and the one case
+in `tests/acceptance/test_project.py` that uses it — keeps the default
+`ravel-v0`, the queue `scripts/run_temporal_worker.py` polls in a deployment,
+because `tool_server_env()` carries every non-launcher coordinate to the session
+that acts on it. Those sessions read and write `ravel_test` while being
+configured with a queue the deployment is listening on.
+
+**Do not conclude** that this is inert because it is inert today. It is: no tool
+in `ravel.mcp` starts a durable run — `start_execution` is the supervisor's loop
+reaching the DAG, and no MCP tool so much as imports `NodeRunClient` — so a role
+session has no way to put work on that queue. The reason to record it rather
+than dismiss it is what would happen if one did: the run would be answered by a
+worker whose activities open the deployment's database, where the test's project
+does not exist, and the failure would arrive as a run that never reports rather
+than as a queue that was wrong. The next tool that starts work from a session is
+the one to check this against.
+
+## L-27 — A REVIEW-typed node is planned, promoted, and never handed to anybody
+
+- **Since:** Phase 10, since the supervisor's loop has held seats at all
+- **Where:** `src/ravel/execution/loop.py` (`ProjectLoop._executor_for`,
+  `Situation.unexecutable`, `Situation.needs_decision`);
+  `src/ravel/domain/state_machines.py` (`NODE_EXECUTOR`)
+- **Seen:** 2026-09-23, live, in two Phase 10 acceptance runs — the certification
+  and the research-driven case
+
+`NODE_EXECUTOR` assigns REVIEW nodes to the Review seat, and the comment on
+`WORKER_RUN_NODE_TYPES` counts REVIEW among the types "performed by the agent of
+their seat, inside its own turn". The loop does not agree. `_executor_for`
+answers with a seat for exactly three types — COMPUTATION, EXPERIMENT, RESEARCH —
+and `None` for everything else, so a READY REVIEW node lands in
+`Situation.unexecutable`: the bucket whose own docstring says these are "not work
+and nobody will ever be given them".
+
+For DECISION that is right, and the reason is written down: Master's part in the
+loop is to be *asked*, not handed a task. Review is in the same position for the
+same reason — its part in the loop is to return PRE_RUN and FINAL verdicts on
+other seats' nodes — but nothing says so, and the domain table and the comment
+above it say the opposite. The loop does put such a node to Master
+(`needs_decision` includes `unexecutable`), so a run does not hang on it; it
+costs a Master turn to find out, and a Master that does not work it out rewires
+around it.
+
+What that cost, measured. On 2026-09-23 a live Master built nine REVIEW-typed
+nodes across one certification run. Two reached READY and neither was ever
+handed to anybody — `REV-B76C0440` became READY at 21:34:56 and was cancelled at
+21:37:35, `REV-FE89EA1D` became READY at 21:39:20 and was cancelled at 21:41:02.
+All nine ended CANCELLED, and none of the run's fifteen review records names a
+REVIEW-typed node as the node being judged — the Review seat was working the
+whole time, writing fifteen verdicts on other seats' nodes across ten nodes, and
+was never once given work of its own. Master read the wait correctly and wrote it down — "the review
+seat has not executed in this environment: two review-typed nodes, one with an
+edge and one without, sat READY and undispatched, while the research seat ran" —
+and then re-cast that checking work onto RESEARCH nodes. The run made 28
+`CREATE_NODE` and 30 `CANCEL_NODE` decisions, took 43 minutes, and ended
+TERMINATE_PROJECT.
+
+**A third run shows what the gap costs when Master tries to reason about it.** In
+the research-driven case, also on 2026-09-23, another live Master planned two
+REVIEW gates, watched them sit, and cancelled both — with reasons that show it
+measuring the right thing and concluding the wrong thing from it. Of the first:
+"it is cancelled only because its dependency, REV-128E30E1, has now sat READY
+through a full cycle without dispatching, so pairing is held hostage to a node
+whose dispatchability I cannot establish." Of the second, one cycle later: "That
+a RESEARCH node (RES-01C6E229) also sits READY undispatched shows the block is
+not specific to review executors, so re-placing this gate elsewhere in the chain
+would not make it run." The observation is exact and the inference is not. A
+RESEARCH node waiting its turn is work in a loop that dispatches one thing at a
+time; a REVIEW node at READY is work that will never be dispatched, however many
+cycles pass. Nothing a Master can read distinguishes the two, so it generalised
+from the case in front of it to the dispatch path as a whole, cancelled both
+gates, and re-based their checking onto a node that would run. Fourteen sources
+were read, nine of them papers, and the run ended INCONCLUSIVE on research nodes
+that had come back PARTIAL — a defensible ending reached by a route that a
+one-line note in the situation would have shortened.
+
+**Do not conclude** that this is a dispatch defect waiting for a fix in the loop.
+It may be exactly right: a verdict is Review's turn, and a REVIEW node is a way
+of asking for one that the shipped wiring does not implement. What is wrong is
+that nothing says so — not the domain table, not the tool that lets Master create
+such a node, not the situation Master is shown — and that no test covers a REVIEW
+node in the unexecutable bucket: the four cases that cover that bucket all use
+DECISION, which is the one node type whose presence there is documented.
+
+**The same class, one step over, with a cheaper outcome.** On 2026-09-23 a
+different live Master — a later run of the same case — committed a `DECISION`
+node for one of its three deliverables, and withdrew it on the very next turn,
+writing why: "the framework assigned the node executor_role 'master', and the
+Master has no mechanism to produce the file artifacts the node owes
+(lab_capability_findings.md, undoped_tio2_measurement_protocol.md), so it could
+never satisfy its own required outputs". One turn, not forty-three minutes. The
+difference is not that this Master is better at planning; DECISION is the type
+whose place in the unexecutable bucket is documented, so the role it was assigned
+was legible as soon as the node existed, and Master could see that it had asked
+itself for a file it has no way to write. The REVIEW case above stayed invisible
+for the whole run because nothing anywhere says a REVIEW node is not dispatched.
+The cost of the gap is set by how discoverable the gap is, and only one of the
+two has been made discoverable.
+
+**Do not conclude** either that this is why the item failed. It did not fail: the
+same run passed. The finding is about what a live Master does when it is handed a
+node type that will never move, and the answer is that it works around it at
+length rather than stopping.
+
+## L-28 — `make test-integration` runs 472 of the 580 tests in `tests/integration`
+
+- **Since:** 2026-09-19, when `tests/integration/roles/` and
+  `tests/integration/research/` were added without the marker
+- **Where:** `Makefile` (`test-integration`); `scripts/test_all.sh`; every module
+  under `tests/integration/roles/` and `tests/integration/research/`
+
+The directory and the target disagree about what an integration test is.
+`make test-integration` runs `pytest tests/integration -m integration`, and 108
+of the 580 tests collected under that path carry no marker at all — the whole of
+`tests/integration/roles/` (80) and `tests/integration/research/` (28) — so the
+flag deselects them. `scripts/test_all.sh`, which is what `make test` runs,
+invokes the same path with no marker and collects all 580, the 17 e2e-marked
+cases inside the directory included. Both spellings are written down, and a
+report can be filled from either.
+
+What that costs is a number that means two things. Measured through the target
+the suite is 472; measured the way the canonical runner measures it, 580, and
+neither figure says which command produced it. The 108 are not incidental: they
+are where a role's permission surface, the worker and review tool rosters, and
+every read-back case of Phase 11's deep read live, and each of them stands up a
+real database and a real tool server.
+
+**Do not conclude** that the tests are at fault. Every case runs and passes in
+the canonical runner. What is wrong is that two entry points in one repository
+answer "run the integration tests" differently and neither says so — the kind of
+gap a report launders into a number without noticing. The Phase 11 sweep hit it
+exactly there: the marked count was the one taken, and the item's own new
+integration cases were not in the run that was reported as covering them. The
+row was re-measured with the canonical command instead, and `TEST_REPORT.md` §1
+now names the command its numbers came from. The target itself was left alone:
+changing what CI runs is a decision for whoever owns the inventory of tests, not
+a side effect of an item about reading a source.

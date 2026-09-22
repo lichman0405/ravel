@@ -37,6 +37,8 @@ produces evidence and advice; what the project does about either is Master's.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from typing import Any
 
@@ -62,10 +64,22 @@ from ravel.domain.evidence import (
 )
 from ravel.domain.state_machines import ACTIVE_NODE_STATUSES
 from ravel.mcp.context import ToolContext, as_json, require_research
-from ravel.research import completion, sufficiency
+from ravel.research import completion, deepread, sufficiency
+from ravel.research.deepread import (
+    DEFAULT_CONTEXT_CHARS,
+    DEFAULT_MATCHES,
+    DEFAULT_READ_CHARS,
+    DEFAULT_SEARCH_PAGES,
+    MAX_CONTEXT_CHARS,
+    MAX_MATCHES,
+    MAX_PAGES_PER_READ,
+    MAX_READ_CHARS,
+    MAX_SEARCH_PAGES,
+)
 from ravel.research.gateway import ResearchSourceGateway, SourceRequest
 from ravel.research.leads import Lead, Retrieval
 from ravel.research.opened import OpenedSources
+from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.contracts import (
     ExecutionContractRepository,
     ResearchContractRepository,
@@ -78,7 +92,7 @@ from ravel.state.repositories.research import (
     ResearchRecordRepository,
     task_ledger,
 )
-from ravel.state.store import ArtifactStore, S3ArtifactStore
+from ravel.state.store import ArtifactStore, S3ArtifactStore, hash_chunks
 
 #: What this process has opened and not yet registered. One per tool server,
 #: because a retrieval is bytes this process read and a reference is only
@@ -548,6 +562,681 @@ def register_source(context: ToolContext) -> Any:
     return register_source
 
 
+# ── reading what RAVEL already has ──────────────────────────────────────────
+#
+# `KNOWN_LIMITATIONS.md` L-25: a source is fetched, hashed, tiered and
+# snapshotted, and the only thing a session ever saw of it was a six-hundred-
+# character excerpt. RAVEL could prove it read a page and could not read the
+# page. These three tools are the reading, and they are the whole of it.
+#
+# Two properties make them safe to hold, and both are enforced here rather than
+# described:
+#
+# - **Every read is a region of a source that already exists.** A reference
+#   names either a retrieval this process opened and is still holding, or a row
+#   in this project's Evidence Ledger. There is no parameter that takes bytes,
+#   no URL to fetch, and no path from either tool to the network: text a
+#   session reads here is text the ledger can account for.
+# - **The bytes are checked against the hash the ledger recorded, on every
+#   read.** For a registered source they come back out of the object store and
+#   are hashed again; a mismatch is refused rather than returned. That is what
+#   makes a read evidence-grade: not that RAVEL says the text is the source's,
+#   but that the text it hands over hashes to what the row says was read.
+#
+# None of the three writes anything. They are not in `WRITE_AUTHORSHIP`, they
+# open a read-only session, and there is no record they produce — a read is not
+# a finding, and a ledger that recorded every look would be a ledger of
+# sessions rather than of sources.
+
+#: What a reference to a readable source resolved to.
+#:
+#: `body` is None when the source exists and RAVEL cannot read it — a paywalled
+#: row, a source registered without a snapshot, a store that would not answer.
+#: That is a state a metadata call reports and a read refuses, which is why the
+#: two are one type: the same lookup feeds both, and a caller cannot get a
+#: different answer about what is readable depending on which tool it asked.
+@dataclass(frozen=True, slots=True)
+class Readable:
+    """Bytes to read from, and the record that says what they are."""
+
+    ref: str
+    #: "opened" for bytes this process read and has not registered, "snapshot"
+    #: for bytes read back out of the object store from a ledger row.
+    origin: str
+    url: str
+    media_type: str | None
+    content_hash: str | None
+    title: str = ""
+    source_id: str | None = None
+    snapshot_ref: str | None = None
+    access_status: str = ""
+    tier: str | None = None
+    retrieved_at: datetime | None = None
+    body: bytes | None = None
+    #: Why there are no bytes, when there are none.
+    refusal: str = ""
+
+    def as_provenance(self) -> dict[str, Any]:
+        """This read's provenance, as the model sees it.
+
+        The fields are the ledger's own — not a summary of them and not a
+        second account — so that a claim written from what was read here cites
+        the row the read came from.
+        """
+        return {
+            "source_ref": self.ref,
+            "source_id": self.source_id,
+            "read_from": self.origin,
+            "url": self.url,
+            "title": self.title,
+            "media_type": self.media_type,
+            "content_hash": self.content_hash,
+            "retrieved_at": json_iso(self.retrieved_at) if self.retrieved_at else None,
+            "snapshot_ref": self.snapshot_ref,
+            "access_status": self.access_status or None,
+            "tier": self.tier,
+            "hash_verified": self.body is not None,
+        }
+
+
+def _readable(context: ToolContext, session: Any, source_ref: str) -> Readable:
+    """Resolve a reference to bytes that can be read, and to their record.
+
+    A reference is one of two things, and the order they are tried in is the
+    order they exist in: a retrieval this process is still holding (not yet
+    registered, so nothing else can see it), or a source in this project's
+    Evidence Ledger.
+
+    Raises:
+        ValueError: The reference names neither. A reference is not a URL and
+            not a free-form identifier: one that resolves to nothing is
+            refused, because a read that fell back to fetching the URL would be
+            a read whose bytes no row describes.
+    """
+    opened = OPENED.recall(source_ref)
+    if opened is not None:
+        return _from_opened(source_ref, opened)
+
+    repository = EvidenceSourceRepository(session, context.project_id)
+    try:
+        source = repository.get(source_id=source_ref)
+    except NotFound as exc:
+        raise ValueError(
+            f"this project is not holding a source or a retrieval called "
+            f"{source_ref!r}. A reference comes from `open_source` (before it is "
+            "registered, and only in the session that opened it) or from a "
+            "`source_id` in this task's ledger — read `read_research_task` for the "
+            "ones already recorded."
+        ) from exc
+    return _from_ledger(source)
+
+
+def _from_opened(reference: str, retrieval: Retrieval) -> Readable:
+    """A retrieval this process opened and has not registered."""
+    if not retrieval.was_read or retrieval.body is None:
+        return Readable(
+            ref=reference,
+            origin="opened",
+            url=retrieval.final_url,
+            media_type=retrieval.media_type,
+            content_hash=retrieval.content_hash,
+            title=retrieval.title,
+            access_status=retrieval.access_status.value,
+            retrieved_at=retrieval.retrieved_at,
+            refusal=(
+                f"this retrieval of {retrieval.final_url} is "
+                f"{retrieval.access_status.value}: RAVEL could not read it, so there "
+                "is nothing to read now. Registering it records that as the finding "
+                "it is."
+            ),
+        )
+    if retrieval.content_hash is None:
+        return Readable(
+            ref=reference,
+            origin="opened",
+            url=retrieval.final_url,
+            media_type=retrieval.media_type,
+            content_hash=None,
+            title=retrieval.title,
+            access_status=retrieval.access_status.value,
+            retrieved_at=retrieval.retrieved_at,
+            refusal=(
+                f"the retrieval of {retrieval.final_url} carries no hash, so there is "
+                "nothing for a read of it to be checked against"
+            ),
+        )
+    observed, _ = hash_chunks([retrieval.body])
+    if observed != retrieval.content_hash:
+        raise ValueError(
+            f"the retrieval of {retrieval.final_url} is holding bytes that hash to "
+            f"{observed} and reports {retrieval.content_hash}; a read of bytes whose "
+            "hash is not what was recorded is not a read of that source"
+        )
+    return Readable(
+        ref=reference,
+        origin="opened",
+        url=retrieval.final_url,
+        media_type=retrieval.media_type,
+        content_hash=retrieval.content_hash,
+        title=retrieval.title,
+        access_status=retrieval.access_status.value,
+        retrieved_at=retrieval.retrieved_at,
+        body=retrieval.body,
+    )
+
+
+def _from_ledger(source: EvidenceSource) -> Readable:
+    """A registered source, read back out of the object store.
+
+    The bytes come from the snapshot and are hashed again here. The stored copy
+    is the only thing that can be read: re-fetching the URL would produce bytes
+    from *now*, which is a different reading of a possibly different document,
+    and handing those over under this row's hash would be the exact confusion
+    the row exists to prevent.
+    """
+    common = {
+        "ref": source.source_id,
+        "origin": "snapshot",
+        "url": source.url,
+        "media_type": source.media_type,
+        "content_hash": source.content_hash,
+        "title": source.title,
+        "source_id": source.source_id,
+        "snapshot_ref": source.snapshot_ref,
+        "access_status": source.access_status.value,
+        "tier": source.tier.value if source.tier else None,
+        "retrieved_at": source.retrieved_at,
+    }
+    if not source.was_read:
+        return Readable(
+            **common,
+            refusal=(
+                f"{source.url} is {source.access_status.value} in the ledger. RAVEL "
+                "recorded that it could not read this source, and it still cannot: "
+                "there are no bytes to read. What it says is not knowable from here, "
+                "and a read must not appear to produce it."
+            ),
+        )
+    if source.snapshot_ref is None:
+        return Readable(
+            **common,
+            refusal=(
+                f"the ledger records {source.url} with the hash "
+                f"{source.content_hash} and no stored copy of the bytes — it was "
+                "registered without a snapshot, or this deployment has no object "
+                "store configured. RAVEL can say what it read and cannot read it "
+                "again; open the URL with `open_source` for a reading it can hold."
+            ),
+        )
+    store = _store()
+    if store is None:
+        return Readable(
+            **common,
+            refusal=(
+                "this deployment has no object store configured, so the snapshot of "
+                f"{source.url} cannot be read back"
+            ),
+        )
+    try:
+        body = store.get(source.snapshot_ref)
+    except Exception as exc:  # missing object, credentials, an unreachable store
+        return Readable(
+            **common,
+            refusal=(
+                f"the stored snapshot of {source.url} could not be read back: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        )
+    if source.content_hash:
+        observed, _ = hash_chunks([body])
+        if observed != source.content_hash:
+            raise ValueError(
+                f"the stored snapshot of {source.url} hashes to {observed} and the "
+                f"ledger records {source.content_hash}. The bytes in the store are "
+                "not the bytes that were read, so reading them would put text under "
+                "a provenance that does not describe it."
+            )
+    return Readable(**common, body=body)
+
+
+def _bytes_or_refuse(readable: Readable) -> bytes:
+    """The bytes, or the refusal, as an error a caller has to act on."""
+    if readable.body is None:
+        raise ValueError(readable.refusal)
+    return readable.body
+
+
+def _continuation(read: dict[str, Any]) -> dict[str, Any] | None:
+    """How to read the next region, when there is one.
+
+    Returned rather than left to the caller to work out, because the arithmetic
+    is the tool's: a reader that has to compute the next offset from what it was
+    given is a reader that can lose its place in a document, and the whole
+    difference between deep reading and skimming is whether it keeps its place.
+    """
+    if read.get("unit") == "pages":
+        last = read.get("last_page")
+        count = read.get("page_count") or 0
+        if isinstance(last, int) and last < count:
+            return {"pages": f"{last + 1}-{min(count, last + MAX_PAGES_PER_READ)}"}
+        return None
+    if read.get("truncated"):
+        return {"start": read["end"], "length": read["length"]}
+    return None
+
+
+def read_source(context: ToolContext) -> Any:
+    """Read a bounded region of a source, character- or page-wise."""
+
+    async def read_source(
+        source_ref: str,
+        start: int = 0,
+        length: int = DEFAULT_READ_CHARS,
+        pages: str | None = None,
+    ) -> dict[str, Any]:
+        """Read part of a source RAVEL has, and say which part it was.
+
+        `source_ref` is either the `retrieval_ref` `open_source` returned — the
+        bytes this session opened and has not registered yet — or a `source_id`
+        from this task's Evidence Ledger, whose bytes come back out of the
+        stored snapshot and are hashed again before you see them. Nothing is
+        fetched here: a source that is not already in hand is not reachable
+        through this tool, and `open_source` is how it gets there.
+
+        The read is bounded, always. `start` and `length` address a character
+        range and return at most `length` characters; a PDF is addressed by
+        `pages` instead ("3", "3-5", "1,4,9-11") and returns at most five pages
+        at a time. The result says where the region began and ended, how much
+        text there is in total, and — when there is more — the exact arguments
+        that read the next region.
+
+        Text is verbatim for plain text, and for HTML, XML and JSON it is the
+        document's text with the markup removed; `note` says what was done, so
+        you can tell the source's words from RAVEL's rendering of them. A
+        scanned PDF, an encrypted PDF and a format RAVEL cannot read all come
+        back saying so with no text, because inventing the contents of a
+        document is the one thing this cannot do.
+        """
+        require_research(context, "read_source")
+        with context.read() as session:
+            readable = _readable(context, session, source_ref)
+            body = _bytes_or_refuse(readable)
+            extraction = deepread.document_of(body, readable.media_type)
+
+            if extraction.format is deepread.ReadFormat.PDF:
+                if start or length != DEFAULT_READ_CHARS:
+                    raise ValueError(
+                        "a PDF is read by page rather than by character offset; call "
+                        'this with `pages` ("3", "3-5", "1,4,9-11") and leave `start` '
+                        "and `length` at their defaults"
+                    )
+                result = _read_pdf(readable, body, pages)
+            else:
+                if pages is not None:
+                    raise ValueError(
+                        f"`pages` addresses a PDF and this source is "
+                        f"{extraction.format.value}; use `start` and `length`, which "
+                        "address its text"
+                    )
+                result = _read_text(extraction, start, length)
+
+        return {
+            "source": readable.as_provenance(),
+            **result,
+            "next": _continuation(result),
+        }
+
+    return read_source
+
+
+def _read_text(extraction: deepread.Extraction, start: int, length: int) -> dict[str, Any]:
+    """A character range of a document's text."""
+    if start < 0:
+        raise ValueError(f"`start` is a character offset and cannot be negative; got {start}")
+    if length <= 0:
+        raise ValueError(f"`length` is how many characters to return; got {length}")
+    if length > MAX_READ_CHARS:
+        raise ValueError(
+            f"one read returns at most {MAX_READ_CHARS} characters, and {length} was "
+            "asked for. Read it in regions: the result of each says where the next "
+            "one starts."
+        )
+    region = deepread.window(extraction.text, start, length)
+    return {
+        "format": extraction.format.value,
+        "unit": "chars",
+        "extractable": extraction.extractable,
+        "text": region.text,
+        "start": region.start,
+        "end": region.end,
+        "length": length,
+        "total_chars": region.total_chars,
+        "truncated": region.truncated,
+        "note": extraction.note,
+    }
+
+
+def _read_pdf(readable: Readable, body: bytes, pages: str | None) -> dict[str, Any]:
+    """A page range of a PDF, as text."""
+    document = deepread.PdfDocument(body)
+    if not document.usable:
+        return {
+            "format": deepread.ReadFormat.PDF.value,
+            "unit": "pages",
+            "extractable": False,
+            "pages": [],
+            "page_count": document.page_count,
+            "truncated": False,
+            "note": document.unusable,
+        }
+    numbers = deepread.page_range(pages, document.page_count, most=MAX_PAGES_PER_READ)
+    extracted = document.pages(numbers)
+
+    # The page cap bounds how much work a read does; this bounds how much text
+    # it returns. Both are needed: five pages of a dense two-column paper can
+    # be twenty thousand words, and a caller that asked for five pages did not
+    # ask for all of them at once.
+    budget = MAX_READ_CHARS
+    shown: list[dict[str, Any]] = []
+    for page in extracted.pages:
+        text = page.text[:budget]
+        budget -= len(text)
+        shown.append(
+            {
+                "page": page.number,
+                "chars": len(text),
+                "text": text,
+                "truncated": len(text) < len(page.text),
+                "note": page.note,
+            }
+        )
+        if budget <= 0:
+            break
+
+    blank = [page["page"] for page in shown if not page["text"].strip()]
+    note = ""
+    if extracted.scanned:
+        note = (
+            "no page in this range carried any text. That is what a scanned or "
+            "image-only PDF looks like: the pages are pictures, and reading words "
+            f"out of pictures is OCR, which RAVEL does not do. The bytes are stored "
+            f"and hashed ({readable.content_hash}), and the document's words are not "
+            "reachable from here. Report the gap rather than the contents."
+        )
+    elif blank:
+        note = f"pages {blank} carried no extractable text; the others did."
+
+    return {
+        "format": deepread.ReadFormat.PDF.value,
+        "unit": "pages",
+        "extractable": True,
+        "pages": shown,
+        "page_count": document.page_count,
+        "last_page": shown[-1]["page"] if shown else None,
+        "truncated": len(shown) < len(extracted.pages) or any(p["truncated"] for p in shown),
+        "note": note,
+    }
+
+
+def search_source(context: ToolContext) -> Any:
+    """Find text in a source RAVEL already has."""
+
+    async def search_source(
+        source_ref: str,
+        query: str,
+        max_matches: int = DEFAULT_MATCHES,
+        context_chars: int = DEFAULT_CONTEXT_CHARS,
+        pages: str | None = None,
+    ) -> dict[str, Any]:
+        """Search inside a source you have already opened or registered.
+
+        This is not a web search and does not go looking for one: it reads the
+        text of *this* source — the bytes in hand, or the snapshot behind a
+        `source_id` — and reports where the query occurs in it. Nothing here
+        establishes that the source exists, that it is the right source, or
+        that what it says is true; it answers "where does this document say
+        this", which is the question you have once you have decided a document
+        is worth reading.
+
+        The match is a literal string, case-insensitive. `offset` is a
+        character offset into the same text `read_source` returns, so
+        `read_source(source_ref, start=offset)` returns the passage the match is
+        in — which is how a methods section gets read rather than guessed at
+        from its surroundings. A PDF is searched by page and each match says
+        which page it is on; with no `pages` given, the first forty are
+        searched, and the result says which pages were covered and what the
+        next range is.
+
+        Search a few words rather than a whole sentence. The text is the
+        document's own, so a line break in the document is a character in the
+        text: a phrase that spans one, or that differs from the document by a
+        space, is not found. That is deliberate — the offset has to name the
+        character `read_source` would return — and it means a search that finds
+        nothing is worth retrying with fewer words before it is believed.
+
+        A query that is not found is a finding about this source. It is not a
+        finding about the world, and it is not a reason to search the web
+        again with the same words.
+        """
+        require_research(context, "search_source")
+        if not query.strip():
+            raise ValueError(
+                "a search needs something to look for; an empty query matches every "
+                "position in the document and answers nothing"
+            )
+        if max_matches <= 0 or max_matches > MAX_MATCHES:
+            raise ValueError(
+                f"`max_matches` is how many matches to return, between 1 and {MAX_MATCHES}; "
+                f"got {max_matches}"
+            )
+        if context_chars < 0 or context_chars > MAX_CONTEXT_CHARS:
+            raise ValueError(
+                f"`context_chars` is how much text to show around each match, between 0 "
+                f"and {MAX_CONTEXT_CHARS}; got {context_chars}"
+            )
+        with context.read() as session:
+            readable = _readable(context, session, source_ref)
+            body = _bytes_or_refuse(readable)
+            extraction = deepread.document_of(body, readable.media_type)
+
+            if extraction.format is deepread.ReadFormat.PDF:
+                result = _search_pdf(body, query, max_matches, context_chars, pages)
+            else:
+                if pages is not None:
+                    raise ValueError(
+                        f"`pages` addresses a PDF and this source is "
+                        f"{extraction.format.value}; search its text without a range"
+                    )
+                matches, total, exact = deepread.find(
+                    extraction.text,
+                    query,
+                    max_matches=max_matches,
+                    context_chars=context_chars,
+                )
+                result = {
+                    "format": extraction.format.value,
+                    "unit": "chars",
+                    "extractable": extraction.extractable,
+                    "matches": [_match(match) for match in matches],
+                    "total_matches": total,
+                    "total_matches_is_exact": exact,
+                    "total_chars": extraction.chars,
+                    "note": extraction.note,
+                    "next": (
+                        {"start": matches[0].offset, "length": DEFAULT_READ_CHARS}
+                        if matches
+                        else None
+                    ),
+                }
+
+        return {"source": readable.as_provenance(), "query": query, **result}
+
+    return search_source
+
+
+def _match(match: deepread.Match) -> dict[str, Any]:
+    """One match as the model sees it."""
+    return {
+        "index": match.index,
+        "offset": match.offset,
+        "page": match.page,
+        "context": match.context,
+    }
+
+
+def _search_pdf(
+    body: bytes,
+    query: str,
+    max_matches: int,
+    context_chars: int,
+    pages: str | None,
+) -> dict[str, Any]:
+    """A literal search across the pages of a PDF."""
+    document = deepread.PdfDocument(body)
+    if not document.usable:
+        return {
+            "format": deepread.ReadFormat.PDF.value,
+            "unit": "pages",
+            "extractable": False,
+            "matches": [],
+            "total_matches": 0,
+            "total_matches_is_exact": True,
+            "page_count": document.page_count,
+            "pages_searched": [],
+            "note": document.unusable,
+            "next": None,
+        }
+    # A caller that named a range gets the wide cap; one that named nothing gets
+    # the narrow one, because "search the paper" on an unstated range should not
+    # mean "and also walk four hundred pages of appendices".
+    numbers = deepread.page_numbers(
+        pages, document.page_count, most=MAX_SEARCH_PAGES if pages else DEFAULT_SEARCH_PAGES
+    )
+    extracted = document.pages(numbers)
+
+    matches: list[deepread.Match] = []
+    total = 0
+    exact = True
+    for page in extracted.pages:
+        found, count, page_exact = deepread.find(
+            page.text, query, max_matches=max_matches, context_chars=context_chars
+        )
+        total += count
+        exact = exact and page_exact
+        for match in found:
+            if len(matches) >= max_matches:
+                break
+            matches.append(
+                deepread.Match(
+                    index=len(matches), offset=match.offset, context=match.context, page=page.number
+                )
+            )
+
+    searched = [page.number for page in extracted.pages]
+    remaining = [n for n in range(searched[-1] + 1, document.page_count + 1)] if searched else []
+    note = ""
+    if extracted.scanned:
+        note = (
+            "no page in this range carried any text, so nothing was searched: this is "
+            "what a scanned PDF looks like, and RAVEL does not read words out of page "
+            "images. The gap is the finding."
+        )
+    elif remaining:
+        note = (
+            f"searched pages {searched[0]}-{searched[-1]} of {document.page_count}; the "
+            "rest were not searched, and a query missing from this range may be on a "
+            "page outside it."
+        )
+    return {
+        "format": deepread.ReadFormat.PDF.value,
+        "unit": "pages",
+        "extractable": True,
+        "matches": [_match(match) for match in matches],
+        "total_matches": total,
+        "total_matches_is_exact": exact,
+        "page_count": document.page_count,
+        "pages_searched": searched,
+        "note": note,
+        "next": (
+            {"pages": f"{remaining[0]}-{min(remaining[-1], remaining[0] + MAX_SEARCH_PAGES - 1)}"}
+            if remaining
+            else None
+        ),
+    }
+
+
+def source_metadata(context: ToolContext) -> Any:
+    """Report what RAVEL knows about a source, and whether it can be read."""
+
+    async def source_metadata(source_ref: str) -> dict[str, Any]:
+        """What the record says about one source, and what can be done with it.
+
+        Cheap and safe to call first: it reads the ledger row and, for a source
+        that has a stored snapshot, enough of the bytes to say what kind of
+        document it is. No text is returned here, so nothing has to be skimmed
+        before deciding whether to read it.
+
+        `readable` is the honest answer to "can I read this". A paywalled
+        source is not readable and says which restriction it was; a source
+        registered without a snapshot is not readable and says so; a scanned
+        PDF is readable in the sense that pages come back and reports
+        `text_extractable: false`, because the pages exist and carry no words.
+        `bytes_available` distinguishes a source whose bytes are in hand from
+        one whose store could not answer — different problems with different
+        next steps.
+
+        This is a read. It writes nothing, and calling it is not an act the
+        ledger records.
+        """
+        require_research(context, "source_metadata")
+        with context.read() as session:
+            readable = _readable(context, session, source_ref)
+            described: dict[str, Any] = {
+                "bytes_available": readable.body is not None,
+                "readable": readable.body is not None,
+                "read_refusal": readable.refusal,
+                "format": None,
+                "text_extractable": None,
+                "bytes": None,
+            }
+            if readable.body is not None:
+                described.update(_describe(readable))
+        return {"source": readable.as_provenance(), **described}
+
+    return source_metadata
+
+
+def _describe(readable: Readable) -> dict[str, Any]:
+    """What is in the bytes, without returning them."""
+    body = readable.body or b""
+    extraction = deepread.document_of(body, readable.media_type)
+    described: dict[str, Any] = {
+        "format": extraction.format.value,
+        "bytes": len(body),
+        "text_extractable": extraction.extractable,
+        "format_note": extraction.note,
+    }
+    if extraction.format is deepread.ReadFormat.PDF:
+        document = deepread.PdfDocument(body)
+        described.update(
+            {
+                "page_count": document.page_count,
+                "usable": document.usable,
+                "text_extractable": document.usable and document.has_text(),
+                "format_note": document.unusable or extraction.note,
+            }
+        )
+        if document.usable and not described["text_extractable"]:
+            described["format_note"] = (
+                f"the first {deepread.PROBE_PAGES} pages carry no extractable text, "
+                "which is what a scanned PDF looks like; RAVEL does not do OCR. Read "
+                "a page to see for yourself before concluding anything about the rest."
+            )
+    elif extraction.extractable:
+        described["chars"] = extraction.chars
+    return described
+
+
 def record_evidence(context: ToolContext) -> Any:
     """Write one claim, with the class that says what kind of claim it is."""
 
@@ -872,6 +1561,9 @@ IMPLEMENTATIONS: dict[str, Any] = {
     "search_web": search_web,
     "open_source": open_source,
     "register_source": register_source,
+    "source_metadata": source_metadata,
+    "read_source": read_source,
+    "search_source": search_source,
     "record_evidence": record_evidence,
     "record_conflict": record_conflict,
     "assess_evidence": assess_evidence,

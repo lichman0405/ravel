@@ -25,6 +25,10 @@ dependencies = [
     "playwright>=1.47",
     "beautifulsoup4>=4.12",
     "lxml>=5.3",
+    # Reading a paper RAVEL stored. Not a fetcher and not a renderer: it takes
+    # the bytes of a PDF that is already in hand and gives back the text of a
+    # page, which is the one thing RAVEL could not do for itself.
+    "pypdf>=5.1",
     # Object storage
     "boto3>=1.35",
     # Identity

@@ -17,24 +17,30 @@ On Ubuntu 24.04 with the infrastructure up (`scripts/dev_up.sh`) and the
 credentials in `.env` filled in:
 
 ```bash
-make migrate       # the live suites read the database `.env` names, not `ravel_test`
+make migrate       # tests/dsh reads the database `.env` names; every other suite
+                   # builds its own schema on `ravel_test` with create_all
 make lint          # ruff check src tests, then pyright src tests
 make test-unit     # tests/unit, no services needed
-make test-integration
+pytest tests/integration   # all 580 cases. `make test-integration` runs the same
+                           # path with `-m integration`, which deselects the 108
+                           # tests in it that carry no marker — see §2 and L-28
 make test-e2e
 make test-live     # real-Internet research; needs RAVEL_RESEARCH_CONTACT_EMAIL
 make test-dsh      # real model turns; needs DEEPSEEK_API_KEY
 make acceptance    # A01-A20 plus the seven gates, printed as a matrix
+make phase10-acceptance  # P10-01..P10-20 and the twenty worker items — 57 cases,
+                         # two of them live runs of a whole project, ~26 minutes
 make phase11-acceptance  # the Phase 11 items, printed as a matrix
 ```
 
 Three warnings, each of which costs time when ignored:
 
-- **Migrate first.** Every suite but `tests/dsh` and the live `tests/acceptance`
-  cases builds its schema against `ravel_test` with `create_all`, so a model
-  that added a table is there without anybody running anything. The live ones
-  read the database `.env` names — the deployment's — and `tests/dsh` now
-  refuses to start against one that is behind the models.
+- **Migrate first.** `tests/dsh` runs against the database `.env` names — the
+  deployment's — and nothing in a test run migrates it, so it now refuses to
+  start against one that is behind the models. Every other suite, the live cases
+  in `tests/acceptance` and all of `tests/live_research` included, builds its
+  schema against `ravel_test` with `create_all`, so a model that added a table is
+  there without anybody running anything.
 - **Never run two pytest processes at once on this machine.** They share the
   `ravel_test` database and both `TRUNCATE` on entry, so the second one's
   cleanup blocks on the first one's locks, and the failure surfaces as a
@@ -45,50 +51,73 @@ Three warnings, each of which costs time when ignored:
 
 ## 2. Results
 
-Run on 2026-09-22 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
-set in `.env`, every suite in one sequential sweep after `make migrate`:
+Run on 2026-09-23 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
+set in `.env`, after `make migrate`. Every suite ran once, in sequence, except
+the integration row — the first pass at it selected a subset of the directory
+rather than all of it, and the paragraph under the table says which command
+produced which number:
 
 | Suite | Passed | Skipped | Failed | Exit |
 |---|---:|---:|---:|---|
-| `tests/unit` | 823 | 0 | 0 | 0 |
-| `tests/integration` | 560 | 0 | 0 | 0 |
-| `tests/dsh` | 10 | 0 | 1 | 1 |
+| `tests/unit` | 879 | 0 | 0 | 0 |
+| `tests/integration` (all 580, see below) | 580 | 0 | 0 | 0 |
+| `tests/dsh` | 11 | 0 | 0 | 0 |
 | `tests/e2e` | 20 | 0 | 0 | 0 |
-| `tests/live_research` | 13 | 0 | 0 | 0 |
+| `tests/live_research` | 15 | 0 | 1 | 1 |
 | `tests/acceptance` (`make acceptance`) | 43 | 0 | 0 | 0 |
-| `tests/acceptance -m phase10` (`make phase10-acceptance`) | 56 | 0 | 0 | 0 |
-| `tests/acceptance -m phase11` (`make phase11-acceptance`) | 9 | 0 | 0 | 0 |
+| `tests/acceptance -m phase10` (`make phase10-acceptance`) | 57 | 0 | 0 | 0 |
+| `tests/acceptance -m phase11` (`make phase11-acceptance`) | 15 | 0 | 0 | 0 |
 
-**The one failure is a live-model flake, and it is left in the table rather
-than re-run away.** In `tests/dsh`, `test_a_role_runtime_starts_runs_a_ravel_tool_and_stops`
-asserts the model reads a title out of `read_project_state` and reports it.
-The session log shows the tool working and the model never answering:
-it called all four read-only tools, got the title back correctly, spent its
-whole 352-token output budget reasoning about whether the *mutating* tools were
-safe to call next — the prompt says "call every tool available to you" and the
-behavioural contract says not to do arbitrary things, so it was weighing a real
-conflict — and finished with `{"kind": "stop"}` and no text block at all. What
-failed is `assert TITLE_SENTINEL in outcome.response`, against `response == ''`.
+**The integration row is the count that runs the whole directory, and the first
+attempt at it was not.** `scripts/test_all.sh` — what `make test` runs — invokes
+`pytest tests/integration` with no marker; `make test-integration` invokes the
+same path with `-m integration`, and 108 of the 580 cases collected there carry
+no marker at all, so the flag deselects them: the whole of
+`tests/integration/roles/` and `tests/integration/research/`, which is where a
+role's permission surface, the worker and review tool rosters, and this item's
+own seventeen deep-read integration cases live. This sweep's first pass used the
+target's spelling and reported 472 — a number that looks like a result and is a
+selection. The row above is the canonical run, re-measured: 580 passed, 0
+deselected, 4:25. `KNOWN_LIMITATIONS.md` L-28 records the disagreement between
+the two entry points and why neither was changed here.
 
-It passed on the two runs before it and on the run after it, which is what
-makes it a flake rather than a fault, and no test was changed to accommodate
-it: a case that tolerates an empty answer is a case that no longer checks
-whether the model read anything. It is recorded here because a green table
-produced by re-running until it was green is worth less than a table that says
-what happened.
+**The one failure is OpenAlex refusing to answer, and it is left in the table
+rather than re-run away.** `tests/live_research/test_live_sources.py::test_the_other_connectors_reach_their_real_services`
+asks each of OpenAlex, arXiv and PubChem for a real record. OpenAlex answered
+HTTP 429, RAVEL recorded it as this connector being *unavailable* rather than as
+a search that found nothing — `unavailable=('openalex: ... answered HTTP 429',)`
+— and the assertion, which is on leads, failed. The headers say what the 429 is:
+`retry-after: 4588`, `x-ratelimit-onetime-remaining: 0`, `x-ratelimit-remaining: 8`
+of `x-ratelimit-limit: 1000`. This host has spent OpenAlex's allowance for the
+day: the same case was re-run minutes later and failed the same way in 0.72s, so
+it is a quota and not a timeout. That case is one test rather than three — it
+asks OpenAlex first and asserts on the three services' leads together — so arXiv
+and PubChem were not exercised behind it; the other 15 live cases, which reach
+Crossref, arXiv, PubChem and the real Internet, passed. The previous edition of
+this table was measured on a day when the
+allowance was not spent; nothing in RAVEL changed to make OpenAlex stop
+answering, and no test was changed to accommodate it. A gate that passes by
+tolerating a 429 is a gate that no longer checks whether the connector works.
+
+The `tests/dsh` flake recorded in the previous edition of this table did not
+recur: 11 passed, 0 failed, and the model answered in every case.
 
 `make acceptance` reports by *item* rather than by test, which is a different
 question from the one a pytest summary answers — see §3. The same is true of
-`make phase10-acceptance`, whose 56 cases are the 36 behind the twenty `P10-`
+`make phase10-acceptance`, whose 57 cases are the 37 behind the twenty `P10-`
 items plus the twenty worker items — see §3.1 — and of `make phase11-acceptance`,
-whose one row is the 9 cases behind `P11-01` — see §7.
+whose two rows are the 15 cases behind `P11-01` and `P11-02` — see §7.
 
-**The live suites read the deployment database, not the test one.** `tests/dsh`
-and the live agent turns inside `tests/acceptance` hand a tool server the
-settings `.env` names, so they need that database migrated; every other suite
-is pointed at `ravel_test` and builds its schema with `create_all`. Run
-`make migrate` before the sweep, or `tests/dsh` refuses to start and says so —
-§6 records what that failure looked like before it had a guard.
+**One suite reads the deployment database; every other one reads `ravel_test`.**
+`tests/dsh` hands a tool server the settings `.env` names, so it needs that
+database migrated and now refuses to start against one that is behind the
+models. The live turns inside `tests/acceptance` do not: they are built on
+`integration_settings`, and the environment the certification's seats were
+launched with says so — `RAVEL_POSTGRES_DB=ravel_test`, quoted in
+`KNOWN_LIMITATIONS.md` L-26, and the projects those runs left behind are rows in
+that database, which is where §6's evidence was read from. Run `make migrate`
+before the sweep in any case; §6 records what a stale deployment database looked
+like before `tests/dsh` had a guard.
 
 ## 3. The acceptance matrix
 
@@ -170,7 +199,7 @@ somebody would otherwise have to take on faith.
   PASS    P10-14  long external wait/resume                   1 passed
   PASS    P10-15  TUI disconnect does not stop project        1 passed
   PASS    P10-16  multi-project isolation                     3 passed
-  PASS    P10-17  live five-agent autonomous certification    1 passed
+  PASS    P10-17  live five-agent autonomous certification    2 passed
   PASS    P10-18  real Research provenance                    1 passed
   PASS    P10-19  original A01-A20 remain green               1 passed
   PASS    P10-20  one-command server startup                  3 passed
@@ -201,12 +230,19 @@ somebody would otherwise have to take on faith.
 40/40 demonstrated, 0 failed, 0 skipped, 0 missing (pytest exit 0)
 ```
 
-One row is expensive. `P10-17` is a live, unattended run of a whole project
-against real model turns, and on this machine it takes about twenty minutes and
-a real bill; it is the only item here that cannot be answered by reading code.
-Its most recent run ended `FAILED` in 20:12, with `executed_by` naming both
-`compute-worker` and `experimental-worker` and the two backends `mock-compute`
-and `mock-lab`. What a live run *cannot* end as, and why, is stated in
+One row is expensive. `P10-17` is two live, unattended runs of a whole project
+against real model turns — one driven by a work order, one by an open question —
+and the pair took 22:25 in this matrix and a real bill. They are the only items
+here that cannot be answered by reading code, and the only ones whose *coverage*
+is a live model's judgement rather than a property of the suite. The two cases
+were also run separately the same day, at 10:45 and 16:32, and both passed; a
+re-run earlier that day failed in 13:52 with the experimental seat never
+reached, for a reason the Decision Record states in Master's own words — the
+objective had left the bench's readiness to be discovered, and Master checked it
+instead of assuming it. §6 has the whole of that. The endings the run reached
+across those runs are `INCONCLUSIVE` and `FAILED`, with `executed_by` naming
+`compute-worker` and `experimental-worker` and the backends `mock-compute` and
+`mock-lab` behind them. What a live run *cannot* end as, and why, is stated in
 `acceptance/PHASE10_ACCEPTANCE.md` under P10-17 and in `KNOWN_LIMITATIONS.md`
 L-19 — a COMPLETED ending would require a live Review to accept a `simulated`
 artifact as a real measurement, and it does not.
@@ -216,13 +252,15 @@ artifact as a real measurement, and it does not.
 With both credentials present, the two previously skipped acceptance items and
 their underlying suites now execute against real external services:
 
-- **A03 / A04 and `tests/live_research`** now reach the real Internet. The 13
-  cases exercise Crossref, OpenAlex, arXiv, PubChem, and direct URL retrieval.
-  The connectivity probe at the start of `scripts/test_live_research.sh` reports
-  Crossref and OpenAlex as reachable; arXiv answers the probe with HTTP 400 but
-  the actual `arxiv.org/abs/1606.00335` fetch in the tests returns 200 — the
-  probe URL (`export.arxiv.org/api/query?max_results=1`) appears to be stricter
-  than the path the product uses.
+- **A03 / A04 and `tests/live_research`** now reach the real Internet. The 16
+  cases exercise Crossref, OpenAlex, arXiv, PubChem, and direct URL retrieval —
+  including three that read a real paper's body text out of the stored snapshot
+  (§7.2). Fifteen passed on 2026-09-23 and the sixteenth is the OpenAlex quota in
+  §2. The connectivity probe at the start of `scripts/test_live_research.sh`
+  reports Crossref and OpenAlex as reachable; arXiv answers the probe with HTTP
+  400 but the actual `arxiv.org/abs/1606.00335` fetch in the tests returns 200 —
+  the probe URL (`export.arxiv.org/api/query?max_results=1`) appears to be
+  stricter than the path the product uses.
 - **`tests/dsh`** now makes real DeepSeek model turns. The 11 cases verify that
   the pinned runtime starts, runs RAVEL tools, refuses cross-role tool access,
   and recovers Master state from PostgreSQL rather than from harness session
@@ -235,7 +273,7 @@ claim must not rest on. Each is answered by a test rather than by an assurance:
 
 | Claim | What demonstrates it |
 |---|---|
-| Web research is not mocked | gate 1 asserts every connector is pointed at a real service and that research cannot be answered offline; gate 2 asserts a source nobody read cannot enter the ledger, with no network call involved. **A03, A04 and all 13 cases of `tests/live_research` now pass against real services.** |
+| Web research is not mocked | gate 1 asserts every connector is pointed at a real service and that research cannot be answered offline; gate 2 asserts a source nobody read cannot enter the ledger, with no network call involved. **A03, A04 and 15 of the 16 cases of `tests/live_research` passed against real services on 2026-09-23; the sixteenth is OpenAlex answering HTTP 429 to a spent daily quota (§2), which the gateway reports as an unavailable connector rather than as a search that found nothing.** |
 | DSH is pinned and tested | gate 4 — the installed distributions match the pin, the bundled runtime self-reports `0.1.5-rc.1`, and the vendored checkout's `HEAD` is the pinned commit |
 | DSH role presets and tool scope are verified | gate 5 — every role boots with its own contract and no other role's roster; `tests/integration/roles` holds the permission matrix for all five |
 | Master recovery is tested | A15 — the project survives the Master session and is recovered from it |
@@ -369,11 +407,10 @@ one that would have caught this before the live run: the reconciler had no
 business forming the question.
 
 **A table without the migration that installs it.** Phase 11 adds
-`run_reconciliations`, and the live suites read the *deployment* database rather
-than `ravel_test`: `tests/dsh` and the live agent turns in `tests/acceptance`
-hand a tool server the settings `.env` names, and nothing in a test run migrates
-that database. Every other suite builds its schema with `create_all` and could
-not have caught it. The symptom was as misleading as it gets — `read_project_state`
+`run_reconciliations`, and `tests/dsh` reads the *deployment* database rather
+than `ravel_test`: it hands a tool server the settings `.env` names, and nothing
+in a test run migrates that database. Every other suite builds its schema with
+`create_all` and could not have caught it. The symptom was as misleading as it gets — `read_project_state`
 raised inside the tool server, the agent reported `Error executing tool
 read_project_state` and then answered, correctly and at length, that it could not
 read the authoritative state and would not guess. The case failed on a sentence
@@ -385,7 +422,161 @@ command. Verified by pointing it at a scratch database pinned to the previous
 revision, where it reports exactly `run_reconciliations` — and at the migrated
 one, where it is silent.
 
-## 7. Phase 11: execution reconciliation
+**A search that could not find a phrase the reader had just read.** The live
+deep-read case read page one of a real paper, took forty characters off its
+longest printed line, and searched the paper for them — and the search came
+back empty on the first run. The phrase had been assembled by joining the words
+of a *different* line, so the string it searched for contained a space where the
+document has a newline. A literal search is right, and it is what makes the
+offset a search reports an offset a read can use: a search that folded
+whitespace would have to report positions in a text the reader never sees. What
+the run found was that the boundary was undocumented, so a model would meet it
+the way the test did. `search_source` now says to search a few words rather than
+a sentence, and `tests/unit/test_deepread.py` pins the behaviour with a phrase
+that spans a line break and the shorter one that finds the same passage.
+
+**Five seats was a property of the plan, not of the code.** P10-17's
+certification asserts that all five seats take a live turn, and it failed a run:
+three seats, `INCONCLUSIVE`, after a live Master planned the literature first,
+read two research records reporting that the protocols could not be fixed from
+what was retrievable, and concluded in writing that the evidence did not settle
+the question. Every turn in that run was defensible and the ending was correct
+science; the assertion was about coverage, and no coverage had been promised.
+Phase 11's deep read was still the obvious suspect, because the seat that stopped
+was the one whose reading tools it had just changed. Testing that meant two runs
+of one test with a single difference between them. Both arms drove the same
+objective out of the same case: the two trees collected the same 56 Phase 10
+acceptance tests at the moment each run started, against the same mock backends
+and the same `ravel_test` — one after the other, the first against `5f01ff9`'s
+source and the second against `HEAD`'s:
+
+| | `5f01ff9` (no deep read) | `HEAD` (deep read) |
+|---|---|---|
+| Ending | `INCONCLUSIVE` | `CANCELLED` (`TERMINATE_PROJECT`) |
+| Nodes in the final plan | 4 | 38 |
+| Node decisions | 5 (4 create, 1 conclude) | 59 (28 create, 30 cancel, 1 terminate) |
+| Execution Records | 2 | 3 |
+| Seats that took a turn | 5 (master, research, review, compute, experimental) | 5 (master 206 turns, research 70, review 26, compute 6, experimental 3) |
+| Result | **passed**, 15:53 | **passed**, 42:58 |
+
+The earlier failure did not reproduce — and the two arms, whose source trees
+differ by three files that no seat but Research can even see, disagree about
+every row of that table. That is the finding: what varies between runs of this
+test is the plan a live Master builds. The code cannot be the explanation, and
+that was checked rather than assumed — P11-02's whole footprint under `src/` is three
+files and one new module (`mcp/registry.py`, `mcp/tools/research.py`,
+`research/fetching.py`, `research/deepread.py`), the registry change adds three
+tools and alters no existing entry, all three are `frozenset({RESEARCH})` and
+therefore invisible to Master's tool list, and no file under `domain/`, `state/`,
+`execution/` or `master/` is touched at all. Role permissions, DAG semantics, and
+execution/reconciliation behaviour are unchanged by construction. The one path
+P11-02 shares with older code was moved rather than changed: `excerpt_of`, which
+`search_web` and `open_source` have always rendered their excerpts with, now
+calls the same tag-stripping `html_text` performs instead of carrying its own copy
+of it, and neither search results nor excerpts gained a byte. What P11-02
+does change is what the Research seat can *read*, and that is visible in the two
+ledgers: the `5f01ff9` arm's own record says of the one PDF it retrieved that it
+"is freely retrievable (HTTP 200, PDF, ~8.39 MB, sha256 78be2ec0…), but RAVEL's
+gateway returned no extractable text from it", while the `HEAD` arm's ledger
+holds four PDFs at `access_status = OK`, and neither ledger shows a seat holding
+a tool it did not hold before.
+
+So the item was asserting something no run owes. Coverage is a property of the
+plan, and the plan belongs to a live model — which its own reasoning already
+said: "a plan that answers half the objective is a worse plan, not a failed
+test". The objective both arms ran has since been rewritten for the same reason,
+and what it shows is worth reading twice: under a question — "establish whether
+niobium doping raises the conductivity of TiO2 by at least 15% ... I will put the
+two together myself" — `5f01ff9` answered it the expensive way, by actually
+building both benches and letting the mock artifacts fail Review, while `HEAD`
+spent its whole run on review gates that could never be dispatched and
+terminated. Both are defensible plans, and neither is a property of the source
+tree. The two are now separate cases. The certification asks for three pieces of
+work, one per work seat, with each bench's inputs written into the objective
+(the composition grid, the reference value, the specimen and conditions) so that
+no bench waits on what the literature did or did not yield, and asserts all five
+seats. The second case asks the screening *question*, asserts that the ending is
+the Decision Record naming it and that each node carried out was carried out by
+the seat that owns its type, and lets the ending be whichever of A20's four the
+evidence supports. Neither mocks Research, loosens a Review, hides an evidence
+gap from Master, or asks any seat to behave unscientifically for a row.
+
+**A node type that is planned, promoted, and never handed to anybody.** The
+`HEAD` arm above also showed what a live Master does when it is handed one. It
+built nine REVIEW-typed nodes; two reached READY and neither was ever dispatched.
+All nine ended `CANCELLED`, and none of the run's fifteen review records names a
+REVIEW-typed node as the node being judged — the seat was working the whole
+time, writing those fifteen verdicts on ten of other seats' nodes, and was never
+given work of its own. `NODE_EXECUTOR` assigns REVIEW to the Review seat and the
+comment on `WORKER_RUN_NODE_TYPES` counts it among the types "performed by the
+agent of their seat, inside its own turn", but `ProjectLoop._executor_for`
+answers with a seat for exactly three types — COMPUTATION, EXPERIMENT, RESEARCH —
+so a REVIEW node lands in `Situation.unexecutable`, the bucket the loop
+documents as "not work and nobody will ever be given them". Master read the wait
+correctly and wrote it down — "the review seat has not executed in this
+environment: two review-typed nodes, one with an edge and one without, sat READY
+and undispatched, while the research seat ran" — then re-cast the checking work
+onto RESEARCH nodes and rewired around the rest. The run made 28 create and 30
+cancel decisions, took 43 minutes, and ended `TERMINATE_PROJECT`. What is wrong
+is not the bucket — a verdict is Review's turn, and a REVIEW node may be a way of
+asking for one the wiring does not implement — but that nothing says so: not the
+domain table, not the tool that lets Master create the node, not the situation
+Master is shown, and not a test, since the four cases covering that bucket all
+use DECISION, the one type whose presence there is documented. `L-27` records it,
+including the third run that saw it — the research-driven case that day, where
+another Master cancelled two REVIEW gates and wrote down an inference nobody
+could have corrected from what it was shown: that the block "is not specific to
+review executors", because a RESEARCH node was sitting READY too.
+
+**The same gap one type over, and what it cost when it was legible.** A later
+run of the certification case — the redesigned one, below — showed the same class
+of node again, this time as a DECISION node, and this time resolved. A live
+Master committed one for a deliverable and withdrew it on the very next turn,
+writing why: the framework had assigned the node `executor_role` `master`, and
+the Master has no mechanism to produce the file artifacts the node owed, so it
+could never satisfy its own required outputs. One turn, against the forty-three
+minutes the REVIEW case cost. The difference is not the plan but the
+discoverability: DECISION is the one type whose place in the unexecutable bucket
+is documented, so its role was legible the moment the node existed, and Master
+could see it had asked itself for a file it cannot write. `L-27` now records both.
+
+**Five seats is still a property of the plan, and a work order leaves the plan
+open.** The redesigned certification — three independent deliverables, one per
+work seat, each with its own inputs in the objective — passed in the full sweep at
+06:35 and failed its own re-run at 06:43, in 13:52. The project reached
+`INCONCLUSIVE` on four nodes with the experimental seat never reached, and the
+Decision Record says why in Master's own words: "Deliverable (3) needs a physical
+specimen and an instrument, and the project has no evidence yet that either
+exists. Committing a measurement node blind would either sit unexecutable in the
+plan or invite a value to be filled in from literature." The objective had
+described the specimen as "characterised" without saying it already was one, and
+Master — correctly — read an unestablished precondition rather than a premise.
+The run then spent a research task establishing availability, and the same Master
+committed and withdrew a DECISION node for the measurement's prerequisites before
+it did. Nothing here is a defect in a seat: the fix went into the objective, which
+now states the bench as the requester's own given — the specimen is in hand and
+characterised, the instrument is available — and says that no deliverable is
+gated on another's findings. Master is told nothing about which nodes to create.
+
+The reworded objective then produced exactly what the case is for, in 10:45: a
+Master that committed "three dependency-free root nodes in a single decision — a
+RESEARCH node for the literature route, a COMPUTATION node for the anchored
+series values, and an EXPERIMENT node for the bench measurement", and a run in
+which all three were carried out — one Research Record, and Execution Records
+whose `executed_by` names `compute-worker` and `experimental-worker` — ending
+INCONCLUSIVE on the merits, with the two mock results failed by a Review that
+would not accept `simulated` artifacts and the literature delivery PARTIAL. One
+run is one run, and the honest count for this item is now two passes and one
+failure; what changed between them is a sentence about a bench, not the plan a
+Master builds.
+
+## 7. Phase 11
+
+Phase 11 is a sequence of tasks. Two have landed: the reconciliation that keeps a
+dead run from stranding its node, and the deep read that lets a Research seat
+read back what it stored.
+
+### 7.1 P11-01: execution reconciliation
 
 Phase 11 opens with the hole Phase 10's own documentation named and left open.
 `KNOWN_LIMITATIONS.md` L-24: every step of a run after planning is an activity
@@ -451,6 +642,71 @@ A tick that fails to reconcile is logged and the supervisor carries on driving
 the projects that are not affected, because a supervisor that died over one
 unreachable node would take every other project down with it.
 
+### 7.2 P11-02: research deep read
+
+The second item is the other half of the first one's problem. A run that is lost
+is one RAVEL cannot see; a source that cannot be read back is one it can see and
+cannot use. `KNOWN_LIMITATIONS.md` L-25: every registration writes the bytes to
+the object store and hashes them into the ledger, and no tool returned them, so
+the most a Research session ever saw of a paper it had obtained was a
+six-hundred-character excerpt — and for a PDF, nothing at all. The live run that
+found it had identified the single source carrying the answer to its question
+and could not read a word of it.
+
+Three tools close it, all read-only and all Research's: `source_metadata`,
+`read_source` and `search_source`. They read the snapshot rather than
+re-fetching, they hash the bytes against the row's `content_hash` before
+returning anything, and the provenance they report is the ledger row itself.
+PDFs are addressed by page rather than by character, a scanned one is reported
+as having no text layer, and nothing in the path can produce text the source did
+not contain.
+
+| | |
+|---|---|
+| Unit | `tests/unit/test_deepread.py` — **56 passed** in 0.31s |
+| Integration | `tests/integration/research/test_deep_read.py` — **17 passed** in 33.5s |
+| Live | `tests/live_research/test_live_deep_read.py` — **3 passed** in 13.2s, against a real arXiv PDF |
+| Acceptance | `tests/acceptance/test_phase11_deepread.py` — **6 passed** in 19.1s, one of them live |
+| Matrix | `make phase11-acceptance` — `PASS P11-02 research deep read 6 passed` |
+
+The PDF cases are tested on real PDF files, not on strings that look like them.
+`tests/documents.py` writes them byte by byte — header, catalog, per-page
+content streams, and a cross-reference table with real offsets — because the
+three cases that matter most cannot be produced any other way: a document with
+no text layer (pages that are drawings), one that needs a password, and one
+whose bytes begin `%PDF-` and are not a PDF. `pypdf` reads these the way it
+reads a publisher's, which is why the same fixtures run through the real tool
+server and the real object store in the integration suite.
+
+What the acceptance cases assert is mostly about the *edges*, because the happy
+path is the easy half. `reading_a_source_changes_nothing_about_the_project`
+counts sources, claims and artifacts before four reads and after them. The
+integration suite does the same and adds the refusals: a source registered
+without a snapshot, a paywalled row, a reference this project never issued, a
+character region asked of a PDF, and — the one that makes the rest worth
+anything — a snapshot whose stored bytes no longer hash to what the row records,
+where the read stops and names both hashes rather than returning text under a
+provenance that does not describe it. The live case reads page one of a real
+paper, checks the arXiv identifier printed on it, extracts the same page
+independently with `pypdf` from the bytes in MinIO, and searches the paper for a
+phrase taken off that page.
+
+One thing the phase did *not* add is a second provenance system. The reading
+tools write nothing: no row, no event, no artifact, no counter. What they return
+as `source` is the ledger's own fields, and the only verification in the path is
+the one the ledger already made possible.
+
+That the item changed nothing outside a Research seat's reading was measured
+rather than asserted, because P10-17 was failing at the time and this item was
+the obvious suspect: `5f01ff9` and `HEAD` were run against one another on the
+Phase 10 certification and are written up in §6. P11-02's whole footprint under
+`src/` is three files and one new module, its three new tools are
+`frozenset({RESEARCH})` like the rest of the reading surface, and no file under
+`domain/`, `state/`, `execution/` or `master/` is touched at all. The one
+difference the two runs' ledgers show is the difference the item is for: a PDF
+the `5f01ff9` arm recorded as retrievable but with no extractable text, against
+four PDFs read at `access_status = OK` in the `HEAD` arm.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was
@@ -459,13 +715,20 @@ unreachable node would take every other project down with it.
   of credentials. Re-running on a different network, a different DeepSeek
   account, or a different DSH release may surface different behavior.
 - The project loop has been observed with a real model in the DSH spike tests,
-  and as of Phase 10 it has also been observed as `P10-17`: one unattended run
-  of a whole project, twenty minutes, five live seats, ending `FAILED`. That is
-  one run, not stress-testing. Repetition, runs of hours rather than minutes,
-  and the endings that need a non-mock backend to reach are all outside what has
-  been measured. `KNOWN_LIMITATIONS.md` L-19 says so in the same words.
+  and as of Phase 10 it has also been observed as `P10-17`: unattended runs of a
+  whole project, five live seats, between 16 and 43 minutes, ending `FAILED`,
+  `INCONCLUSIVE` and `CANCELLED` across them — and no two of them built anything
+  like the same plan, including the pair that differed only in the source tree.
+  That is a handful of runs, not stress-testing, and it is the reason the item
+  asserts what the architecture owns rather than what a plan happened to contain.
+  Repetition, runs of hours rather than minutes, and the endings that need a
+  non-mock backend to reach are all outside what has been measured.
+  `KNOWN_LIMITATIONS.md` L-19 says so in the same words.
 - `40/40 demonstrated` is a claim about the tests that ran, not about the
   science. Every live run of `P10-17` ends `FAILED`, `INCONCLUSIVE` or
   `CANCELLED`, because V0's backends are mocks and a live Review will not accept
-  a `simulated` artifact as a measurement; a run reaching an ending says the
-  architecture carried the project there, not that the hypothesis was answered.
+  a `simulated` artifact as a measurement — though those are not the only roads
+  to a non-`COMPLETED` ending, and the `CANCELLED` one took another: a live
+  Master that could not get its review gates dispatched terminated its own
+  project rather than wait. A run reaching an ending says the architecture
+  carried the project there, not that the hypothesis was answered.

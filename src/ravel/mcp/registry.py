@@ -87,6 +87,13 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "search_web": frozenset({RESEARCH}),
     "open_source": frozenset({RESEARCH}),
     "register_source": frozenset({RESEARCH}),
+    # The reading surface. Read-only, and Research's for the same reason the
+    # ledger's entrance is: what a seat may read out of a snapshot is the
+    # counterpart of what it may write into the ledger, and a source row
+    # describes bytes that only the seat which read them can quote.
+    "source_metadata": frozenset({RESEARCH}),
+    "read_source": frozenset({RESEARCH}),
+    "search_source": frozenset({RESEARCH}),
     "record_evidence": frozenset({RESEARCH}),
     "record_conflict": frozenset({RESEARCH}),
     "assess_evidence": frozenset({RESEARCH}),
@@ -311,6 +318,30 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "it and a stored copy of the bytes. This is the only way anything enters the "
         "ledger: the source is registered from the bytes RAVEL read, never from a URL and "
         "a hash you supply."
+    ),
+    "source_metadata": (
+        "Ask what RAVEL knows about one source before reading it: what it is, how big it "
+        "is, what RAVEL recorded about how it was reached, and whether it can be read at "
+        "all. Answers 'can I read this' honestly — a paywalled source, one stored without "
+        "a snapshot, and a scanned PDF each say which they are. Cheap, and it returns no "
+        "text."
+    ),
+    "read_source": (
+        "Read a bounded region of a source you have already opened or registered, and get "
+        "back the passage, where it sits in the document, and how much there is in total. "
+        "Plain text comes back verbatim; HTML, XML and JSON come back with their markup "
+        "removed and the result says so. A PDF is read by page, at most a few at a time. "
+        "Every read is checked against the hash the ledger recorded, so what you quote is "
+        "what was stored. You never get the whole paper: read the methods section, read "
+        "the paragraph around the number you need, and follow `next` for the region after "
+        "the one you just read."
+    ),
+    "search_source": (
+        "Find where a source you already have says something, and get the words around "
+        "each match. Searches the text of that one source — never the web — and reports "
+        "the offset so `read_source` can return the passage the match is in. Use it once "
+        "you have decided a document is worth reading: 'which force field did they use' "
+        "is a question about a document, and this is how a document is asked."
     ),
     "record_evidence": (
         "Record one claim and what supports it. A FACT needs sources you actually read; "

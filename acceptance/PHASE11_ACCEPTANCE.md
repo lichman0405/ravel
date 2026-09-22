@@ -77,3 +77,66 @@ each with a reconciliation saying its run had been lost. That is recorded in
 `TEST_REPORT.md` §6 and `KNOWN_LIMITATIONS.md` L-24, and pinned by
 `tests/integration/reconcile/test_execution_reconcile.py::test_a_node_no_worker_runs_is_never_asked_about`,
 which asserts both that nothing was written and that the probe was never asked.
+
+## P11-02 research deep read
+
+A source RAVEL stored must be readable by the seat that found it. That is
+`KNOWN_LIMITATIONS.md` L-25: the snapshot was written on every registration and
+nothing could read it back, so the most a Research session ever saw of a paper
+it had obtained was a six-hundred-character excerpt — and for a PDF, nothing at
+all. Every later reader of the ledger checks a claim against the snapshot, which
+is worth doing only if somebody can read the snapshot.
+
+Three tools, all of them reads, all of them Research's: `source_metadata` says
+what the ledger holds and whether it can be read; `read_source` returns a bounded
+region of the text, addressed by character for prose and by page for a PDF;
+`search_source` searches inside a source already in hand and reports offsets
+into the same text a read returns. They are three rather than one per format
+because the format is a property of the bytes: a roster that grew with every
+format RAVEL learned to read is a roster nobody can hold in mind.
+
+What the surface refuses is the substance of the item. It reads the *snapshot*
+and never re-fetches, so what comes back is the document that was registered
+rather than whatever the URL serves now, and the bytes are hashed again against
+the row's `content_hash` before anybody sees them — a mismatch is a refusal that
+names both hashes, not a reading. It writes nothing: no row, no counter, no
+artifact, so a look is not an act and the ledger records no sessions. A scanned
+PDF is reported as having no text layer, an encrypted one as encrypted, a format
+with no words as a format with no words, and none of them is guessed at. And the
+provenance block is the ledger row itself — `source_id`, `content_hash`,
+`retrieved_at`, `snapshot_ref`, tier, access status — so there is no second
+account of where a passage came from.
+
+The table below is the five requirements of §3.3 and §3.5 in
+`RAVEL_PHASE11_IMPLEMENTATION_PLAN_v2.md`, and each row names the tests that
+demonstrate it.
+
+| Requirement | Demonstrated by |
+|---|---|
+| Bounded, page/range-addressed reading with a maximum | `test_p11_02_a_stored_paper_is_read_again_by_the_page_it_is_on` — one page asked for, one page returned, and the arguments for the next region; `tests/integration/research/test_deep_read.py::test_a_read_is_a_bounded_region_and_says_where_the_next_one_is`, where two regions concatenate into the document |
+| Snapshot hash, retrieved_at and provenance linkage | `test_p11_02_a_methods_parameter_is_read_out_of_the_body_and_cited` — the chain record → claim → source → stored object, verified against its own hash |
+| A concrete fact out of a real paper's body, not its abstract | `test_p11_02_a_real_papers_body_is_read_and_quoted` — a live arXiv PDF, read by page and quoted, with the page extracted independently here from the stored bytes |
+| Scanned PDFs and formats with no text reported, never invented | `test_p11_02_a_scanned_paper_is_reported_and_never_invented` — pages, no words, and all three tools saying so |
+| Reading is not writing | `test_p11_02_reading_a_source_changes_nothing_about_the_project`, and `tests/integration/research/test_deep_read.py::test_reading_writes_nothing` |
+
+The provenance check is the one that makes a reading citable, so it is
+demonstrated as a refusal as well as a result:
+`tests/integration/research/test_deep_read.py::test_bytes_that_disagree_with_the_row_are_refused_rather_than_read`
+replaces the object under a snapshot's key and requires the read to stop. The
+same file pins the refusals that keep the surface honest — a source registered
+without a snapshot, a paywalled row, a reference this project never issued, a
+character region asked of a PDF — and
+`test_p11_02_the_reading_surface_belongs_to_the_ledgers_author` asks every role
+over the real transport and requires the three tools to be registered for
+Research alone. What a seat may read out of a snapshot is the counterpart of
+what it may write into the ledger, and the ledger has one author.
+
+Five cases run offline against the real database, the real object store and the
+real tool server; the sixth is live, because a document this repository wrote
+cannot show that a publisher's PDF yields its body text. Seventeen more in
+`tests/integration/research/test_deep_read.py` drive the same path over MCP
+stdio, and fifty-six in `tests/unit/test_deepread.py` settle the reader itself:
+the media-type table, every extraction, the offset arithmetic, and the scans,
+encryptions and unparseable files that have no text in them. Those fixtures are
+real PDF files, built byte by byte in `tests/documents.py`, so the scanned and
+encrypted cases are tested on documents that really are those things.
