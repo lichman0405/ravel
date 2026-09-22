@@ -41,6 +41,7 @@ from ravel.domain.roles import AgentRole, require_role
 from ravel.state.mapping import to_row_data
 from ravel.state.outbox import emit
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
+from ravel.state.repositories.reconciliation import RunReconciliationRepository
 from ravel.state.tables import (
     BackendJobRow,
     DecisionRecordRow,
@@ -228,9 +229,37 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         return sorted(self.all(node_id=node_id), key=lambda job: job.attempt)
 
     def latest_for_node(self, node_id: str) -> BackendJob | None:
-        """The most recent attempt's job, if the node has one."""
+        """The most recent attempt's job, if the node has one.
+
+        Ordered by attempt, which is the only ordering `for_node` has — so for
+        a node that has run under more than one version this is the
+        highest-numbered attempt of *any* version, and not necessarily the
+        newest run. A caller that means "the run in flight now" wants
+        `latest_for_version` with the version it is asking about.
+        """
         jobs = self.for_node(node_id)
         return jobs[-1] if jobs else None
+
+    def latest_for_version(
+        self, node_id: str, execution_contract_version: int
+    ) -> BackendJob | None:
+        """The newest attempt recorded under one version of a node's contract.
+
+        The version is part of the question for the reason it is part of the
+        job's key: a node whose terms Master revised starts again at attempt
+        one under the new version, so "the latest job" across versions would
+        answer with an attempt of a run that has already ended.
+
+        Attempts under one version are numbered from one and `for_node` sorts
+        by attempt, so the last of the filtered list is the newest — not the
+        one whose `updated_at` is largest, which polling moves.
+        """
+        matching = [
+            job
+            for job in self.for_node(node_id)
+            if job.execution_contract_version == execution_contract_version
+        ]
+        return matching[-1] if matching else None
 
     def start(self, job: BackendJob) -> BackendJob:
         """Record that a backend is taking on this attempt.
@@ -296,12 +325,24 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         backend_job_ref: str | None = None,
         failure_class: FailureClass | None = None,
         detail: str = "",
+        actor_id: str | None = None,
+        actor_type: ActorType = ActorType.BACKEND,
     ) -> BackendJob:
         """Move a job to a new state and record the change.
 
         Re-asserting the state a job is already in writes nothing and emits
         nothing, so a poll that reports the same thing twice does not fill the
         event stream with it.
+
+        **Who is credited with the change defaults to the backend, and is not
+        always the backend.** Almost every call here is a report: the backend
+        said the job is running, and RAVEL wrote down what it was told. One
+        caller is not — the reconciler ends a job belonging to a run that no
+        longer exists, which is RAVEL's own act on its own machinery — and a
+        stream that credited that to the backend would say the machine
+        reported an ending it never reported. So the actor travels with the
+        call rather than being assumed, and the default keeps every existing
+        caller's event exactly as it was.
 
         Raises:
             TransitionError: The move is not legal, or the job has ended.
@@ -328,15 +369,22 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
         row.backend_job_ref = moved.backend_job_ref
         row.updated_at = moved.updated_at
         row.ended_at = moved.ended_at
-        self._emit(moved, change="STATE")
+        self._emit(moved, change="STATE", actor_id=actor_id, actor_type=actor_type)
         return moved
 
-    def _emit(self, job: BackendJob, *, change: str) -> None:
+    def _emit(
+        self,
+        job: BackendJob,
+        *,
+        change: str,
+        actor_id: str | None = None,
+        actor_type: ActorType = ActorType.BACKEND,
+    ) -> None:
         """Record the change in the project's stream.
 
         `BACKEND_STATUS_CHANGED` is the event the vocabulary already had for
-        this, and it is emitted with the backend as the actor: RAVEL did not
-        decide the job was running, it was told.
+        this, and it is emitted with the backend as the actor by default:
+        RAVEL did not decide the job was running, it was told.
 
         The backend's own state word travels in the payload beside RAVEL's, so
         a reader can see the two disagree without opening the table — and
@@ -348,8 +396,8 @@ class BackendJobRepository(ProjectScopedRepository[BackendJob]):
             self.session,
             project_id=self.project_id,
             event_type=ProjectEventType.BACKEND_STATUS_CHANGED,
-            actor_type=ActorType.BACKEND,
-            actor_id=job.backend,
+            actor_type=actor_type,
+            actor_id=actor_id or job.backend,
             payload={
                 "change": change,
                 "job_id": job.job_id,
@@ -462,6 +510,7 @@ class RecordRepositories:
         self.deviations = DeviationRepository(session, project_id)
         self.jobs = BackendJobRepository(session, project_id)
         self.messages = WorkerMessageRepository(session, project_id)
+        self.reconciliations = RunReconciliationRepository(session, project_id)
 
     def latest_execution(self, node_id: str) -> ExecutionRecord | None:
         """The most recent execution of a node, if any."""

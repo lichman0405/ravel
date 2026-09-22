@@ -21,6 +21,7 @@ WITH_ENV := set -a; . ./.env 2>/dev/null || true; set +a;
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
         typecheck gateway tui acceptance-matrix acceptance-raw clean \
         phase10-acceptance phase10-acceptance-raw \
+        phase11-acceptance phase11-acceptance-raw \
         up worker project account
 
 help: ## Show this help
@@ -88,6 +89,16 @@ phase10-acceptance: ## Run P10-01..P10-20 and the worker items, print the matrix
 
 phase10-acceptance-raw: ## Run the Phase 10 acceptance suite, no matrix
 	$(WITH_ENV) $(VENV)/bin/pytest tests/acceptance -m phase10
+
+# Phase 11's items are tasks rather than a parallel set, so the document grows
+# as they land and one item per task is enough. The rule is unchanged: an item
+# with no case prints as MISSING, and the item count is asserted against the
+# document so a task that quietly lost its section is a failure here.
+phase11-acceptance: ## Run the Phase 11 items and print the matrix
+	$(WITH_ENV) $(PY) scripts/acceptance_matrix.py --phase phase11
+
+phase11-acceptance-raw: ## Run the Phase 11 acceptance suite, no matrix
+	$(WITH_ENV) $(VENV)/bin/pytest tests/acceptance -m phase11
 
 # The checks that decide whether the tree is acceptable: the linter for style
 # and likely mistakes, and the type checker for the interfaces between modules.

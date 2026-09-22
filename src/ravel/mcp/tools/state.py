@@ -14,8 +14,15 @@ from typing import Any
 
 from ravel.domain.contracts import BudgetLimits, ProjectSuccessContract, ResearchContract
 from ravel.domain.decisions import ReviewRecord
-from ravel.domain.enums import DecisionType, NodeStatus, ProjectOutcome
+from ravel.domain.enums import (
+    DecisionType,
+    JobState,
+    NodeStatus,
+    ProjectOutcome,
+    ReviewOutcome,
+)
 from ravel.domain.identity import MasterCheckpoint
+from ravel.domain.reconciliation import RunReconciliation
 from ravel.domain.roles import AgentRole
 from ravel.master.service import ENDING_DECISION, MasterService
 from ravel.mcp.context import ToolContext, as_json, require_master
@@ -28,6 +35,7 @@ from ravel.state.repositories.identity import (
     CheckpointRepository,
 )
 from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
+from ravel.state.repositories.reconciliation import RunReconciliationRepository
 from ravel.state.repositories.records import RecordRepositories
 from ravel.state.services.dag import DagMutationService, DecisionDraft
 
@@ -56,6 +64,17 @@ def whoami(context: ToolContext) -> Any:
         }
 
     return whoami
+
+
+def _state_name(state: JobState | None) -> str | None:
+    """A job state as it is reported, or nothing for a run that had no job.
+
+    `None` rather than a word, because the two are different: a run that died
+    before `start_job` recorded anything had no job, and "unknown" would read
+    as a job nobody could identify. A reader who wants to know which ran out of
+    the two looks at `job_id`, which is null in exactly the same case.
+    """
+    return state.value if state is not None else None
 
 
 def read_project_state(context: ToolContext) -> Any:
@@ -101,6 +120,22 @@ def read_project_state(context: ToolContext) -> Any:
             latest: dict[str, ReviewRecord] = {}
             for review in RecordRepositories(session, context.project_id).reviews.all():
                 latest[review.node_id] = review
+            # The third reason a node is waiting, and the one with no author:
+            # a run of it was lost, and RAVEL parked it here rather than decide
+            # what that meant. The record is what says so — without it the node
+            # reads as a question with no question in it, and the one role that
+            # may answer would be asked to answer nothing.
+            #
+            # Keyed by node rather than by run, because a node is what this read
+            # reports about and a node can lose more than one run. The newest is
+            # kept, which is `for_node`'s ordering: a reconciliation written
+            # later is about a revision of the terms, and it is the one that
+            # says where the node is now.
+            lost: dict[str, RunReconciliation] = {}
+            for reconciliation in RunReconciliationRepository(
+                session, context.project_id
+            ).all():
+                lost[reconciliation.node_id] = reconciliation
             seq = last_event_seq(session, context.project_id)
 
         counts: dict[str, int] = {}
@@ -147,6 +182,15 @@ def read_project_state(context: ToolContext) -> Any:
                     "node_type": node.node_type.value,
                     "status": node.status.value,
                     "objective": node.objective,
+                    # Only a verdict that *withheld* something is a reason a
+                    # node stopped. A PASS is the clearance a node needed to
+                    # enter RUNNING, and a node that ran and was then parked —
+                    # by a lost run, by a deviation — still has that PASS as its
+                    # latest review, so reporting it here would answer "why did
+                    # this stop" with a document saying it was allowed to go.
+                    # Observed rather than theorised: the first version of this
+                    # read did exactly that, and the acceptance case that reads
+                    # it back caught it.
                     "verdict": (
                         {
                             "checkpoint": latest[node.node_id].checkpoint.value,
@@ -155,6 +199,35 @@ def read_project_state(context: ToolContext) -> Any:
                             "recommendations": list(latest[node.node_id].recommendations),
                         }
                         if node.node_id in latest
+                        and latest[node.node_id].outcome is not ReviewOutcome.PASS
+                        else None
+                    ),
+                    # Why RAVEL stopped it, when RAVEL is the one that did.
+                    # Every value is a report from somewhere else — Temporal's
+                    # word for the run, the job's state, the class RAVEL read
+                    # off both — so Master can see that a queue was lost without
+                    # being told anything about the science.
+                    "run_reconciliation": (
+                        {
+                            "reconciliation_id": lost[node.node_id].reconciliation_id,
+                            "failure_class": lost[node.node_id].failure_class.value,
+                            "observed": lost[node.node_id].observed.value,
+                            "workflow_id": lost[node.node_id].workflow_id,
+                            "execution_contract_version": (
+                                lost[node.node_id].execution_contract_version
+                            ),
+                            "job_id": lost[node.node_id].job_id,
+                            "job_state_before": _state_name(
+                                lost[node.node_id].job_state_before
+                            ),
+                            "job_state_after": _state_name(
+                                lost[node.node_id].job_state_after
+                            ),
+                            "detail": lost[node.node_id].detail,
+                            "detected_by": lost[node.node_id].detected_by,
+                            "created_at": lost[node.node_id].created_at.isoformat(),
+                        }
+                        if node.node_id in lost
                         else None
                     ),
                 }

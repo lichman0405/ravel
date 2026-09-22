@@ -132,6 +132,20 @@ FROZEN_CRITERIA_NODE_TYPES: frozenset[NodeType] = frozenset(
     {NodeType.COMPUTATION, NodeType.EXPERIMENT}
 )
 
+#: Node types a Worker performs as a *run*: a durable workflow that starts a
+#: backend job and reports through its own activities.
+#:
+#: The other four are performed by the agent of their seat, inside its own
+#: turn. The distinction is invisible in `NodeStatus` — a RESEARCH node and a
+#: COMPUTATION node are both `RUNNING` while somebody works on them — and it
+#: matters to anything that asks a system *outside* PostgreSQL whether that
+#: work is still under way. A workflow id for a RESEARCH node was never
+#: started, so Temporal answers that it does not exist, which is true and
+#: means nothing: there was never one to lose.
+WORKER_RUN_NODE_TYPES: frozenset[NodeType] = frozenset(
+    {NodeType.COMPUTATION, NodeType.EXPERIMENT}
+)
+
 #: Job state -> the states it may move to.
 #:
 #: The four terminal states have no outgoing edges, for the same reason the

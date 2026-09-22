@@ -73,6 +73,7 @@ markers = [
     "e2e: full loop or TUI",
     "acceptance: one of the A01-A20 acceptance cases",
     "phase10: one of the Phase 10 autonomy acceptance cases",
+    "phase11: one of the Phase 11 execution-reconciliation acceptance cases",
 ]
 addopts = "-q --strict-markers"
 

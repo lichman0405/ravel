@@ -17,6 +17,7 @@ On Ubuntu 24.04 with the infrastructure up (`scripts/dev_up.sh`) and the
 credentials in `.env` filled in:
 
 ```bash
+make migrate       # the live suites read the database `.env` names, not `ravel_test`
 make lint          # ruff check src tests, then pyright src tests
 make test-unit     # tests/unit, no services needed
 make test-integration
@@ -24,10 +25,16 @@ make test-e2e
 make test-live     # real-Internet research; needs RAVEL_RESEARCH_CONTACT_EMAIL
 make test-dsh      # real model turns; needs DEEPSEEK_API_KEY
 make acceptance    # A01-A20 plus the seven gates, printed as a matrix
+make phase11-acceptance  # the Phase 11 items, printed as a matrix
 ```
 
-Two warnings, both of which cost time when ignored:
+Three warnings, each of which costs time when ignored:
 
+- **Migrate first.** Every suite but `tests/dsh` and the live `tests/acceptance`
+  cases builds its schema against `ravel_test` with `create_all`, so a model
+  that added a table is there without anybody running anything. The live ones
+  read the database `.env` names — the deployment's — and `tests/dsh` now
+  refuses to start against one that is behind the models.
 - **Never run two pytest processes at once on this machine.** They share the
   `ravel_test` database and both `TRUNCATE` on entry, so the second one's
   cleanup blocks on the first one's locks, and the failure surfaces as a
@@ -38,23 +45,50 @@ Two warnings, both of which cost time when ignored:
 
 ## 2. Results
 
-Run on 2026-09-21 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
-set in `.env`:
+Run on 2026-09-22 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
+set in `.env`, every suite in one sequential sweep after `make migrate`:
 
 | Suite | Passed | Skipped | Failed | Exit |
 |---|---:|---:|---:|---|
-| `tests/unit` | 803 | 0 | 0 | 0 |
-| `tests/integration` | 538 | 0 | 0 | 0 |
-| `tests/dsh` | 11 | 0 | 0 | 0 |
+| `tests/unit` | 823 | 0 | 0 | 0 |
+| `tests/integration` | 560 | 0 | 0 | 0 |
+| `tests/dsh` | 10 | 0 | 1 | 1 |
 | `tests/e2e` | 20 | 0 | 0 | 0 |
 | `tests/live_research` | 13 | 0 | 0 | 0 |
 | `tests/acceptance` (`make acceptance`) | 43 | 0 | 0 | 0 |
 | `tests/acceptance -m phase10` (`make phase10-acceptance`) | 56 | 0 | 0 | 0 |
+| `tests/acceptance -m phase11` (`make phase11-acceptance`) | 9 | 0 | 0 | 0 |
+
+**The one failure is a live-model flake, and it is left in the table rather
+than re-run away.** In `tests/dsh`, `test_a_role_runtime_starts_runs_a_ravel_tool_and_stops`
+asserts the model reads a title out of `read_project_state` and reports it.
+The session log shows the tool working and the model never answering:
+it called all four read-only tools, got the title back correctly, spent its
+whole 352-token output budget reasoning about whether the *mutating* tools were
+safe to call next — the prompt says "call every tool available to you" and the
+behavioural contract says not to do arbitrary things, so it was weighing a real
+conflict — and finished with `{"kind": "stop"}` and no text block at all. What
+failed is `assert TITLE_SENTINEL in outcome.response`, against `response == ''`.
+
+It passed on the two runs before it and on the run after it, which is what
+makes it a flake rather than a fault, and no test was changed to accommodate
+it: a case that tolerates an empty answer is a case that no longer checks
+whether the model read anything. It is recorded here because a green table
+produced by re-running until it was green is worth less than a table that says
+what happened.
 
 `make acceptance` reports by *item* rather than by test, which is a different
 question from the one a pytest summary answers — see §3. The same is true of
 `make phase10-acceptance`, whose 56 cases are the 36 behind the twenty `P10-`
-items plus the twenty worker items — see §3.1.
+items plus the twenty worker items — see §3.1 — and of `make phase11-acceptance`,
+whose one row is the 9 cases behind `P11-01` — see §7.
+
+**The live suites read the deployment database, not the test one.** `tests/dsh`
+and the live agent turns inside `tests/acceptance` hand a tool server the
+settings `.env` names, so they need that database migrated; every other suite
+is pointed at `ravel_test` and builds its schema with `create_all`. Run
+`make migrate` before the sweep, or `tests/dsh` refuses to start and says so —
+§6 records what that failure looked like before it had a guard.
 
 ## 3. The acceptance matrix
 
@@ -213,8 +247,8 @@ claim must not rest on. Each is answered by a test rather than by an assurance:
 ## 6. What the tests found
 
 The suite is load-bearing, and the record of what it caught is the evidence for
-that. The two earlier findings are kept below; a third was found only when the
-model-turn gate could finally run.
+that. Every finding below is kept, including the ones that were found only once
+a live gate could run and the one that was found by a live gate failing.
 
 **A hang that named the wrong test.** The first full acceptance run failed at
 A15 with `Timeout (>600.0s) from pytest-timeout`. A15 was not the problem.
@@ -277,7 +311,147 @@ Fixed by adding `json_iso()` to `ravel.domain.clock` and using it wherever a
 timestamp is hand-serialized to match Pydantic's `model_dump(mode="json")`
 output.
 
-## 7. What these numbers do not say
+**A node that stopped reported the wrong reason.** P11-01's acceptance case
+`test_p11_01_a_lost_run_leaves_a_question_and_no_scientific_verdict` failed on
+its first run, and the fault was in the product rather than in the test.
+`read_project_state` reports why each stopped node is stopped, under `stopped`,
+and the reason it reported was the node's latest Review. For a node a Worker's
+contract refused, or one a Review would not clear, that is correct — the verdict
+*is* what stopped it. But a node that ran and was then stranded by something else
+still has its pre-flight clearance as its latest review, and that clearance is a
+PASS: a document saying the node was allowed to go, handed to Master as the
+answer to why it did not.
+
+The fix is one condition — a `PASS` is not a reason anything stopped, so it is
+reported as no verdict rather than as one. It would have been easy to close this
+by weakening the test, which is why the finding is recorded here: the assertion
+was right and the read was wrong, and the reason it was reachable at all is that
+until Phase 11 no node could reach `WAITING_DECISION` without a verdict that put
+it there.
+
+**The reconciler asked about runs that had never existed.** The live five-agent
+certification — `test_p10_17`, the one item no amount of reading can answer —
+failed on the first full run with Phase 11 in it. The project reached
+`CANCELLED` with three of the five seats never having taken a turn, and the log
+said why:
+
+```
+reconciled a lost run: node=RES-287B4188 version=1
+  workflow=node-run:9ea8e5eef6d0428799669fadad3183e6:v1
+  observed=NOT_FOUND class=WORKFLOW_LOST node now=WAITING_DECISION
+```
+
+Three **research** nodes, parked in the middle of their searches, each with a
+reconciliation saying its run had been lost. No run existed to lose. A Research
+Agent does that work inside its own turn: it never calls `start_execution`, no
+workflow is started for it, and no activity of a run ever moves the node. The
+sweep asked Temporal about a workflow id nothing had ever started, and Temporal
+correctly answered that it was not there. The Master then saw three of its
+evidence-gathering tasks waiting on it, could not get the evidence, and the
+project ended without a Review or a Worker ever running.
+
+The defect was in the reasoning, and the test that should have caught it had the
+belief written into it. `LIVE_NODE_STATUSES` was the whole filter: any node in
+`RUNNING` or `WAITING_EXTERNAL` was asked about, and
+`test_recovery_does_not_depend_on_which_node_type_it_is` asserted that a RESEARCH
+node *was* recovered, on the argument that the reconciler reads the durable layer
+and not what kind of work the node asked for. The argument is sound and the
+conclusion is wrong — which nodes have a durable run is precisely what the
+durable layer knows, and a node type performed by an agent has none.
+
+The filter is now `WORKER_RUN_NODE_TYPES`: COMPUTATION and EXPERIMENT, the two
+node types whose execution *is* a run, stated once in `ravel.domain.state_machines`
+and pinned by a unit test to the seats `NODE_EXECUTOR` assigns them, so a node
+type added later cannot quietly join one set and not the other. The integration
+case that had it backwards now asserts the opposite, and asserts it twice —
+nothing was written, and the probe was never asked. The second assertion is the
+one that would have caught this before the live run: the reconciler had no
+business forming the question.
+
+**A table without the migration that installs it.** Phase 11 adds
+`run_reconciliations`, and the live suites read the *deployment* database rather
+than `ravel_test`: `tests/dsh` and the live agent turns in `tests/acceptance`
+hand a tool server the settings `.env` names, and nothing in a test run migrates
+that database. Every other suite builds its schema with `create_all` and could
+not have caught it. The symptom was as misleading as it gets — `read_project_state`
+raised inside the tool server, the agent reported `Error executing tool
+read_project_state` and then answered, correctly and at length, that it could not
+read the authoritative state and would not guess. The case failed on a sentence
+about the model, and the model had done nothing wrong.
+
+`make migrate` was the fix, and `tests/dsh/conftest.py` now refuses to start
+against a database older than the models, naming the missing tables and the
+command. Verified by pointing it at a scratch database pinned to the previous
+revision, where it reports exactly `run_reconciliations` — and at the migrated
+one, where it is silent.
+
+## 7. Phase 11: execution reconciliation
+
+Phase 11 opens with the hole Phase 10's own documentation named and left open.
+`KNOWN_LIMITATIONS.md` L-24: every step of a run after planning is an activity
+retried five times, and the last of them is the one that writes. When it exhausts
+its retries the workflow ends FAILED, PostgreSQL keeps a node in `RUNNING` for a
+run that no longer exists, and nothing in RAVEL ever asks again — the loop reads
+`in_flight`, which is true and useless, and the project cannot reach an ending
+while it holds one. It was found by a live run, and it is the limitation that
+makes every other kind of autonomy unsafe, because a real Slurm cluster and a
+real laboratory make a lost run more likely rather than less.
+
+`ExecutionReconciler` closes it. On each supervisor tick it sweeps the live nodes
+of every active project, asks Temporal about the one run each node is supposed to
+have, and for a run that is gone it ends the job, moves the node to
+`WAITING_DECISION` — the state that means Master is asked — and writes an
+immutable `RunReconciliation` recording what it observed, in one transaction,
+behind a re-read of the node so a decision that landed mid-sweep wins.
+
+| | |
+|---|---|
+| Unit | `tests/unit/domain/test_reconciliation.py` — **16 passed**; `test_state_machines.py::test_a_durable_run_is_what_a_worker_seat_does` for the node-type set |
+| Integration | `tests/integration/reconcile/test_execution_reconcile.py` — **22 passed** in 3.46s |
+| Acceptance | `tests/acceptance/test_phase11_reconcile.py` — **9 passed** in 20.71s |
+| Matrix | `make phase11-acceptance` — `PASS P11-01 execution reconciliation 9 passed` |
+
+Run with `make phase11-acceptance` (the matrix above) or
+`make phase11-acceptance-raw` for the suite alone. The acceptance cases run
+against the real Temporal cluster; the integration cases drive the same code
+against PostgreSQL with a scripted probe, which is what makes the races
+reachable — a competing write that lands during the probe is arranged by the
+probe itself, because that is where it happens in a deployment.
+
+The expensive case is the one that reproduces L-24 the way L-24 happened.
+`test_p11_01_a_run_that_died_writing_its_result_does_not_strand_its_node` starts
+a real run against a backend whose `collect` raises — `finish_node_run` calls
+`collect` outside its write transaction, so the activity fails while the job has
+already reported COMPLETED — and waits out five real retries with the real
+`1, 2, 4, 8` second backoff, about eighteen seconds. What it then asserts is the
+whole point of the item: the workflow is observed FAILED, the job is left exactly
+as the backend reported it, the node moves to `WAITING_DECISION`, and the
+classification recorded is `INFRASTRUCTURE`, not `SCIENTIFIC`.
+
+**What the reconciler refuses to do is most of the design.** It writes no
+Execution Record, because a run that never reported did nothing RAVEL can attest
+to and that record is a Worker's act in every other path. It does not send the
+node to `REVIEWING`, because Review measures a delivered result against criteria
+frozen before the run and an empty result is not evidence. It does not fail the
+node, because `FAILED` is RAVEL saying the work failed and work that never
+happened did not. It does not start another run: the workflow id carries
+`REJECT_DUPLICATE`, and running work a second time opens a new node or a new
+contract version, which is Master's decision. And it does not act on a probe that
+established nothing — an unreachable frontend is `UNKNOWN`, and `UNKNOWN` is not
+evidence that a run is dead. Each omission has a case in
+`tests/integration/reconcile/`, and the cumulative claim is that a lost run
+pollutes no scientific conclusion:
+`test_p11_01_a_lost_run_leaves_a_question_and_no_scientific_verdict` asserts no
+Execution Record, no PASS, and no ending.
+
+The supervisor wiring is a read-only one. `ProjectSupervisor` holds a Temporal
+client for the first time, and the sweep is the only thing it does with it:
+`describe_workflow`, never `start_workflow`, never a signal, never a terminate.
+A tick that fails to reconcile is logged and the supervisor carries on driving
+the projects that are not affected, because a supervisor that died over one
+unreachable node would take every other project down with it.
+
+## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was
   exercised, and `KNOWN_LIMITATIONS.md` is the record of what was not.

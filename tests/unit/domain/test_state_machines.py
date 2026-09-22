@@ -21,6 +21,7 @@ from ravel.domain.state_machines import (
     PROJECT_TRANSITIONS,
     TERMINAL_NODE_STATUSES,
     TERMINAL_PROJECT_STATUSES,
+    WORKER_RUN_NODE_TYPES,
     TransitionError,
     can_transition_job,
     can_transition_node,
@@ -208,6 +209,27 @@ def test_only_computation_and_experiment_freeze_criteria() -> None:
     assert requires_frozen_criteria(NodeType.EXPERIMENT)
     assert not requires_frozen_criteria(NodeType.RESEARCH)
     assert not requires_frozen_criteria(NodeType.REVIEW)
+
+
+def test_a_durable_run_is_what_a_worker_seat_does() -> None:
+    """Which node types have a run is a fact about who executes them.
+
+    A node whose seat is a Worker is executed as a durable run: the Worker
+    calls `start_execution`, a workflow starts a backend job, and the run's own
+    activities move the node. Every other seat performs its node inside an
+    agent turn, with no workflow anywhere — a Research Agent searching for
+    evidence is not a run that can be lost.
+
+    The distinction is invisible in `NodeStatus`, so the set is stated once and
+    checked here against `NODE_EXECUTOR` rather than inferred at each use. The
+    two must not drift: a node type added later, assigned to a Worker and
+    missing from `WORKER_RUN_NODE_TYPES`, would be a run nothing ever
+    reconciled.
+    """
+    worker_seats = {AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER}
+    assert {
+        node_type for node_type in NodeType if executor_for(node_type) in worker_seats
+    } == WORKER_RUN_NODE_TYPES
 
 
 # ── Joins ───────────────────────────────────────────────────────────────────

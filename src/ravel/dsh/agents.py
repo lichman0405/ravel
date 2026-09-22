@@ -305,10 +305,13 @@ class HarnessAgent(RoleSession):
             if node.status is NodeStatus.WAITING_DECISION:
                 waiting.append(
                     f"- {node.display_id} stopped and is waiting on your decision "
-                    f"about what happens to it next. Why it stopped is the verdict "
-                    f"that stopped it: `read_project_state` reports it under "
-                    f"`stopped`, and a node a Worker's contract stopped and a node "
-                    f"a Review would not clear are different problems."
+                    f"about what happens to it next. Why it stopped is under "
+                    f"`stopped` in `read_project_state`, in one of two fields: a "
+                    f"`verdict` means a seat stopped it — a Worker's contract "
+                    f"refused something, or a Review withheld the clearance — and "
+                    f"a `run_reconciliation` means RAVEL did, because the run "
+                    f"holding the node was lost. The two are different problems "
+                    f"and a decision that treats one as the other will not fit."
                 )
             elif node.status is NodeStatus.BLOCKED:
                 waiting.append(

@@ -24,10 +24,20 @@ processes and neither replaces the other, because they hold different things:
 **Neither process starts a run on its own account.** A node runs because the
 Worker Agent whose node it is asked for one, through the tool that reaches the
 Execution Service (`ravel.execution.node_runs`); the tool server is a third
-process the harness spawns per session, so this one holds no Temporal client at
-all. What the control plane contributes is the *turn*: a READY node, cleared by
-the DAG, handed to the seat that owns it. What the data plane contributes is
-running it, durably, without either of the other two waiting on it.
+process the harness spawns per session. What the control plane contributes is
+the *turn*: a READY node, cleared by the DAG, handed to the seat that owns it.
+What the data plane contributes is running it, durably, without either of the
+other two waiting on it. Nothing here calls `start_workflow`.
+
+**This process does hold a Temporal client, since Phase 11, and it only ever
+reads with it.** The supervisor reconciles before it drives (`_reconcile`):
+a node can be left in a live status by a run whose workflow is gone, and
+whether that has happened is a fact only Temporal has — so the one thing the
+control plane asks the data plane is `describe_workflow`, and the answer is
+used to end the stranded job and put the node where Master is asked. No run is
+started, no signal is sent, no workflow is terminated. The client is opened
+lazily by `ravel.execution.reconcile`, on the first tick that has something to
+ask, so a deployment with nothing stranded still opens no connection.
 
 So a Worker agent's `start` turn begins a run and its `act` turns read one; the
 backend call itself is an activity, there. Neither writes a decision or a
@@ -55,6 +65,7 @@ from ravel.domain.state_machines import TERMINAL_PROJECT_STATUSES
 from ravel.dsh.agents import HarnessAgent, ResearchAgent, WorkerAgent
 from ravel.dsh.pool import DshRuntimePool, create_pool
 from ravel.execution.loop import ProjectLoop
+from ravel.execution.reconcile import ExecutionReconciler
 from ravel.state.database import Database
 from ravel.state.repositories.projects import ProjectRegistry
 
@@ -73,6 +84,17 @@ class ProjectSupervisor:
     _tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict, init=False, repr=False)
     _pool: DshRuntimePool | None = field(default=None, init=False, repr=False)
     _stop_event: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
+    #: Built from `database` and `settings` in `__post_init__` rather than
+    #: declared as a field, because a default would have to be built from the
+    #: other two and a caller that replaced one of them would get a reconciler
+    #: still pointed at the other. `probe` stays overridable after the fact —
+    #: that is the seam a test uses to answer for Temporal without a cluster.
+    reconciler: ExecutionReconciler = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.reconciler = ExecutionReconciler(
+            database=self.database, settings=self.settings
+        )
 
     @property
     def pool(self) -> DshRuntimePool | None:
@@ -104,9 +126,10 @@ class ProjectSupervisor:
         self._stop_event.set()
 
     async def _tick(self) -> None:
-        """Start project loops for newly active projects, reap finished ones."""
+        """Recover dead runs, then start loops for active projects and reap."""
         self._reap()
         active = self._active_projects()
+        await self._reconcile(active)
         for project_id in active:
             if project_id not in self._tasks:
                 task = asyncio.create_task(
@@ -129,6 +152,29 @@ class ProjectSupervisor:
                     exc,
                     exc_info=exc,
                 )
+
+    async def _reconcile(self, active: set[str]) -> None:
+        """Find runs that are gone, and put their nodes back in play.
+
+        Before the loops rather than beside them, because a project holding a
+        stranded node is one the loop cannot move: the node reads as in flight,
+        so the loop hands out no turn that could end it. Reconciling first
+        means the loop's own read of the project, a moment later, is of a
+        project where Master has something to decide.
+
+        **A failure here does not stop the supervisor.** A Temporal frontend
+        that is down, a database that went away mid-scan — neither is a reason
+        to stop driving the projects that are not affected, and a supervisor
+        that died because it could not check one node would take every other
+        project down with it. The next tick tries again, which is what a
+        polling loop is for.
+        """
+        if not active:
+            return
+        try:
+            await self.reconciler.reconcile(active)
+        except Exception:
+            logger.exception("reconciliation sweep failed; continuing to drive")
 
     def _reap(self) -> None:
         """Close harness runtimes that have gone idle.
@@ -213,4 +259,5 @@ class ProjectSupervisor:
         self._tasks.clear()
         if self._pool is not None:
             self._pool.close()
+        await self.reconciler.close()
         self.database.dispose()

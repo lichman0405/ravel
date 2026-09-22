@@ -65,6 +65,7 @@ from ravel.domain.enums import (
     WorkerMessageKind,
 )
 from ravel.domain.events import ActorType, ProjectEventType
+from ravel.domain.reconciliation import RunFailureClass, WorkflowLiveness
 from ravel.domain.roles import AgentRole
 
 #: Deterministic constraint names. Without this, PostgreSQL invents names and
@@ -1094,6 +1095,83 @@ class WorkerMessageRow(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     approved_by_contract: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunReconciliationRow(Base):
+    """A run RAVEL found dead, and what it did about it.
+
+    **This table is append-only, and that is enforced rather than intended.**
+    It is not in `guards.UPDATABLE_TABLES`, so the guard triggers give it the
+    same `ravel_reject_write` and `ravel_reject_delete` every other record
+    table has. A reconciliation is a statement about what RAVEL observed at a
+    moment; a row that could be edited afterwards would be a statement about
+    what somebody later preferred it to say.
+
+    `one_reconciliation_per_run` is the second half of the idempotency the
+    reconciler needs, and it is keyed by the same triple the run is:
+    `(project_id, node_id, execution_contract_version)`. A scan that runs twice
+    finds the first record instead of writing a second, and a node whose terms
+    Master revised and whose second run is also lost still gets its own record
+    — because that run is a different run under different terms, and collapsing
+    the two would hide the second loss behind the first recovery.
+
+    `workflow_id` is stored rather than derived. It could be rebuilt from the
+    node and the version, and deriving it in a reader is exactly how the two
+    would come to disagree: the id is what a person pastes into the Temporal
+    UI to ask about the run, and a record of a lost run should carry the name
+    it was lost under.
+
+    **`job_id` carries no foreign key, and the omissions are deliberate.** The
+    project and the node are containers — this record lives and dies with them
+    — while a job is not: it is what the record *quotes* from the moment it
+    looked, the way an event's payload quotes an id without owning it. A
+    cascading key would let the evidence disappear with the thing it is
+    evidence about, and a restricting one would make a job row undeletable for
+    the sake of a record that merely mentions it.
+    """
+
+    __tablename__ = "run_reconciliations"
+    __table_args__ = (
+        _enum_constraint("observed", WorkflowLiveness),
+        _enum_constraint("failure_class", RunFailureClass),
+        _enum_constraint("node_status_before", NodeStatus),
+        _enum_constraint("node_status_after", NodeStatus),
+        _enum_constraint("job_state_before", JobState),
+        _enum_constraint("job_state_after", JobState),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        UniqueConstraint(
+            "project_id",
+            "node_id",
+            "execution_contract_version",
+            name="one_reconciliation_per_run",
+        ),
+        Index("ix_run_reconciliations_node_created", "node_id", "created_at"),
+    )
+
+    reconciliation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    workflow_id: Mapped[str] = mapped_column(REF, nullable=False)
+    observed: Mapped[str] = mapped_column(String(32), nullable=False)
+    failure_class: Mapped[str] = mapped_column(String(32), nullable=False)
+    node_status_before: Mapped[str] = mapped_column(String(32), nullable=False)
+    node_status_after: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: Nullable, and null together: a run that died before `start_job` recorded
+    #: a job has no job to describe, and a row that named one anyway would send
+    #: a reader to a row that does not exist.
+    job_id: Mapped[str | None] = mapped_column(ID)
+    job_state_before: Mapped[str | None] = mapped_column(String(32))
+    job_state_after: Mapped[str | None] = mapped_column(String(32))
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detected_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 # ── The event stream ────────────────────────────────────────────────────────

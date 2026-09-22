@@ -552,9 +552,22 @@ problem into the scientific record, and whether a project that has stopped
 moving should be replanned, narrowed, or abandoned is a decision for a person —
 or for Master, once somebody tells it what happened.
 
-## L-24 — A run whose workflow dies leaves the node RUNNING, and nothing ends it
+## L-24 — A run whose workflow died left the node RUNNING, and nothing ended it
 
 - **Since:** Phase 10, found by a live run of `test_p10_17`
+- **Resolved:** 2026-09-22, in Phase 11. `ExecutionReconciler` sweeps the live
+  nodes of every project on each supervisor tick, asks Temporal about the one
+  run each is supposed to have, and for a run that is gone it ends the job,
+  moves the node to `WAITING_DECISION` where Master is asked, and writes an
+  immutable `RunReconciliation` saying what it saw — in one transaction. The
+  three things the paragraph below says recovery needed are the three it now
+  has: a read of Temporal that the control plane makes with a client it only ever
+  reads with, a classification that puts the loss on RAVEL's machinery rather
+  than on the science, and a record for it. What is deliberately still absent
+  is the Execution Record: a run that never reported did nothing RAVEL can
+  attest to, so the loss is a question for Master rather than a result. See
+  `ravel.domain.reconciliation`, `tests/integration/reconcile/`, and
+  `tests/acceptance/test_phase11_reconcile.py`.
 - **Where:** `src/ravel/execution/temporal/workflows.py`
   (`NodeRunWorkflow.run`, `_ACTIVITY_RETRY`); `src/ravel/execution/loop.py`
   (`Situation.in_flight`, the stall counter in `ProjectLoop.run`)
@@ -563,45 +576,73 @@ Every step of a run after planning is an activity — `start_job`, `check_job`,
 `finish_node_run` — and each is retried five times
 (`RetryPolicy(maximum_attempts=5)`) before the workflow fails. The last of them
 is the one that writes: `finish_node_run` records the Execution Record, the
-artifacts and the node's move to REVIEWING. If it exhausts its retries, the
-workflow ends as FAILED, the activity error is logged by the Temporal worker,
-and **PostgreSQL is left holding a node in RUNNING for a run that no longer
-exists.**
+artifacts and the node's move to REVIEWING. When it exhausted its retries the
+workflow ended as FAILED, the activity error was logged by the Temporal worker,
+and **PostgreSQL was left holding a node in RUNNING for a run that no longer
+existed.**
 
-Nothing recovers from that state, and the reason is the loop's own deliberate
+Nothing recovered from that state, and the reason was the loop's own deliberate
 rule: a run in flight is not a stall, so rounds spent on it do not count toward
-`max_stalled_rounds` (`loop.py:482`). The supervisor re-drives a project that is
-not terminal, the loop reads the same RUNNING node, takes no turn that could move
-it, and waits again. A node in this state is not slow — it is unreachable, and
-the project cannot reach an ending while it holds one.
+`max_stalled_rounds` (`loop.py:482`). The supervisor re-drove a project that was
+not terminal, the loop read the same RUNNING node, took no turn that could move
+it, and waited again. A node in this state was not slow — it was unreachable, and
+the project could not reach an ending while it held one.
 
 Seen once, in a live run: a plan whose required output was a sentence rather
 than a file name made `finish_node_run` raise
 `ValueError` on all five attempts, and the item then spent forty-five minutes
 waiting for a workflow that had already died. The plan-side cause is fixed at the
-planning gate; this hole is not, because closing it is a design rather than a
-fix.
+planning gate. The hole itself took a design rather than a patch, and that design
+is what the **Resolved** line above describes.
+
+A second live run found something in the recovery itself, and it is worth
+recording because the mistake was in the reasoning rather than in the code. The
+first version asked Temporal about every node in a live status. A RESEARCH node
+is in a live status for as long as its agent is searching, and no workflow was
+ever started for it — the Research Agent does that work inside its own turn — so
+Temporal answered `NOT_FOUND`, which was true and meant nothing. Three research
+nodes of one project were moved to `WAITING_DECISION` mid-search, each with a
+reconciliation saying its run had been lost. The sweep now considers only
+`WORKER_RUN_NODE_TYPES`, the two node types whose execution *is* a durable run,
+because "is this node live" and "does this node have a run" are different
+questions and `NodeStatus` answers only the first.
 
 **Do not conclude** that the fix is "catch the error in the activity". Catching
-it would hide the fault and still leave the node RUNNING. What recovery needs is
-three things RAVEL does not have. First, a liveness fact PostgreSQL can read: a
-stuck node has a status and nothing else — no Execution Record, since
-`finish_node_run` is what writes one and it never succeeded — and while the
-workflow id is derivable from the node and its contract version, "is this run
-still alive" can only be answered by asking Temporal, which the loop does not
-do and holds no client for. Second, a rule about who may write an Execution
-Record for a run that never reported: that write is a Worker's act in every
-other path, and `run once` for a node. Third, a termination vocabulary for it —
-`TerminationStatus` has no value for "RAVEL lost this run", and `FAILED` would
-attribute to the backend a failure that was RAVEL's own. Re-running is not the
-answer either: Temporal's workflow id carries `REJECT_DUPLICATE`, so a dead run
-cannot simply be started again, and running the work a second time is a decision
-that opens a new node or a new contract version.
+it would hide the fault and still leave the node RUNNING. What recovery needed
+was three things the loop did not have, and each is a decision rather than a
+patch. First, a liveness fact PostgreSQL can read: a stranded node has a status
+and nothing else — no Execution Record, since `finish_node_run` is what writes
+one and it never succeeded — and while the workflow id is derivable from the node
+and its contract version, "is this run still alive" can only be answered by
+asking Temporal, which the loop did not do and held no client for. That is
+`TemporalWorkflowProbe`, and it was built to read and to do nothing else. Second,
+a rule about who may write an Execution Record for a run that never reported:
+that write is a Worker's act in every other path, and `run once` for a node. The
+answer was to write none — `RunReconciliation` records that RAVEL looked and what
+it saw, and leaves the question of what the loss means to Master. Third, a
+termination vocabulary for it — `TerminationStatus` has no value for "RAVEL lost
+this run", and `FAILED` would attribute to the backend a failure that was
+RAVEL's own. So `RunFailureClass` is a vocabulary of its own, with a fifth member
+that is never assigned precisely to mark where the science would have been
+judged. Re-running is not the answer either: Temporal's workflow id carries
+`REJECT_DUPLICATE`, so a dead run cannot simply be started again, and running the
+work again is a decision that opens a new node or a new contract version — which
+is Master's to make, and is why recovery ends by asking.
 
 **Do not conclude** either that this is the same as L-23. L-23 is a question a
 seat does not answer, and the loop *does* notice it — it halts and says so. This
-is a run nothing can notice: the loop's answer to "what is this node waiting
-for" is `in_flight`, which is true and useless. Phase 11 should open with it.
+was a run nothing could notice: the loop's answer to "what is this node waiting
+for" was `in_flight`, which is true and useless. Phase 11 opened with it, which
+is why the reconciler is a deterministic layer rather than something a seat does:
+the fact it needs is a fact, not a judgement, and a seat asked to notice it would
+be a seat given the power to end runs.
+
+**Do not conclude** that a recovered node resumes by itself. Recovery ends where
+a decision begins: the node sits at `WAITING_DECISION`, the project stays
+unfinished, and it stays that way until Master moves it — so a project whose
+Master seat is not running waits exactly as L-23 describes, only now with a
+record saying why. What is closed is the permanent, silent strand; what is not
+is any promise that the work comes back without someone deciding it should.
 
 ## L-25 — RAVEL keeps what it reads and gives no seat a way to read it back
 

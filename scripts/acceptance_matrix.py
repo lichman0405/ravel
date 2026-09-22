@@ -90,9 +90,7 @@ class Phase:
 
     def item_of(self, test_name: str) -> str | None:
         """The item a test function is named for, if it names one."""
-        if self.name == "phase10":
-            return _phase10_item_of(test_name)
-        return _v0_item_of(test_name)
+        return _ITEM_READERS.get(self.name, _v0_item_of)(test_name)
 
 
 V0 = Phase(
@@ -117,7 +115,22 @@ PHASE10 = Phase(
     second_prefix="P10-W",
 )
 
-PHASES = {phase.name: phase for phase in (V0, PHASE10)}
+# Phase 11 is a sequence of tasks rather than a parallel set, so its document
+# grows as they land: the item count is asserted against the file, which means
+# an item added to the plan and not to the file is a failing assertion here
+# rather than a task nobody notices went unverified. It has no second list —
+# every Phase 11 item is one of the tasks.
+PHASE11 = Phase(
+    name="phase11",
+    title="RAVEL Phase 11 acceptance",
+    doc=ACCEPTANCE_DIR / "PHASE11_ACCEPTANCE.md",
+    marker="phase11",
+    heading="## P11-",
+    items_claimed=1,
+    second_title="",
+)
+
+PHASES = {phase.name: phase for phase in (V0, PHASE10, PHASE11)}
 
 
 @dataclass
@@ -274,6 +287,19 @@ def _phase10_item_of(name: str) -> str | None:
     return None
 
 
+def _phase11_item_of(name: str) -> str | None:
+    """The P11 item a test function is named for, if it names one."""
+    if not name.startswith("test_p11_"):
+        return None
+    head = name.removeprefix("test_p11_").split("_", 1)[0]
+    return f"P11-{int(head):02d}" if head.isdigit() else None
+
+
+#: Which reader knows a phase's test names. A phase whose naming is the V0
+#: `test_a14_...` shape does not need an entry.
+_ITEM_READERS = {"phase10": _phase10_item_of, "phase11": _phase11_item_of}
+
+
 def _case_count(item: Item) -> str:
     """How many cases an item has, by outcome."""
     parts = []
@@ -300,8 +326,9 @@ def print_matrix(phase: Phase, items: list[Item], second: list[Item], code: int)
     width = max(len(item.title) for item in (*items, *second))
     print(f"\n\033[1m── {phase.title} ──\033[0m\n")
     print_rows(items, width)
-    print(f"\n\033[1m── {phase.second_title} ──\033[0m\n")
-    print_rows(second, width)
+    if second:
+        print(f"\n\033[1m── {phase.second_title} ──\033[0m\n")
+        print_rows(second, width)
 
     everything = [*items, *second]
     skipped = [item for item in everything if item.outcome == "SKIP"]
