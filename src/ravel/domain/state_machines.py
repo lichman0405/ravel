@@ -78,6 +78,27 @@ ACTIVE_NODE_STATUSES: frozenset[NodeStatus] = frozenset(
     {NodeStatus.RUNNING, NodeStatus.WAITING_EXTERNAL, NodeStatus.REVIEWING}
 )
 
+#: The statuses in which a node's work has been handed over to be judged.
+#:
+#: REVIEWING is where a seat leaves a result it has finished: the work is over
+#: and the node is waiting for the FINAL checkpoint, which is why it is here
+#: rather than among the active ones — nothing is being worked on any more. The
+#: other three are what a FINAL verdict moves a node to, so the set is exactly
+#: "there is a result, and here is where it stands".
+#:
+#: Not a synonym for "has a record" or "has artifacts": which of those exist is
+#: a property of the node type — a RESEARCH node's result is a Research Record,
+#: a COMPUTATION node's is an Execution Record and its artifacts — and this set
+#: is about the node, whatever kind of work it handed over.
+HANDED_OVER_NODE_STATUSES: frozenset[NodeStatus] = frozenset(
+    {
+        NodeStatus.REVIEWING,
+        NodeStatus.PASSED,
+        NodeStatus.FAILED,
+        NodeStatus.PARTIAL,
+    }
+)
+
 #: Project status -> the statuses it may move to.
 PROJECT_TRANSITIONS: dict[ProjectStatus, frozenset[ProjectStatus]] = {
     ProjectStatus.CREATED: frozenset(

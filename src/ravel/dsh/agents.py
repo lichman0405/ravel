@@ -47,9 +47,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus
+from ravel.domain.enums import NodeStatus, NodeType
 from ravel.domain.roles import AgentRole
-from ravel.domain.state_machines import unexecutable_reason
+from ravel.domain.state_machines import (
+    HANDED_OVER_NODE_STATUSES,
+    unexecutable_reason,
+)
 from ravel.dsh.pool import DshRuntimePool
 from ravel.dsh.runtime import RoleRuntime, TurnOutcome
 from ravel.execution.loop import Situation
@@ -203,6 +206,11 @@ class HarnessAgent(RoleSession):
         waiting = self._waiting_on_master(situation)
         lines.extend(waiting or ["Nothing in the DAG is waiting on a decision."])
 
+        results = self._research_results(situation)
+        if results:
+            lines.extend(["", "* Research that has handed a result over"])
+            lines.extend(results)
+
         if situation.open_deviations:
             lines.extend(["", "* The escalations themselves"])
             lines.extend(self._deviation_lines(situation))
@@ -338,6 +346,38 @@ class HarnessAgent(RoleSession):
                 f"asked for {deviation.requested_action!r}"
             )
         return waiting
+
+    @staticmethod
+    def _research_results(situation: Situation) -> list[str]:
+        """The research tasks whose results are readable, said in one line each.
+
+        A tool nobody is told about is a tool nobody calls, and this one is the
+        difference between a decision made from the record and a decision made
+        from a recollection of it: the record was written by another seat, in
+        another session, and a Master that has just been rebuilt has no memory
+        of the turn it arrived in. The line names the node and what to read it
+        with; the counts and the verdict are the state read's, so this stays a
+        pointer rather than a second summary that could disagree with it.
+        """
+        handed_over = [
+            node
+            for node in situation.nodes
+            if node.node_type is NodeType.RESEARCH
+            and node.status in HANDED_OVER_NODE_STATUSES
+        ]
+        if not handed_over:
+            return []
+        return [
+            f"- {node.display_id} has handed a result over and is {node.status.value}: "
+            f"{node.objective}"
+            for node in handed_over
+        ] + [
+            "Read one with `read_research_result` before planning anything that "
+            "depends on what it found, and read the record rather than your memory "
+            "of it: the claims, the sources behind them and the verdict are rows, "
+            "and a decision that cites evidence nobody recorded is a decision made "
+            "from nothing."
+        ]
 
     @staticmethod
     def _deviation_lines(situation: Situation) -> list[str]:

@@ -249,3 +249,52 @@ Projection:
 - Human-readable Research Report
 
 Master should consume structured record first and retrieve long report only as needed.
+
+## 13. Reading a Result Back
+
+The chain the design claims is `Master → Research Agent → Evidence → Master →
+Decision`, and until Phase 11 the last arrow had no tool behind it. Master could
+read the whole project state and could not read one research task's result, so
+the only way to act on what a task found was to be the session it was produced
+in — which a replacement session is not.
+
+Four tools close it. All four are reads, all four are Master's alone, and none
+of them appears in `registry.WRITE_TOOLS`:
+
+- **`list_research_results`** — every research task in the project, with the
+  record it handed over (if any), the completion status and sufficiency
+  assessment it was judged against, how many claims, sources and conflicts its
+  ledger holds, and the verdict Review gave it. Counts, not contents: the
+  listing answers *which* task is worth reading, not what it says.
+- **`read_research_result(node_id)`** — the Research Record as the seat
+  submitted it, the Evidence claims it was assembled from, those claims'
+  source rows, the recorded conflicts, a sufficiency assessment measured live
+  from the ledger, and the verdicts given about the node. `result` is `null`
+  for a task that has not submitted one, and the live assessment is still
+  there, so a task under way is readable rather than blank.
+- **`read_evidence(evidence_id)`** — one claim, its sources, and the conflicts
+  it is part of, for when the wording of a single claim is what a decision
+  turns on.
+- **`read_source_metadata(source_id)`** — one source's ledger row: requested
+  and final URL, title, DOI, media type, retrieval time, content hash, tier,
+  access status, whether a snapshot exists, and which claims cite it. **No
+  text.** It is the same row §10's `source_metadata` returns to Research, read
+  by a different seat and named differently on purpose: two tools of one name
+  serving two roles would be one roster entry with two meanings. What a
+  document says is read by the seat whose task it answers, and a
+  passage worth quoting is worth a research task that quotes it into the
+  ledger; returning the text here would make Master a second reader of the
+  document rather than a reader of the record.
+
+`read_project_state` carries `completed_research`: the research tasks that have
+handed a result over, one flat summary each — the same shape the listing
+returns, so the two cannot drift. It is a pointer, not the evidence. A task
+still being worked on is deliberately absent (`list_research_results` names
+it), and no claim text reaches the state read, which is the read every turn
+begins with.
+
+What stays separate is authorship. The ledger and the record are Research's;
+Master reads them and may not write to them, which is enforced by the roster
+rather than by the prompt — no Master-facing tool can register a claim, a
+source, or a record. Where Master needs a claim that Research did not record,
+the answer is a research task, not a line to add.

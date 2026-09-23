@@ -14,6 +14,13 @@ from dataclasses import dataclass
 import pytest
 from tests.integration.conftest import Prepared, build_prepared
 
+#: The readback tests drive the *seat's* server as well as Master's — the record
+#: they read back is one Research wrote, in another process — so they need the
+#: mapping the runtime launches a `(project, role)` server with. That builder
+#: belongs to `tests/integration/roles`, and this is the same borrow
+#: `tests/integration/research/conftest.py` makes for the reading surface.
+from tests.integration.roles.conftest import RoleEnvironment, role_environment
+
 from ravel.domain.contracts import ExecutionContract, ProjectSuccessContract
 from ravel.domain.enums import Confidence, DecisionType, NodeStatus, ProjectStatus
 from ravel.domain.execution import DeviationRecord
@@ -26,6 +33,8 @@ from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.services.dag import DecisionDraft
+
+__all__ = ["RoleEnvironment", "role_environment"]
 
 #: The action a Worker asks about in these tests. Deliberately absent from the
 #: contract `prepare` writes, so every escalation starts from a request the

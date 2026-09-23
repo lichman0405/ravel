@@ -21,7 +21,7 @@ make migrate       # tests/dsh reads the database `.env` names; every other suit
                    # builds its own schema on `ravel_test` with create_all
 make lint          # ruff check src tests, then pyright src tests
 make test-unit     # tests/unit, no services needed
-pytest tests/integration   # all 580 cases. `make test-integration` runs the same
+pytest tests/integration   # all 586 cases. `make test-integration` runs the same
                            # path with `-m integration`, which deselects the 108
                            # tests in it that carry no marker — see §2 and L-28
 make test-e2e
@@ -106,7 +106,15 @@ recur: 11 passed, 0 failed, and the model answered in every case.
 question from the one a pytest summary answers — see §3. The same is true of
 `make phase10-acceptance`, whose 57 cases are the 37 behind the twenty `P10-`
 items plus the twenty worker items — see §3.1 — and of `make phase11-acceptance`,
-whose two rows are the 15 cases behind `P11-01` and `P11-02` — see §7.
+whose rows are the cases behind the `P11-` items — see §7.
+
+**These rows were not all measured at the same moment, and the last two are the
+oldest.** The integration row was re-measured after `L-27` landed — the paragraph
+above says why — and the unit row carries the pass from before it. Measured
+together on the tree that ends Phase 11's third item, `tests/unit` is 882 and
+`tests/integration` is 586, the second including §7.4's six readback cases;
+`tests/acceptance -m phase11` was 15 when this sweep ran and is 19 as of §7.4,
+where every remeasured number is given with the command that produced it.
 
 **One suite reads the deployment database; every other one reads `ravel_test`.**
 `tests/dsh` hands a tool server the settings `.env` names, so it needs that
@@ -572,9 +580,13 @@ Master builds.
 
 ## 7. Phase 11
 
-Phase 11 is a sequence of tasks. Two have landed: the reconciliation that keeps a
-dead run from stranding its node, and the deep read that lets a Research seat
-read back what it stored.
+Phase 11 is a sequence of tasks, and the first thing it did was not one of them:
+`L-27`, a node type that could be planned and could not be run, resolved before
+the items that follow because every one of them would otherwise be built on a
+plan that can hold work nobody is ever given. Three items have landed after it —
+the reconciliation that keeps a dead run from stranding its node, the deep read
+that lets a Research seat read back what it stored, and the readback that carries
+a research result the last arrow of the chain, back to Master.
 
 ### 7.1 P11-01: execution reconciliation
 
@@ -706,6 +718,120 @@ Phase 10 certification and are written up in §6. P11-02's whole footprint under
 difference the two runs' ledgers show is the difference the item is for: a PDF
 the `5f01ff9` arm recorded as retrievable but with no extractable text, against
 four PDFs read at `access_status = OK` in the `HEAD` arm.
+
+### 7.3 L-27: the node type that could be planned and never run
+
+This one is not an item. It is a defect a live certification run found, and it
+was fixed before the next item was started because the items that follow assume a
+plan is work. `KNOWN_LIMITATIONS.md` L-27: `REVIEW` was a plannable node type,
+`NODE_EXECUTOR` assigned it to the Review Agent, and the loop has no execution
+path into a REVIEW node at all — that seat's whole surface is verdicts about
+*other* nodes. A Master that planned one had asked for work no seat could be
+given, and nothing it could read said so. Nine of them were planned in a single
+certification run, all nine cancelled, thirty `CANCEL_NODE` decisions and
+forty-three minutes spent on nodes that were never going to move.
+
+The resolution has two halves, because either alone leaves the other standing.
+The type is gone from the plan: `PLANNABLE_NODE_TYPES` is what a node may be
+created as and `DagNode.create` refuses anything outside it, so every path into
+the DAG meets the same refusal rather than each tool remembering to check. And
+what is *still* unexecutable — `HYPOTHESIS` and `DECISION` are plannable and
+belong to Master, who is not an execution seat — is now explained where it is
+read: `unexecutable_reason` is one sentence, carried by `Situation.unexecutable`,
+by Master's turn prompt, and by `read_project_state` under `stopped`.
+
+`NodeType.REVIEW` stays a member of the enum and of the database's check
+constraint, because a node written while the type existed is a record of what a
+project did and has to stay readable. `executor_for` answers `None` for it rather
+than raising, and the model validator tolerates a stored executor that is no
+longer in the table. **No migration was written and none is needed.** Ending a
+node that is already in the DAG is a DAG mutation: it requires Master and a
+Decision Record saying why, and a migration that cancelled every surviving REVIEW
+node would be RAVEL taking an act that is Master's.
+
+| | |
+|---|---|
+| Unit | `tests/unit/domain/test_state_machines.py` — **255 passed** with the rest of `tests/unit/domain` |
+| Integration | `tests/integration` — **580 passed** (exit 0) |
+| Acceptance | `make acceptance-raw` — **43 passed**; `make phase10-acceptance-raw` — **58 passed** in 1741.52s (29:01) |
+| Lint | `ruff check src tests` and `pyright src tests` — clean |
+
+The regression tests are the fix's own shape. `test_a_node_may_not_be_created_as_the_retired_type`
+holds the creation path; `test_no_role_executes_a_review_node_and_no_plan_may_hold_one`
+holds the table and the set together; `test_a_legacy_review_node_can_still_be_read`
+reads a stored one, which is the half that a fix by deletion would have broken;
+`test_each_plannable_node_type_has_exactly_one_executor` is the general property
+the four specific ones are instances of. Over the real transport,
+`tests/integration/roles/test_permissions.py::test_a_review_node_is_refused_at_planning_and_the_plan_keeps_nothing`
+asserts the refusal *and* that the plan holds nothing afterwards — a tool that
+refused after writing would pass a test that only asked whether it raised — and
+`tests/acceptance/test_phase10_agents.py::test_l27_a_node_nobody_can_run_is_named_to_master`
+drives a Master through a real project and requires the prompt it is given to
+name the node and say why nothing will run it.
+
+One correction to the record: `30cbf6d`'s message reports `tests/integration` as
+583 passed. That run was taken with this section's own test file — P11-03's, then
+untracked and already on disk — inside the tree, and three of its cases were
+passing at that moment. Measured on the commit itself, the suite is **580**.
+
+### 7.4 P11-03: research → Master result readback
+
+The chain the architecture claims is `Master → Research Agent → Evidence /
+ResearchRecord → Master → Decision`, and the last arrow had no tool behind it.
+Master could read the whole project state and could not read one research task's
+result, so what a task found reached the next decision only if the session that
+received it was also the session making it. Across a crash, a rebuild or a
+supervisor restart — the situations a long-lived project is made of — it is not,
+and the record that would have answered the question was in PostgreSQL the whole
+time with nothing pointing at it.
+
+Four tools close it, all reads, all Master's, none of them writing anything:
+`list_research_results` names each research task and what it delivered — record,
+completion status, sufficiency, claim/source/conflict counts, verdict — and
+`read_research_result` returns one task's record, the claims it was assembled
+from, their sources, the conflicts between them, a sufficiency assessment
+measured live off the ledger, and the verdicts given about the node.
+`read_evidence` and `read_source_metadata` are the narrower reads a decision
+turning on one claim needs, and the second returns no text at all: what a
+document says is read by the seat whose task it answers.
+
+`read_project_state` gained `completed_research`, the research tasks that have
+handed a result over, one flat summary each. It is a pointer, not the evidence —
+a task still in flight is deliberately absent, and no claim text reaches the
+state read, which is the read every turn begins with. A Master with no memory of
+the turn a record arrived in learns from the state it reads first that there is
+something to read, and the turn prompt says the same thing in the same words for
+the same reason.
+
+| | |
+|---|---|
+| Unit | `tests/unit/test_tool_roster.py` — **33 passed** |
+| Integration | `tests/integration/master/test_research_readback.py` — **6 passed**; `tests/integration` — **586 passed** in 270.74s (4:30) |
+| Acceptance | `tests/acceptance/test_phase11_readback.py` — **4 passed**; `make phase11-acceptance-raw` — **19 passed** in 55.82s |
+| Matrix | `make phase11-acceptance` — `PASS P11-03 research → Master result readback 4 passed` |
+| Lint | `ruff check src tests` and `pyright src tests` — clean |
+
+What makes the item a claim rather than a tool listing is that the two directions
+are asserted together. The record is produced through the *Research seat's* own
+server, in another process, over the same stdio transport a deployment uses, and
+every field Master reads is compared against the rows in PostgreSQL — so a
+readback that returned what a fixture had put in a convenient place would fail.
+The other direction is the roster: `test_the_readback_tools_are_masters_and_write_nothing`
+holds that no non-Master role holds any of the four and that none of them is in
+`WRITE_TOOLS`, the acceptance case asks every role over the real transport, and
+the ledger's own writing tools are still refused to Master. A Master that could
+file its own evidence would be the judge of a record it wrote.
+
+The filter is a claim too, and it is the one this report has to correct. The
+first version of the case asserted that a research task nothing had been recorded
+on was absent from the whole state read — which is false, and the test said so:
+the state read names the DAG, and a READY research node is in `ready_to_run`
+because that is what it is. What the item means is narrower — that such a node is
+not reported as a *result* — and the case now asserts both halves, that the node
+is named as a node and not as a result, so that it cannot pass against a task the
+read never mentioned at all. `HANDED_OVER_NODE_STATUSES` is what the filter turns
+on: `REVIEWING` is where a seat leaves finished work, and `PASSED`, `FAILED` and
+`PARTIAL` are where a FINAL verdict moves it.
 
 ## 8. What these numbers do not say
 

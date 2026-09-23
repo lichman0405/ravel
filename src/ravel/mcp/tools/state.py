@@ -28,6 +28,7 @@ from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
 from ravel.master.service import ENDING_DECISION, MasterService
 from ravel.mcp.context import ToolContext, as_json, require_master
 from ravel.mcp.registry import tools_for
+from ravel.mcp.tools.research_results import completed_research
 from ravel.state.outbox import last_event_seq
 from ravel.state.repositories.contracts import ResearchContractRepository
 from ravel.state.repositories.identity import (
@@ -138,6 +139,17 @@ def read_project_state(context: ToolContext) -> Any:
             ).all():
                 lost[reconciliation.node_id] = reconciliation
             seq = last_event_seq(session, context.project_id)
+            # What research has handed over, which is the half of the project a
+            # Master with no memory of earlier turns cannot otherwise find: a
+            # result is written by another seat, in another session, and the DAG
+            # summary counts its node among the REVIEWING ones and says nothing
+            # about what is in it. Reports the summary and not the contents —
+            # `read_research_result` is where the claims are read, and a state
+            # read that carried them would put a project's whole evidence base
+            # through the model's context every turn.
+            research = completed_research(
+                session, context.project_id, nodes, reviews=latest
+            )
 
         counts: dict[str, int] = {}
         for node in nodes:
@@ -257,6 +269,14 @@ def read_project_state(context: ToolContext) -> Any:
                     and node.node_type not in SEATED_NODE_TYPES
                 )
             ],
+            # The research tasks that have handed a result over, each with what
+            # it holds and the verdict it was given. This is the pointer, not
+            # the evidence: a Master reading the state learns which tasks have
+            # something to read back and calls `read_research_result` for the
+            # one a decision turns on. Without it, the only way to act on what a
+            # task found would be to have been the session that was told, which
+            # a replacement session is by definition not.
+            "completed_research": research,
             # Whether the project has stated its own question, reported here
             # because this is the read a session starts from: a contract that
             # is missing is the first thing to write, and a session that had to

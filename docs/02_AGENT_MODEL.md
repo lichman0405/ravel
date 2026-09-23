@@ -46,6 +46,17 @@ DAG 说明当前 stage 具体由什么组成。node 必须落在某个 stage 上
 而 stage 必须先存在——所以空 Project 上没有任何工具可以绕过
 `commit_roadmap_phase` 直接把 node 写进 DAG。详见 `docs/03` §3。
 
+### 读回研究结果
+Master 看得到 Research 交付的东西，但只经由四个只读工具——全部是 Master
+的，且都不在 `registry.WRITE_TOOLS` 里：`list_research_results`（哪些
+research task 交出了结果、判成什么）、`read_research_result`（一条 task 的
+record、它依据的 claims 与 sources、记下的冲突、按 ledger 实时算出的
+sufficiency、以及 Review 的判词）、`read_evidence`、`read_source_metadata`
+（source 的 ledger 行，不含正文）。`read_project_state` 里的
+`completed_research` 是入口而不是内容：只列已经交出的 task，摘要里没有任
+何 claim 原文。Master 没有写 ledger 的工具——需要一条 Research 没记下的
+claim，答案是加一个 research task，不是补一行。详见 `docs/05` §13。
+
 ### Must not
 - 绕过 Review 把执行结果判定为通过
 - 覆盖已有历史记录

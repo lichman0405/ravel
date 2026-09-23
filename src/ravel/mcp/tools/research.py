@@ -1380,7 +1380,7 @@ def assess_evidence(context: ToolContext) -> Any:
             conflicts=list(ledger.conflicts),
         )
         return {
-            **_assessment(assessment),
+            **assessment_of(assessment),
             "rationale_note": rationale,
             "sources_read": len([source for source in ledger.sources if source.was_read]),
             "sources_named": len(ledger.sources),
@@ -1389,8 +1389,15 @@ def assess_evidence(context: ToolContext) -> Any:
     return assess_evidence
 
 
-def _assessment(assessment: sufficiency.Assessment) -> dict[str, Any]:
-    """An assessment as the researcher sees it, measurements included."""
+def assessment_of(assessment: sufficiency.Assessment) -> dict[str, Any]:
+    """An assessment as the researcher sees it, measurements included.
+
+    Public because the seat is no longer the only reader: Master's readback
+    reports the same assessment, and a second rendering of it would be a second
+    definition of how strong the evidence came back. One shape, so that what a
+    researcher is told about its own ledger and what Master is told about it
+    cannot drift apart.
+    """
     return {
         "sufficiency": assessment.sufficiency.value,
         "measurements": [
@@ -1491,7 +1498,7 @@ def submit_research_record(context: ToolContext) -> Any:
             "completion_status": judged.status.value,
             "unmet": list(judged.unmet),
             "detail": list(judged.detail),
-            "assessment": _assessment(assessment),
+            "assessment": assessment_of(assessment),
             "unmeasured": [item.value for item in completion.unmeasured(assessment)],
             "is_complete": judged.is_complete,
             "handed_over": handed_over,

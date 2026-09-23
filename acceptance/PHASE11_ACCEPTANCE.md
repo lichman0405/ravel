@@ -140,3 +140,51 @@ the media-type table, every extraction, the offset arithmetic, and the scans,
 encryptions and unparseable files that have no text in them. Those fixtures are
 real PDF files, built byte by byte in `tests/documents.py`, so the scanned and
 encrypted cases are tested on documents that really are those things.
+
+## P11-03 research → Master result readback
+
+The chain the architecture claims is `Master → Research Agent → Evidence /
+ResearchRecord → Master → Decision`, and the last arrow had no tool behind it.
+Master could read the whole project state and could not read one research task's
+result, so what a task found reached the next decision only if the session that
+received it was still the session making it. Across a crash, a rebuild, or a
+supervisor restart — the situations a long-lived project is made of — it is not,
+and the record that would have answered the question was in PostgreSQL the whole
+time with nothing pointing at it.
+
+Four tools close it. All four are reads, all four are Master's alone, and none
+of them writes: `list_research_results` names each research task and what it
+delivered — record, completion status, sufficiency, claim/source/conflict
+counts, verdict — and `read_research_result` returns one task's record, the
+claims it was assembled from, their sources, the conflicts, a sufficiency
+assessment measured live off the ledger, and the verdicts given about the node.
+`read_evidence` and `read_source_metadata` are the narrower reads a decision
+that turns on one claim needs, and the second returns no text at all: what a
+document says is read by the seat whose task it answers.
+
+`read_project_state` carries `completed_research`, the research tasks that have
+handed a result over, one flat summary each in the same shape the listing
+returns. It is a pointer rather than the evidence — a task still being worked on
+is deliberately absent, and no claim text reaches the state read, which is the
+read every turn begins with.
+
+| Requirement | Demonstrated by |
+|---|---|
+| Master can read Research's actual output | `test_p11_03_master_reads_the_result_a_research_seat_handed_over` — the seat's server begins the task and hands the record over, Review's server judges it, Master's server reads the record, its claims, a claim's sources and a source's metadata, all compared against the rows |
+| Authorship stays separated: MASTER reads, RESEARCH writes | `test_p11_03_the_readback_belongs_to_master_and_to_nobody_else` — every role over the real transport, plus `tests/integration/master/test_research_readback.py::test_the_readback_tools_are_masters_and_write_nothing` |
+| The next turn sees that a result is available | `test_p11_03_master_reads_the_result_a_research_seat_handed_over` (the state read names the node, its verdict and its record, and carries no claim text), `test_p11_03_the_masters_turn_points_at_the_result_it_can_read` (the turn itself names the node and the tool, and carries no claim text either) and `test_p11_03_a_task_that_has_not_handed_over_is_not_a_result_yet` (a task in flight is not a result, and is still readable) |
+| What is read is the row, not a session's memory | `tests/integration/master/test_research_readback.py::test_the_ledger_holds_what_the_readback_reports` — the same fields read straight out of PostgreSQL |
+
+The refusals are part of the item rather than an edge of it. A node that is not a
+research task has no ledger to return, and asking for one is refused in a
+sentence that names the tool which lists the nodes that do. A tool Master does
+not hold cannot be called at all, and the ledger's four writing tools are refused
+to every other role including Master — pinned by
+`tests/integration/roles/test_research_tools.py::test_only_research_may_write_to_the_ledger`,
+which asserts nothing was written as well as that the call failed.
+
+Four cases run offline against the real database and the real tool servers, one
+per role that the chain passes through. Six more in
+`tests/integration/master/test_research_readback.py` drive the same path directly
+and read the storage back out of PostgreSQL, which is where the claim that the
+readback is the row rather than a summary of it is settled.

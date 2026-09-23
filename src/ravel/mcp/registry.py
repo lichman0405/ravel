@@ -39,6 +39,18 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "list_pending_approvals": frozenset({MASTER}),
     "read_master_checkpoint": frozenset({MASTER}),
     "write_master_checkpoint": frozenset({MASTER}),
+    # Reading back what a research task produced is the last arrow of the chain
+    # this role sits at the head of: Master → Research → Evidence → Master →
+    # Decision. Without it, the only way to act on what a task found would be to
+    # have remembered the turn it was found in, which a replacement session has
+    # not. Master's alone, and reads only: a ledger-writing tool held by the
+    # role that judges the ledger is the separation this project is built on
+    # inverted. See `tools/research_results.py`, and `WRITE_AUTHORSHIP` below
+    # for the record of who authors the rows these read.
+    "list_research_results": frozenset({MASTER}),
+    "read_research_result": frozenset({MASTER}),
+    "read_evidence": frozenset({MASTER}),
+    "read_source_metadata": frozenset({MASTER}),
     # What the project is for is Master's to write and nobody else's, for the
     # reason the DAG is: it is the statement every later judgement is made
     # against. Deliberately *not* a DAG mutation — see `DAG_MUTATION_TOOLS`.
@@ -190,9 +202,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "read_project_state": (
         "Read the current authoritative state of this project: its objective and status, its "
-        "roadmap and where in it the project is now, a summary of the DAG by status, and how "
-        "many approvals are waiting on a human. This is the record of truth — prefer it over "
-        "your own recollection of earlier conversation."
+        "roadmap and where in it the project is now, a summary of the DAG by status, the "
+        "nodes waiting on a decision of yours, which research tasks have handed a result "
+        "over, and how many approvals are waiting on a human. This is the record of truth — "
+        "prefer it over your own recollection of earlier conversation."
     ),
     "list_pending_approvals": (
         "List the approvals no human has answered yet, with what each is waiting on. Use it "
@@ -206,6 +219,31 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Write down where your work stands — current focus, open hypotheses, what you are "
         "waiting on, and which decisions a successor should read — so a replacement session "
         "can continue after this one is gone."
+    ),
+    "list_research_results": (
+        "List every research task in this project and what it delivered: whether a record "
+        "was submitted, the completion status and sufficiency it was judged against, how "
+        "many claims, sources and conflicts it holds, and the verdict Review gave it. Read "
+        "it before planning work that depends on what research found, then read the result "
+        "itself — the counts say how much there is, not what it says."
+    ),
+    "read_research_result": (
+        "Read what one research task found: its Research Record, the Evidence claims it was "
+        "assembled from, the sources behind them, the conflicts recorded between them, and "
+        "the verdicts given about the node. This is the evidence, as the Research seat "
+        "recorded it — read a decision against it rather than against your recollection, and "
+        "where a claim you need is missing, plan a research task for it."
+    ),
+    "read_evidence": (
+        "Read one Evidence row and the sources supporting it, when the wording of a single "
+        "claim matters to a decision. The id is the one from a claim in "
+        "`read_research_result`."
+    ),
+    "read_source_metadata": (
+        "Read one source's ledger row — where it came from, when it was retrieved, the hash "
+        "of the bytes read, its tier, and whether the content itself was obtained or only "
+        "its metadata. No text is returned: what a source says is the Research seat's to "
+        "read and quote into the ledger."
     ),
     "commit_research_contract": (
         "Write down what this project was asked for: the goal in the words it was "
