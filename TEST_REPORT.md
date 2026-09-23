@@ -21,8 +21,8 @@ make migrate       # tests/dsh reads the database `.env` names; every other suit
                    # builds its own schema on `ravel_test` with create_all
 make lint          # ruff check src tests, then pyright src tests
 make test-unit     # tests/unit, no services needed
-pytest tests/integration   # all 586 cases. `make test-integration` runs the same
-                           # path with `-m integration`, which deselects the 108
+pytest tests/integration   # all 709 cases. `make test-integration` runs the same
+                           # path with `-m integration`, which deselects the 126
                            # tests in it that carry no marker — see §2 and L-28
 make test-e2e
 make test-live     # real-Internet research; needs RAVEL_RESEARCH_CONTACT_EMAIL
@@ -55,70 +55,94 @@ Three warnings, each of which costs time when ignored:
 
 ## 2. Results
 
-Run on 2026-09-23 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL`
-set in `.env`, after `make migrate`. Every suite ran once, in sequence, except
-the integration row — the first pass at it selected a subset of the directory
-rather than all of it, and the paragraph under the table says which command
-produced which number:
+Run on 2026-09-23 with `DEEPSEEK_API_KEY` and `RAVEL_RESEARCH_CONTACT_EMAIL` set
+in `.env`, after `make migrate`. The table is one command's output: `make
+release-gate` runs the eighteen rows below in sequence, prints a result for each
+and then one word for the whole run. It is the sweep's **second** run — the one
+on the tree that carries §7.11's fix — and every row's exact command is printed
+by `make release-gate-rows`, with what each row is evidence for in §7.8.
 
-| Suite | Passed | Skipped | Failed | Exit |
-|---|---:|---:|---:|---|
-| `tests/unit` | 879 | 0 | 0 | 0 |
-| `tests/integration` (all 580, see below) | 580 | 0 | 0 | 0 |
-| `tests/dsh` | 11 | 0 | 0 | 0 |
-| `tests/e2e` | 20 | 0 | 0 | 0 |
-| `tests/live_research` | 15 | 0 | 1 | 1 |
-| `tests/acceptance` (`make acceptance`) | 43 | 0 | 0 | 0 |
-| `tests/acceptance -m phase10` (`make phase10-acceptance`) | 57 | 0 | 0 | 0 |
-| `tests/acceptance -m phase11` (`make phase11-acceptance`) | 15 | 0 | 0 | 0 |
+| Row | Result | Time |
+|---|---|---|
+| `ruff` | All checks passed | — |
+| `pyright` | 0 errors, 0 warnings, 0 informations | — |
+| `unit` | 1106 passed | 3.03s |
+| `integration` | 709 passed | 5:14 |
+| `e2e` | 27 passed | 35.74s |
+| `v0-acceptance` | 71 passed, 1 skipped | 19:45 |
+| `phase10-acceptance` | 59 passed | 32:20 |
+| `phase11-acceptance` | 49 passed, 1 skipped | 18:03 |
+| `dsh` | 11 passed | 39.34s |
+| `live-research` | **1 failed**, 15 passed | 37.54s |
+| `research-readback` | 10 passed | 24.38s |
+| `temporal-reconciliation` | 33 passed | 24.38s |
+| `compute-preparation` | 43 passed | 16.55s |
+| `lab-preparation` | 38 passed | 2.72s |
+| `slurm-integration` | 115 passed, 1 skipped | 7.39s |
+| `humanlab-integration` | 33 passed | 8.33s |
+| `five-agent-e2e` | 1 passed | 14:12 |
+| `full-chain-e2e` | 2 passed | 15:05 |
 
-**The integration row is the count that runs the whole directory, and the first
-attempt at it was not.** `scripts/test_all.sh` — what `make test` runs — invokes
-`pytest tests/integration` with no marker; `make test-integration` invokes the
-same path with `-m integration`, and 108 of the 580 cases collected there carry
-no marker at all, so the flag deselects them: the whole of
-`tests/integration/roles/` and `tests/integration/research/`, which is where a
-role's permission surface, the worker and review tool rosters, and this item's
-own seventeen deep-read integration cases live. This sweep's first pass used the
-target's spelling and reported 472 — a number that looks like a result and is a
-selection. The row above is the canonical run, re-measured: 580 passed, 0
-deselected, 4:25. `KNOWN_LIMITATIONS.md` L-28 records the disagreement between
-the two entry points and why neither was changed here.
-
-**The one failure is OpenAlex refusing to answer, and it is left in the table
-rather than re-run away.** `tests/live_research/test_live_sources.py::test_the_other_connectors_reach_their_real_services`
-asks each of OpenAlex, arXiv and PubChem for a real record. OpenAlex answered
-HTTP 429, RAVEL recorded it as this connector being *unavailable* rather than as
-a search that found nothing — `unavailable=('openalex: ... answered HTTP 429',)`
-— and the assertion, which is on leads, failed. The headers say what the 429 is:
+**The verdict is `NOT_CERTIFIED`, on exactly one case, and it is the Internet's.**
+`tests/live_research/test_live_sources.py::test_the_other_connectors_reach_their_real_services`
+asks OpenAlex, arXiv and PubChem each for a real record; OpenAlex answered HTTP
+429 and RAVEL recorded it as the connector being *unavailable* rather than as a
+search that found nothing — `unavailable=('openalex: ... answered HTTP 429',)` —
+so the assertion, which is on leads, failed. The headers say what the 429 is:
 `retry-after: 4588`, `x-ratelimit-onetime-remaining: 0`, `x-ratelimit-remaining: 8`
 of `x-ratelimit-limit: 1000`. This host has spent OpenAlex's allowance for the
-day: the same case was re-run minutes later and failed the same way in 0.72s, so
-it is a quota and not a timeout. That case is one test rather than three — it
-asks OpenAlex first and asserts on the three services' leads together — so arXiv
-and PubChem were not exercised behind it; the other 15 live cases, which reach
-Crossref, arXiv, PubChem and the real Internet, passed. The previous edition of
-this table was measured on a day when the
-allowance was not spent; nothing in RAVEL changed to make OpenAlex stop
-answering, and no test was changed to accommodate it. A gate that passes by
-tolerating a 429 is a gate that no longer checks whether the connector works.
+day, and the same case failed the same way on both runs of the sweep and in a
+third invocation minutes later. Nothing in RAVEL was changed to accommodate it
+and nothing was re-run away: a gate that passes by tolerating a 429 is a gate
+that no longer checks whether the connector works. **It is classified
+`EXTERNAL RATE LIMIT`** — the service is reachable, authenticated by nothing, and
+answering a quota refusal, which is why the row's other fifteen cases, arXiv's
+and Crossref's and PubChem's among them, passed.
 
-The `tests/dsh` flake recorded in the previous edition of this table did not
-recur: 11 passed, 0 failed, and the model answered in every case.
+**Three rows ran with a skip inside them, and all three name the same missing
+dependency.** `v0-acceptance`, `phase11-acceptance` and `slurm-integration` each
+hold P11-05's live case, which skips on `RAVEL_SLURM_HOST`; the gate prints those
+rows as having *run* and lists what each was waiting for, which is what they are.
+It is the difference between a row that did not run and a phase that did not
+finish, and the gate's verdict keeps them apart.
 
-`make acceptance` reports by *item* rather than by test, which is a different
-question from the one a pytest summary answers — see §3. The same is true of
-`make phase10-acceptance`, whose 57 cases are the 37 behind the twenty `P10-`
-items plus the twenty worker items — see §3.1 — and of `make phase11-acceptance`,
-whose rows are the cases behind the `P11-` items — see §7.
+**The run before this one returned `NOT_CERTIFIED` on two rows, and one of them
+was real.** `phase10-acceptance` failed `test_p10_20_one_command_starts_the_whole_server`
+because P11-10 had moved the launcher onto a shared entry point and the case
+asserted the old spelling — a Phase 10 acceptance case, red since `443fb37`, in
+no suite that item ran. It is fixed (§7.11, `KNOWN_LIMITATIONS.md` L-34) and this
+run's row is 59 passed, 0 failed. `live-research` failed three cases on the first
+run — arXiv answered 429 to its API and, for a window, 404 to an abstract page
+that answers 200 today — and one case on the second, which is what a rate limit
+looks like from here and not a defect that the second run failed to reproduce.
 
-**These rows were not all measured at the same moment, and the last two are the
-oldest.** The integration row was re-measured after `L-27` landed — the paragraph
-above says why — and the unit row carries the pass from before it. Measured
-together on the tree that ends Phase 11's third item, `tests/unit` is 882 and
-`tests/integration` is 586, the second including §7.4's six readback cases;
-`tests/acceptance -m phase11` was 15 when this sweep ran and is 19 as of §7.4,
-where every remeasured number is given with the command that produced it.
+**The integration row is the count that runs the whole directory.** `scripts/test_all.sh`
+— what `make test` runs — invokes `pytest tests/integration` with no marker, and
+the gate's row does the same: 709 cases, all passed, 5:14. `make test-integration`
+invokes the same path with `-m integration`, and **126 of the 709 carry no marker
+at all**, so the flag deselects them and the target reports 583 — a different
+number for the same directory, which is `KNOWN_LIMITATIONS.md` L-28. Most of the
+126 are a role's permission surface, the worker and review tool rosters, and
+Phase 11's own deep-read cases (`tests/integration/roles/`, 83 of its 88, and all
+28 of `tests/integration/research/`); 15 more are in files the gate names by
+path — `test_slurm_collection.py` (9) and `test_research_readback.py` (6) — so
+the gate runs those even though the target would not.
+
+**The acceptance rows report by item, not by test.** `make acceptance`,
+`make phase10-acceptance` and `make phase11-acceptance` run the suites and then
+print one row per acceptance item derived from the case names — see §3, §3.1 and
+§7. The counts above are the pytest summaries underneath those matrices: the
+Phase 10 matrix's 59 cases are the ones behind the twenty `P10-` items plus the
+twenty worker-level items, and the Phase 11 matrix's 49 are the ones behind
+`P11-01`…`P11-11`, with one case — P11-05's live cluster — skipped for the reason
+above.
+
+**This section is one run, and §7's tables are per-item ones.** Each Phase 11
+item's section records what was measured when that item landed, with the command
+that produced it; where a number here and a number there disagree, this section
+is the newer and the item's table is what the item was accepted on. The unit
+count has not moved since P11-01 (1106); `tests/integration` has grown from 580
+to 709 and `tests/e2e` from 20 to 27 across the phase.
 
 **One suite reads the deployment database; every other one reads `ravel_test`.**
 `tests/dsh` hands a tool server the settings `.env` names, so it needs that
@@ -1075,8 +1099,11 @@ the database sits one layer below it, and L-26 — the entry that recorded a rol
 session on the deployment's queue — now carries its resolution.
 
 `make release-gate` is the runner and `make release-gate-rows` prints the rows
-without running them. The full run takes about fifty minutes, most of it the
-live rows; the certification run for the phase is recorded in §2.
+without running them. The sweep's two full runs took **2h11m** and **1h48m**,
+most of it the live rows — `five-agent-e2e` alone is a quarter of an hour, and
+the phase-10 row takes half an hour even when it is green. The certification run
+for the phase is recorded in §2. The first of the two returned `NOT_CERTIFIED`
+on two rows and the second on one; what each was is in §2 and §7.11.
 
 ### 7.9 P11-08: users, projects and membership
 
@@ -1484,17 +1511,19 @@ release certifying parts; the seventeen rows before this one each run a suite,
 and not one of them asserts the join. `scripts/release_gate.py` now runs
 `full-chain-e2e` — this module under `-k whole_chain`, with `RAVEL_REQUIRE_DSH=1`
 so that the live case runs rather than skipping — so both certification cases sit
-on the release's path and not only on the matrix's. Its live half alone is
-twenty-four minutes of a real Master planning, which is why the row is last.
+on the release's path and not only on the matrix's. Its live half is fifteen to
+twenty-four minutes of a real Master planning, depending on the run, which is why
+the row is last.
 
 **The live case is reached three times in one full run.** The module carries the
 `acceptance` marker its sibling Phase 11 acceptance modules carry, so the
 `v0-acceptance` and `phase11-acceptance` rows each sweep it up by marker before
-`full-chain-e2e` names it — an hour of the gate inside one case, and not a
-redundancy: each row's verdict is about a different claim, and the alternative,
+`full-chain-e2e` names it: on the sweep's second run those three rows are 19:45,
+18:03 and 15:05, and the live case is the largest part of each. It is not a
+redundancy — each row's verdict is about a different claim, and the alternative,
 narrowing the marker, would take the phase's central case out of `make
-acceptance`. What it does mean is that a release verdict costs about twice what
-it did before this item, and §7.8's fifty minutes are no longer the number.
+acceptance` — but it does mean a release verdict costs more than twice what it did
+before this item, and §7.8's fifty minutes are no longer the number.
 
 | | |
 |---|---|

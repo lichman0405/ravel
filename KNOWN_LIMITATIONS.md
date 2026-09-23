@@ -1002,28 +1002,34 @@ same run passed. The finding is about what a live Master does when it is handed 
 node type that will never move, and the answer is that it works around it at
 length rather than stopping.
 
-## L-28 — `make test-integration` runs 579 of the 705 tests in `tests/integration`
+## L-28 — `make test-integration` runs 583 of the 709 tests in `tests/integration`
 
 - **Since:** 2026-09-19, when `tests/integration/roles/` and
   `tests/integration/research/` were added without the marker
 - **Where:** `Makefile` (`test-integration`); `scripts/test_all.sh`; every module
-  under `tests/integration/roles/` and `tests/integration/research/`
+  under `tests/integration/roles/` and `tests/integration/research/`, plus
+  `tests/integration/backends/test_slurm_collection.py` and
+  `tests/integration/master/test_research_readback.py`
 
 The directory and the target disagree about what an integration test is.
 `make test-integration` runs `pytest tests/integration -m integration`, and 126
-of the 705 tests collected under that path carry no marker at all — the whole of
-`tests/integration/roles/` (80) and `tests/integration/research/` (28) chief
-among them — so the flag deselects them. `scripts/test_all.sh`, which is what
-`make test` runs, invokes the same path with no marker and collects all 705, the
+of the 709 tests collected under that path carry no marker at all — the whole of
+`tests/integration/roles/` (83) and `tests/integration/research/` (28) chief
+among them, with `test_slurm_collection.py` (9) and `test_research_readback.py`
+(6) behind — so the flag deselects them. `scripts/test_all.sh`, which is what
+`make test` runs, invokes the same path with no marker and collects all 709, the
 e2e-marked cases inside the directory included. Both spellings are written down,
 and a report can be filled from either.
 
 What that costs is a number that means two things. Measured through the target
-the suite is 579; measured the way the canonical runner measures it, 705, and
+the suite is 583; measured the way the canonical runner measures it, 709, and
 neither figure says which command produced it. The 126 are not incidental: they
 are where a role's permission surface, the worker and review tool rosters, and
 every read-back case of Phase 11's deep read live, and each of them stands up a
-real database and a real tool server.
+real database and a real tool server. Two of the four files are run by name in
+release-gate rows (`slurm-integration`, `research-readback`), which is coverage
+without a fix: the target still under-collects, and only the gate knows which
+files it is reaching.
 
 **Do not conclude** that the tests are at fault. Every case runs and passes in
 the canonical runner. What is wrong is that two entry points in one repository
@@ -1036,10 +1042,10 @@ now names the command its numbers came from. The target itself was left alone:
 changing what CI runs is a decision for whoever owns the inventory of tests, not
 a side effect of an item about reading a source.
 
-The counts above are as of P11-09 and both keep moving: the directory grew by
-125 cases across Phase 11 and the deselected set grew with it, which is the
-reason the two figures are re-measured at the end of each item rather than
-carried forward.
+The counts above are as of the Phase 11 sweep (2026-09-23) and both keep moving:
+the directory grew by 129 cases across Phase 11 and the deselected set grew with
+it, which is the reason the two figures are re-measured at the end of each item
+rather than carried forward.
 
 ## L-29 — The bench is a person, and RAVEL can neither see nor stop one
 
