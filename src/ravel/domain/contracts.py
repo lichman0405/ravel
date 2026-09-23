@@ -38,6 +38,20 @@ _RANGE = re.compile(r"^\s*(?P<low>-?\d+(?:\.\d+)?)\s*\.\.\s*(?P<high>-?\d+(?:\.\
 #: replacement. `"reagent-A -> reagent-B"`.
 _SUBSTITUTION = re.compile(r"^\s*(?P<given>[^>]+?)\s*->\s*(?P<instead>[^>]+?)\s*$")
 
+#: The kinds of environment a contract may require RAVEL to materialize before
+#: a run. A closed list, like `allowed_actions` and for the same reason: a
+#: requirement RAVEL does not recognise cannot be materialized, and a contract
+#: that named one would otherwise be discovered by a Worker starting a run in a
+#: workspace nothing had prepared.
+#:
+#: The *kind* is fixed here and the *name* is not. `software` names a compute
+#: package RAVEL can build inputs for (`raspa`); `lab` names a kind of benchtop
+#: package RAVEL assembles for a person to carry out. Which names exist is a
+#: deployment fact — it is what the preparation registries hold — so an
+#: unsupported name is refused when the contract is materialized rather than
+#: when it is written, and the refusal is a record Master answers.
+EXECUTION_REQUIREMENT_KINDS: frozenset[str] = frozenset({"software", "lab"})
+
 
 def _range(span: str) -> tuple[float, float] | None:
     """The two ends of a range, or `None` if it is not written as one."""
@@ -45,6 +59,24 @@ def _range(span: str) -> tuple[float, float] | None:
     if match is None:
         return None
     return float(match.group("low")), float(match.group("high"))
+
+
+def substitution_parts(entry: str) -> tuple[str, str] | None:
+    """A permitted substitution split into what it names and what replaces it.
+
+    Here rather than beside its two callers — the check that reads a
+    substitution back and preparation, which writes the reagent list a bench
+    works from — because the format is the contract's, and a second reader of
+    it would be a second definition of what `"A -> B"` means.
+
+    Returns `None` for an entry that is not written as one; construction
+    refuses those, and a caller meeting one here is looking at a row that got
+    past the model rather than at a substitution.
+    """
+    match = _SUBSTITUTION.match(entry)
+    if match is None:
+        return None
+    return match.group("given").strip(), match.group("instead").strip()
 
 
 def _number(value: float | int | str) -> float | None:
@@ -263,6 +295,18 @@ class ExecutionContract(Record):
     stop_conditions: tuple[str, ...] = ()
     escalation_conditions: tuple[str, ...] = ()
     resource_limits: dict[str, str] = Field(default_factory=dict)
+    #: The environment the run needs prepared, keyed by kind: `{"software":
+    #: "raspa"}` or `{"lab": "bench-chemistry"}`. Empty means the run needs
+    #: nothing built for it, which is the case for every node whose work is
+    #: reading, writing, or being judged — and for every contract written
+    #: before this field existed.
+    #:
+    #: The requirement is stated by the contract rather than inferred from the
+    #: node type, because whether a run needs a workspace is a property of the
+    #: work: a COMPUTATION node that runs a calculation needs one, a
+    #: COMPUTATION node that analyses numbers already on disk does not, and
+    #: Master is the role that knows which it is planning.
+    execution_requirements: dict[str, str] = Field(default_factory=dict)
     acceptance_contract_ref: str | None = None
     frozen_at: datetime | None = None
     created_at: datetime = Field(default_factory=utcnow)
@@ -271,6 +315,18 @@ class ExecutionContract(Record):
     def is_frozen(self) -> bool:
         """Whether this contract has been frozen for execution."""
         return self.frozen_at is not None
+
+    @property
+    def requires_preparation(self) -> bool:
+        """Whether RAVEL must materialize an environment before this run starts.
+
+        The one question the execution loop asks before it prepares anything.
+        A contract that names no environment is not prepared — it is executed
+        by a Worker under the terms it already has — which is what keeps the
+        nodes that need nothing built for them running exactly as they did
+        before preparation existed.
+        """
+        return bool(self.execution_requirements)
 
     def freeze(self, at: datetime | None = None) -> ExecutionContract:
         """Return a frozen copy. Idempotent."""
@@ -311,6 +367,41 @@ class ExecutionContract(Record):
                     "name a replacement; write it as '<given> -> <instead>'"
                 )
         return substitutions
+
+    @field_validator("execution_requirements")
+    @classmethod
+    def _requirements_name_a_known_environment(
+        cls, requirements: dict[str, str]
+    ) -> dict[str, str]:
+        """Refuse a requirement RAVEL would not know what to do with.
+
+        Two ways a requirement can be unmaterializable at the moment it is
+        written, and both are refused here rather than at the run: a kind that
+        is not in the closed list, and a requirement that names nothing. The
+        second is not pedantry — `{"software": ""}` reads as "this run has a
+        software requirement" to every reader and to any check that asks
+        whether the dict is non-empty, while naming nothing to prepare.
+
+        A recognised kind with an unsupported name is *not* refused here.
+        Which software RAVEL can build inputs for is a deployment fact rather
+        than a domain one, so the answer belongs to the preparation layer, and
+        its answer is a refusal Master decides on.
+        """
+        for kind, name in requirements.items():
+            if kind not in EXECUTION_REQUIREMENT_KINDS:
+                known = ", ".join(sorted(EXECUTION_REQUIREMENT_KINDS))
+                raise ValueError(
+                    f"execution_requirements names {kind!r}, which is not a kind "
+                    f"of environment RAVEL prepares; the kinds are {known}. Write "
+                    'it as {"software": "<package>"} or {"lab": "<kind of package>"}'
+                )
+            if not name.strip():
+                raise ValueError(
+                    f"execution_requirements[{kind!r}] names nothing to prepare, "
+                    "so the contract reads as one that requires an environment "
+                    "while saying nothing about which"
+                )
+        return requirements
 
     def permits(self, action: str) -> bool:
         """Whether the contract explicitly names an action as permitted."""
@@ -354,12 +445,9 @@ class ExecutionContract(Record):
         is an experiment that ran without authority.
         """
         for entry in self.allowed_substitutions:
-            match = _SUBSTITUTION.match(entry)
-            if match is None:
+            parts = substitution_parts(entry)
+            if parts is None:
                 continue  # construction refuses these; a bypass may not
-            if (
-                match.group("given").strip() == given.strip()
-                and match.group("instead").strip() == instead.strip()
-            ):
+            if parts == (given.strip(), instead.strip()):
                 return True
         return False

@@ -123,6 +123,16 @@ class Settings(BaseSettings):
     s3_bucket: str = "ravel-artifacts"
     s3_region: str = "us-east-1"
 
+    # ── Compute environments ───────────────────────────────────────────────
+    # Where the software a contract names keeps the data it needs in order to
+    # run — for RASPA, the `share/raspa` directory of an installation, which
+    # holds `forcefield/` and `molecules/`. Preparation copies files out of it
+    # into a run's workspace, and a deployment that has not configured one
+    # refuses the contract instead of inventing the files: a force field is
+    # numbers that a result depends on, and one RAVEL made up would be a
+    # result nobody could attribute to anything.
+    raspa_data_dir: Path | None = None
+
     # ── Harness ────────────────────────────────────────────────────────────
     dsh_home: Path = Path("./runtime/dsh_home")
     dsh_bin: str | None = None
@@ -163,6 +173,7 @@ class Settings(BaseSettings):
         "research_contact_email",
         "search_provider",
         "postgres_dsn_override",
+        "raspa_data_dir",
         mode="before",
     )
     @classmethod

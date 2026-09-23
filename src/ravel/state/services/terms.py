@@ -29,6 +29,7 @@ refused part way through leaves no half-contracted node behind.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -71,12 +72,40 @@ def commit_terms(
     node: DagNode,
     *,
     criteria: tuple[AcceptanceCriterion, ...] = (),
+    inputs: tuple[str, ...] = (),
     allowed_actions: tuple[str, ...] = (),
     required_outputs: tuple[str, ...] = (),
+    parameter_targets: Mapping[str, str] | None = None,
+    allowed_ranges: Mapping[str, str] | None = None,
+    allowed_substitutions: tuple[str, ...] = (),
     allowed_retries: int = 0,
+    stop_conditions: tuple[str, ...] = (),
+    escalation_conditions: tuple[str, ...] = (),
+    resource_limits: Mapping[str, str] | None = None,
+    execution_requirements: Mapping[str, str] | None = None,
     procedure: str = "",
 ) -> NodeTerms:
     """Write both contracts for a node, freeze them, and bind them to it.
+
+    Every term an `ExecutionContract` can carry is a parameter here, because a
+    term Master cannot write is a term no node will ever run under: the
+    contract's schema is what a Worker checks an action against, and a schema
+    the planning path cannot fill is a set of rules nobody can be held to. The
+    defaults are the empty ones, so a node whose work needs none of them is
+    written exactly as it was before they existed.
+
+    The three that carry the most weight:
+
+    - `parameter_targets` — the values the run is to use, as the contract's
+      own account of them. The preparation layer builds a workspace from these
+      and refuses rather than filling a gap, so a target that is absent is a
+      parameter that does not exist, not one to be inferred.
+    - `allowed_ranges` — the window each parameter may be varied inside. A
+      Worker checks a value against it, which is why the format is fixed:
+      `{"temperature_c": "20..25"}`.
+    - `execution_requirements` — whether RAVEL must materialize an environment
+      before this node runs, and which. Empty means nothing is prepared and the
+      Worker executes under the terms it already has.
 
     `criteria` is required exactly for the node types the domain says must have
     them. Passing criteria for a node that does not need them is allowed and
@@ -97,6 +126,9 @@ def commit_terms(
             an artifact's name — work that could never start, or could start and
             never deliver. Both are worth refusing at the moment they are
             planned rather than at the moment the scheduler finds them stuck.
+            The contract's own validators refuse a range that is not written as
+            one, a substitution that does not say what replaces what, and an
+            execution requirement of a kind RAVEL does not prepare.
     """
     if requires_frozen_criteria(node.node_type) and not criteria:
         raise ValueError(
@@ -132,9 +164,17 @@ def commit_terms(
             node_id=node.node_id,
             objective=node.objective,
             procedure=procedure,
+            inputs=inputs,
             allowed_actions=allowed_actions,
+            parameter_targets=dict(parameter_targets or {}),
+            allowed_ranges=dict(allowed_ranges or {}),
+            allowed_substitutions=allowed_substitutions,
             allowed_retries=allowed_retries,
             required_outputs=required_outputs,
+            stop_conditions=stop_conditions,
+            escalation_conditions=escalation_conditions,
+            resource_limits=dict(resource_limits or {}),
+            execution_requirements=dict(execution_requirements or {}),
             acceptance_contract_ref=(
                 acceptance.contract_id if acceptance is not None else None
             ),

@@ -65,6 +65,7 @@ from ravel.domain.enums import (
     WorkerMessageKind,
 )
 from ravel.domain.events import ActorType, ProjectEventType
+from ravel.domain.preparation import PreparationOutcome, PreparationRefusal
 from ravel.domain.reconciliation import RunFailureClass, WorkflowLiveness
 from ravel.domain.roles import AgentRole
 
@@ -623,6 +624,9 @@ class ExecutionContractRow(Base):
     resource_limits: Mapped[dict[str, str]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
+    execution_requirements: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     acceptance_contract_ref: Mapped[str | None] = mapped_column(REF)
     frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -1171,6 +1175,69 @@ class RunReconciliationRow(Base):
     job_state_after: Mapped[str | None] = mapped_column(String(32))
     detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
     detected_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PreparationRow(Base):
+    """One contract materialized into a workspace, or one refusal to materialize it.
+
+    **Append-only, enforced rather than intended.** This table is not in
+    `guards.UPDATABLE_TABLES`, so it carries the same `ravel_reject_write` and
+    `ravel_reject_delete` triggers as every other record table. What RAVEL built
+    for a run — and the hashes it built it from — is what makes a result
+    traceable to its inputs, and a row that could be rewritten afterwards would
+    be a trace that follows whatever was last written rather than what was run.
+
+    **No unique constraint, unlike `run_reconciliations`.** A reconciliation is
+    written by a scan that will look at the same stranded run again, so it has
+    to be deduplicated by PostgreSQL. Preparation is written once per run by an
+    activity that runs before the job starts, and the interesting case is the
+    one a unique constraint would hide: an attempt that refused and the
+    attempt after it that prepared, or two preparations whose manifests differ
+    because the host changed under them. Both are history worth keeping, and
+    the newest row is the one a reader wants — `PreparationRepository` sorts
+    and finds them.
+
+    `execution_contract_ref` carries no foreign key, for the reason
+    `ExecutionRecordRow`'s does not: the row quotes the contract version it
+    read, and the contract is not deleted out from under a record of what was
+    built from it.
+    """
+
+    __tablename__ = "execution_preparations"
+    __table_args__ = (
+        _enum_constraint("outcome", PreparationOutcome),
+        # Nullable, and the constraint is written so that NULL passes: a
+        # preparation that succeeded has no refusal class, which is not a
+        # violation of a closed vocabulary.
+        _enum_constraint("refusal", PreparationRefusal),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        Index("ix_execution_preparations_node_created", "node_id", "created_at"),
+    )
+
+    preparation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    materializer: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    materializer_version: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    workspace_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    required_outputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    execution_metadata: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    refusal: Mapped[str | None] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

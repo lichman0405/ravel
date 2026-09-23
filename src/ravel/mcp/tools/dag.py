@@ -16,7 +16,7 @@ else.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -47,9 +47,17 @@ class NodeTermsSpec:
     """
 
     criteria: tuple[AcceptanceCriterion, ...] = ()
+    inputs: tuple[str, ...] = ()
     allowed_actions: tuple[str, ...] = ()
     required_outputs: tuple[str, ...] = ()
+    parameter_targets: dict[str, str] = field(default_factory=dict)
+    allowed_ranges: dict[str, str] = field(default_factory=dict)
+    allowed_substitutions: tuple[str, ...] = ()
     allowed_retries: int = 0
+    stop_conditions: tuple[str, ...] = ()
+    escalation_conditions: tuple[str, ...] = ()
+    resource_limits: dict[str, str] = field(default_factory=dict)
+    execution_requirements: dict[str, str] = field(default_factory=dict)
     procedure: str = ""
 
     def commit(self, session: Session, project_id: str, node: DagNode) -> None:
@@ -58,9 +66,17 @@ class NodeTermsSpec:
             project_id,
             node,
             criteria=self.criteria,
+            inputs=self.inputs,
             allowed_actions=self.allowed_actions,
             required_outputs=self.required_outputs,
+            parameter_targets=self.parameter_targets,
+            allowed_ranges=self.allowed_ranges,
+            allowed_substitutions=self.allowed_substitutions,
             allowed_retries=self.allowed_retries,
+            stop_conditions=self.stop_conditions,
+            escalation_conditions=self.escalation_conditions,
+            resource_limits=self.resource_limits,
+            execution_requirements=self.execution_requirements,
             procedure=self.procedure,
         )
 
@@ -81,6 +97,7 @@ def _terms(spec: dict[str, Any]) -> NodeTermsSpec:
     retries = spec.get("allowed_retries", 0)
     return NodeTermsSpec(
         criteria=criteria,
+        inputs=tuple(str(name) for name in spec.get("inputs") or ()),
         allowed_actions=tuple(str(action) for action in spec.get("allowed_actions") or ()),
         # Stripped because a name is a name: a stray space around one is a
         # typo, not a different deliverable. Whether what is left could be a
@@ -89,9 +106,40 @@ def _terms(spec: dict[str, Any]) -> NodeTermsSpec:
         required_outputs=tuple(
             str(name).strip() for name in spec.get("required_outputs") or ()
         ),
+        parameter_targets=_string_map(spec.get("parameter_targets")),
+        allowed_ranges=_string_map(spec.get("allowed_ranges")),
+        allowed_substitutions=tuple(
+            str(entry) for entry in spec.get("allowed_substitutions") or ()
+        ),
         allowed_retries=int(retries),
+        stop_conditions=tuple(str(entry) for entry in spec.get("stop_conditions") or ()),
+        escalation_conditions=tuple(
+            str(entry) for entry in spec.get("escalation_conditions") or ()
+        ),
+        resource_limits=_string_map(spec.get("resource_limits")),
+        execution_requirements=_string_map(spec.get("execution_requirements")),
         procedure=str(spec.get("procedure") or ""),
     )
+
+
+def _string_map(raw: Any) -> dict[str, str]:
+    """A name-to-value map out of a tool call, with every value a string.
+
+    Coerced rather than trusted: tool-call arguments arrive as JSON, so a
+    parameter target the model wrote as the number `298` arrives as `298`, and
+    a contract whose `parameter_targets["temperature_k"]` is an int where every
+    reader expects a string is a difference that surfaces in the preparation
+    layer rather than here. The *contract's* validators are what decide whether
+    the values mean anything; this only makes them the shape the schema says.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"expected an object of name to value, got {raw!r}; write it as "
+            '{"temperature_k": "298"}'
+        )
+    return {str(key): str(value) for key, value in raw.items()}
 
 
 def _criterion(item: Any) -> AcceptanceCriterion:
@@ -260,9 +308,17 @@ def add_dag_node(context: ToolContext) -> Any:
         objective: str,
         rationale: str,
         criteria: list[dict[str, Any]] | None = None,
+        inputs: list[str] | None = None,
         allowed_actions: list[str] | None = None,
         required_outputs: list[str] | None = None,
+        parameter_targets: dict[str, str] | None = None,
+        allowed_ranges: dict[str, str] | None = None,
+        allowed_substitutions: list[str] | None = None,
         allowed_retries: int = 0,
+        stop_conditions: list[str] | None = None,
+        escalation_conditions: list[str] | None = None,
+        resource_limits: dict[str, str] | None = None,
+        execution_requirements: dict[str, str] | None = None,
         procedure: str = "",
         roadmap_phase: str | None = None,
         dependencies: list[str] | None = None,
@@ -291,6 +347,33 @@ def add_dag_node(context: ToolContext) -> Any:
         `allowed_retries` is how many times an infrastructure failure may be
         retried.
 
+        The rest of the terms are what the run is to do and the room it has to
+        move in, and a node whose work is a computation or an experiment is
+        under-specified without them:
+
+        - `parameter_targets` — the values this run uses, `{"temperature_k":
+          "298"}`. What you write here is what is run; nothing downstream fills
+          in a value you left out, and a node whose preparation finds a
+          parameter missing is parked for you to decide about rather than
+          guessed at.
+        - `allowed_ranges` — the window each parameter may be varied inside,
+          written `"8..12"`. A Worker checks a value against this; a range that
+          is not written as one is refused here rather than halfway through a
+          run.
+        - `allowed_substitutions` — permitted swaps, written `"A -> B"`.
+        - `inputs` — what the run reads, named.
+        - `stop_conditions` and `escalation_conditions` — when the Worker stops
+          by itself, and when it stops and asks you.
+        - `resource_limits` — what the run may consume.
+        - `execution_requirements` — whether RAVEL must *build* an environment
+          before this node runs: `{"software": "raspa"}` for a computation,
+          `{"lab": "bench-chemistry"}` for an experiment a person carries out.
+          Omit it for a node that needs no workspace — reading, writing, or
+          analysing what is already there — and nothing is prepared for it.
+          Naming an environment RAVEL does not have a materializer for is not
+          refused here; it becomes a refusal at preparation time that comes
+          back to you as a node waiting on your decision.
+
         `roadmap_phase` must be a stage within the planning horizon; adding work
         to a stage further ahead is refused, and the refusal says which stages
         are reachable.
@@ -308,9 +391,17 @@ def add_dag_node(context: ToolContext) -> Any:
         terms = _terms(
             {
                 "criteria": criteria,
+                "inputs": inputs,
                 "allowed_actions": allowed_actions,
                 "required_outputs": required_outputs,
+                "parameter_targets": parameter_targets,
+                "allowed_ranges": allowed_ranges,
+                "allowed_substitutions": allowed_substitutions,
                 "allowed_retries": allowed_retries,
+                "stop_conditions": stop_conditions,
+                "escalation_conditions": escalation_conditions,
+                "resource_limits": resource_limits,
+                "execution_requirements": execution_requirements,
                 "procedure": procedure,
             }
         )
@@ -433,10 +524,18 @@ def expand_dag_phase(context: ToolContext) -> Any:
 
         `nodes` is a list of objects, each with `node_type`, `objective`, and
         optionally `ref`, `dependencies`, `join_policy`, `join_threshold`, and
-        the terms the node runs under: `criteria` (required for COMPUTATION and
-        EXPERIMENT nodes — a list of objects with a `statement` and a
-        `provenance`), `allowed_actions`, `required_outputs` (each entry the
-        name of a file the run delivers), `allowed_retries` and `procedure`.
+        the terms the node runs under, which are the same ones `add_dag_node`
+        takes and mean the same things: `criteria` (required for COMPUTATION
+        and EXPERIMENT nodes — a list of objects with a `statement` and a
+        `provenance`), `inputs`, `allowed_actions`, `required_outputs` (each
+        entry the name of a file the run delivers), `parameter_targets`,
+        `allowed_ranges`, `allowed_substitutions`, `allowed_retries`,
+        `stop_conditions`, `escalation_conditions`, `resource_limits`,
+        `execution_requirements`, and `procedure`. State a node's parameters
+        and its execution requirement with the node: a stage expanded without
+        them is a stage of work that is planned but not specified, and the
+        node that needs an environment prepared will be parked for you later
+        rather than run.
 
         A node's `dependencies` name nodes that already exist, or siblings in
         this same call — by the `ref` given to them here, since ids are not
