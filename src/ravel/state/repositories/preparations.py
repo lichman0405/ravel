@@ -63,6 +63,29 @@ class PreparationRepository(ProjectScopedRepository[PreparationRecord]):
         records = self.for_run(node_id, execution_contract_version)
         return records[-1] if records else None
 
+    def stopping_refusal(self, node_id: str) -> PreparationRecord | None:
+        """The refusal that is stopping this node now, or `None` if none is.
+
+        Across contract versions, unlike the two reads above, because the caller
+        is answering "why is this node stopped" for a node whose run it did not
+        watch: a node whose terms were revised and whose new run then refused
+        has its answer under the new version, and a read that asked for a
+        version the caller had to guess at would report the wrong run.
+
+        **The newest record has to be the refusal.** A refusal that was later
+        followed by a preparation is history — Master revised the terms, the
+        next run built its workspace and went on — and reporting it would answer
+        "why has this stopped" with the reason something else stopped earlier.
+        That is the same mistake as reporting a `PASS` as a node's verdict, and
+        it is reachable the same way: a node that refused at version one and was
+        parked at version two by a lost run has both records, and only the
+        second is about where it is now.
+        """
+        records = self.for_node(node_id)
+        if records and records[-1].outcome is PreparationOutcome.REFUSED:
+            return records[-1]
+        return None
+
     def prepared_for_run(
         self, node_id: str, execution_contract_version: int
     ) -> PreparationRecord | None:

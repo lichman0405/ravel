@@ -188,3 +188,79 @@ per role that the chain passes through. Six more in
 `tests/integration/master/test_research_readback.py` drive the same path directly
 and read the storage back out of PostgreSQL, which is where the claim that the
 readback is the row rather than a summary of it is settled.
+
+## P11-04 execution preparation
+
+A contract that names an environment must be turned into that environment before
+anything runs, or the run must not happen. That is the item, and what makes it
+Phase 11's rather than Phase 6's is where the answer goes when it cannot be
+built: the contract is what is wrong, Master is the only role that may revise
+it, and a refusal has to arrive at Master as a question rather than as a failure
+of work nobody attempted.
+
+`ExecutionContract.execution_requirements` is a one-entry mapping — `{"software":
+"raspa"}`, `{"lab": "bench-chemistry"}` — and `requires_preparation` is whether a
+contract names one. Preparation is therefore opt-in per contract, and a contract
+that names nothing runs exactly as it did before the layer existed. A
+`MaterializerRegistry` resolves the environment to a materializer and builds a
+workspace from the frozen contract: the inputs resolved to artifact versions and
+read out of the object store, the files written with their hashes, a manifest
+recording what was built from what, and an entrypoint a job starts from. The
+deployment registers exactly two — `RaspaMaterializer` and `LabMaterializer` —
+and a contract naming anything else is refused rather than guessed at.
+
+The refusals are the item's spine, and the class is what routes them.
+`MISSING_SCIENTIFIC_PARAMETER` is a gap in the terms — a bench contract with no
+procedure — and is Master's to fill. `INCONSISTENT_CONTRACT` is terms that
+disagree with themselves. `ENVIRONMENT_UNAVAILABLE` is this machine: RASPA code
+with no RASPA installed, or a resolved input with no object store to read it
+from, and the sentence names the setting that would fix it. `UNSUPPORTED_ENVIRONMENT`
+is RAVEL: no materializer for that environment at all, which is a different
+sentence for Master than a broken host. Every one of them parks the node at
+`WAITING_DECISION`, writes no Execution Record, starts no job, and ends the run
+without a termination status — nothing was tried, so there is nothing to fail.
+
+The materializer is not allowed to decide anything. It renders what the contract
+states — the procedure as written, the conditions it fixes, the samples it
+names, the outputs it requires — and where the contract does not say enough it
+refuses and names the term. It does not choose a method from an objective, fill
+in a concentration, or read the DAG for itself: the acceptance criteria in a
+bench package are the node's *frozen binding*, handed in by the activity, so a
+package cannot be built against criteria the delivery will not be measured by.
+
+| Requirement | Demonstrated by |
+|---|---|
+| A contract that names an environment runs in the workspace built for it | `tests/integration/temporal/test_preparation.py::test_a_run_that_needs_an_environment_runs_in_the_workspace_built_for_it` — contract → inputs → files → manifest → the `JobRequest` the backend was actually handed |
+| A refusal parks the node, writes no record and starts nothing | the three refusal cases in the same file, plus `test_a_lab_contract_that_states_no_procedure_parks_the_node` |
+| A refusal reaches the seat that has to answer it | `test_p11_04_a_contract_this_deployment_cannot_build_reaches_master` — the refusal read back through Master's own tool, field by field against the row, and the turn that hands Master the node |
+| A refusal is about this deployment, not about the work | `test_p11_04_the_same_contract_prepares_where_the_environment_exists` — the same tool call on a deployment that can build it |
+| A contract naming no environment is unchanged | `tests/integration/temporal/test_preparation.py::test_a_contract_that_names_no_environment_runs_exactly_as_before` |
+| Preparation is keyed to the terms, not to the call | `test_the_same_run_prepares_one_workspace_however_often_it_is_read`, `tests/integration/state/test_preparations.py::test_each_contract_version_is_its_own_history` |
+
+**What Master is told, and why the case exists.** The first version of this read
+reported what stopped a node from a review verdict and a lost run, and a
+preparation refusal was neither — so a live five-agent run handed Master a node
+that had refused, Master found nothing in the record that named a reason, and it
+cancelled the work. Its own cancel rationale is the finding: "the state records
+no verdict from a seat, no run reconciliation from RAVEL, and no unexecutability
+reason". The refusal had been written the whole time. `read_project_state`'s
+`stopped` block now carries `preparation_refusal`, and the Master turn says
+which of the three fields to look in — because a reason in a record no prompt
+mentions is a reason a session will not go and read. The field is reported only
+when the refusal is the *newest* thing RAVEL did for the node: one that a later
+preparation answered is history, and reporting it would answer "why has this
+stopped" with a reason something else stopped earlier
+(`tests/integration/state/test_preparations.py::test_the_refusal_reported_as_stopping_a_node_is_the_newest_one`).
+
+**A live Master writes contracts the deployment has not registered.** In the
+same run, contracts naming `{"software": "python"}` and `{"lab":
+"four-point-probe"}` were written and refused as `UNSUPPORTED_ENVIRONMENT`. That
+is not a defect: the tool documentation names the two environments RAVEL builds,
+and a Master that asks for another gets a refusal that says so rather than a
+workspace that pretends. `tests/integration/temporal/test_preparation.py::test_an_input_nothing_answers_does_not_need_an_object_store`
+is the other half of a related fix — `inputs` is a list of *names*, resolving one
+is a database query, and a plan naming the research contract or a file the run
+produces itself resolves to nothing rather than to bytes. A run whose inputs are
+all absent needs no object store, and refusing it would have blamed the host for
+a fact about the project.
+

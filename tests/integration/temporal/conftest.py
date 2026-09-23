@@ -452,7 +452,13 @@ class RunningWorker:
         the fixture — it is the deployment a contract naming no environment
         runs in, and the tests that need preparation say so by passing these
         rather than by the fixture guessing.
+
+        **`ExecutionRuntime.from_settings` gives a deployment both**, so a
+        caller building something a deployment stands in for should pass them:
+        `tests/e2e`'s `headless` does, because a live Master writes contracts
+        and one naming an environment has to prepare where a deployment would.
         """
+
         runtime = ExecutionRuntime(
             settings=settings,
             # The test's own engine, so the worker and the test are looking at

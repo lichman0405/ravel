@@ -22,6 +22,7 @@ from ravel.domain.enums import (
     ReviewOutcome,
 )
 from ravel.domain.identity import MasterCheckpoint
+from ravel.domain.preparation import PreparationRecord
 from ravel.domain.reconciliation import RunReconciliation
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
@@ -36,6 +37,7 @@ from ravel.state.repositories.identity import (
     ApprovalRepository,
     CheckpointRepository,
 )
+from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
 from ravel.state.repositories.reconciliation import RunReconciliationRepository
 from ravel.state.repositories.records import RecordRepositories
@@ -77,6 +79,21 @@ def _state_name(state: JobState | None) -> str | None:
     the two looks at `job_id`, which is null in exactly the same case.
     """
     return state.value if state is not None else None
+
+
+def _refusal_kind(preparation: PreparationRecord) -> str:
+    """Which kind of refusal stopped the node, in the record's own words.
+
+    The domain pairs the two — a `REFUSED` outcome always names a class and a
+    sentence, and the validator refuses a record that does not — so a record
+    read here has one. The fallback is written out rather than asserted because
+    this is a projection: Master's read is not the place a data fault should
+    surface, and a record that somehow lacked the class would be better
+    reported as the outcome it does carry than raised over.
+    """
+    if preparation.refusal is not None:
+        return preparation.refusal.value
+    return preparation.outcome.value
 
 
 def read_project_state(context: ToolContext) -> Any:
@@ -138,6 +155,22 @@ def read_project_state(context: ToolContext) -> Any:
                 session, context.project_id
             ).all():
                 lost[reconciliation.node_id] = reconciliation
+            # The fourth reason, and the one with no author outside RAVEL's own
+            # preparation layer: a run was ordered, RAVEL could not build the
+            # environment its contract named, and the node was parked rather
+            # than failed. Wrote the refusal, so the answer exists — and
+            # without this read Master is asked to decide about a node whose
+            # record reads as empty. A live run was asked exactly that: it
+            # spent three turns establishing that "the state records no verdict
+            # from a seat, no run reconciliation from RAVEL, and no
+            # unexecutability reason", concluded the work was UNRESOLVED, and
+            # the reason it could not see was written down the whole time.
+            refused: dict[str, PreparationRecord] = {}
+            preparations = PreparationRepository(session, context.project_id)
+            for node in nodes:
+                refusal = preparations.stopping_refusal(node.node_id)
+                if refusal is not None:
+                    refused[node.node_id] = refusal
             seq = last_event_seq(session, context.project_id)
             # What research has handed over, which is the half of the project a
             # Master with no memory of earlier turns cannot otherwise find: a
@@ -259,6 +292,39 @@ def read_project_state(context: ToolContext) -> Any:
                             "created_at": lost[node.node_id].created_at.isoformat(),
                         }
                         if node.node_id in lost
+                        else None
+                    ),
+                    # Why preparation stopped it, which is the answer RAVEL
+                    # itself owes and the one a reader is least able to infer.
+                    # A refusal is a fact about this deployment and this
+                    # contract — the environment named is not one RAVEL builds
+                    # here, or a parameter the materializer was not given — and
+                    # none of it is on the node, in its contract's text, or in
+                    # any review. Master is asked to decide about the node, so
+                    # the reason has to be here; the live run described above
+                    # shows what the alternative costs.
+                    #
+                    # Every value is RAVEL's own record of what it tried, so
+                    # this reports a limit of the deployment rather than a
+                    # judgement about the work — which is exactly what Master
+                    # needs in order to choose between revising the terms and
+                    # redirecting the node.
+                    "preparation_refusal": (
+                        {
+                            "preparation_id": refused[node.node_id].preparation_id,
+                            "refusal": _refusal_kind(refused[node.node_id]),
+                            "reason": refused[node.node_id].reason,
+                            "materializer": refused[node.node_id].materializer,
+                            "execution_contract_version": (
+                                refused[node.node_id].execution_contract_version
+                            ),
+                            "workspace_path": refused[node.node_id].workspace_path,
+                            "required_outputs": list(
+                                refused[node.node_id].required_outputs
+                            ),
+                            "created_at": refused[node.node_id].created_at.isoformat(),
+                        }
+                        if node.node_id in refused
                         else None
                     ),
                 }

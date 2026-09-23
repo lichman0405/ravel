@@ -75,6 +75,11 @@ REQUIREMENTS = {"software": "raspa"}
 
 LIMITS = {"wall_clock_hours": "4", "cpus_per_task": "8"}
 
+#: What a bench package cannot be built without, for the tests below that use
+#: the lab materializer only because it is the one that reads no input bytes.
+BENCH_CONDITIONS = {"temperature_c": "25"}
+BENCH_LIMITS = {"bench_hours": "6", "instrument": "TGA-2"}
+
 
 @pytest.fixture
 async def client(execution_settings, temporal_unreachable) -> NodeRunClient:
@@ -482,6 +487,123 @@ async def test_a_lab_run_is_handed_the_package_and_the_criteria_it_will_be_judge
     # And the run is started from the protocol, not from a command.
     (request,) = backend.jobs.values()
     assert request.entrypoint == "experimental_protocol.md"
+
+
+async def test_an_input_nothing_answers_does_not_need_an_object_store(
+    database: Database,
+    project,
+    runnable_node,
+    backend,
+    registry,
+    client,
+    lab_materializers: MaterializerRegistry,
+) -> None:
+    """A contract naming an input the project holds nothing under prepares.
+
+    **This is the shape a live Master writes.** `inputs` is prose-y: a plan
+    naming `project_research_contract`, or a file the run is meant to produce
+    itself, is a name no artifact answers, and resolving a name is a database
+    query rather than an object-store read. Such a run needs no store, and one
+    that refused it would be refusing a fact about the project by blaming the
+    host — with the sentence "this deployment has no object store configured",
+    which names nothing Master can act on and is not true of the contract.
+
+    No store is passed at all: this worker is the deployment that has none, and
+    the run has to be unaffected by that because it reads no artifact bytes.
+    """
+    node = runnable_node(
+        node_type=NodeType.EXPERIMENT,
+        execution_requirements={"lab": "bench-chemistry"},
+        procedure="Equilibrate each sample and record the conductivity.",
+        # The lab package is the materializer that reads no input bytes — it
+        # writes the protocol out of the contract — so an input nothing answers
+        # leaves it with nothing missing, which is what makes this a test about
+        # the store rather than about a materializer's own terms.
+        inputs=("project_research_contract",),
+        parameter_targets=BENCH_CONDITIONS,
+        resource_limits=BENCH_LIMITS,
+    )
+    backend.states = [JobState.RUNNING, JobState.COMPLETED]
+
+    worker = await RunningWorker.start(
+        client.settings, registry, database, materializers=lab_materializers
+    )
+    try:
+        handle = await client.start_node_run(
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+        )
+        outcome = await handle.result()
+    finally:
+        await worker.stop_gracefully()
+
+    assert outcome.refusal is None, (
+        f"a contract naming an input nothing answers was refused as {outcome.refusal}"
+    )
+    assert outcome.completeness is not None
+    (preparation,) = _preparations(database, node.node_id)
+    assert preparation["outcome"] == "PREPARED"
+    workspace = Path(str(preparation["workspace_path"]))
+    assert (workspace / "experimental_protocol.md").is_file()
+
+
+async def test_a_resolved_input_with_no_store_refuses_the_run(
+    database: Database,
+    project,
+    runnable_node,
+    backend,
+    registry,
+    client,
+    lab_materializers: MaterializerRegistry,
+    registered_framework,
+) -> None:
+    """The other half of the rule, which the fix above must not have taken out.
+
+    A name the project *does* hold a version under is bytes, and bytes live in
+    the object store. A worker without one cannot read them, and that is a
+    machine to fix rather than something to work around: the contract asked for
+    a file and this deployment cannot produce it.
+
+    The refusal names the input and the missing store rather than the contract,
+    because the contract is fine — the same one prepares on a host that has one.
+    """
+    node = runnable_node(
+        node_type=NodeType.EXPERIMENT,
+        execution_requirements={"lab": "bench-chemistry"},
+        procedure="Equilibrate each sample and record the conductivity.",
+        inputs=(FRAMEWORK_NAME,),
+        parameter_targets=BENCH_CONDITIONS,
+        resource_limits=BENCH_LIMITS,
+    )
+
+    worker = await RunningWorker.start(
+        client.settings, registry, database, materializers=lab_materializers
+    )
+    try:
+        handle = await client.start_node_run(
+            project_id=project.project_id,
+            node_id=node.node_id,
+            actor_id=ACTOR,
+            execution_contract_version=FIRST_CONTRACT_VERSION,
+        )
+        outcome = await handle.result()
+    finally:
+        await worker.stop_gracefully()
+
+    assert outcome.refusal is PreparationRefusal.ENVIRONMENT_UNAVAILABLE
+    assert outcome.completeness is None
+    assert _node_status(database, node.node_id) == NodeStatus.WAITING_DECISION.value
+    assert _counts(database, node.node_id) == (0, 0)
+    assert backend.submit_entries == 0
+
+    (preparation,) = _preparations(database, node.node_id)
+    assert preparation["outcome"] == "REFUSED"
+    assert preparation["refusal"] == "ENVIRONMENT_UNAVAILABLE"
+    reason = str(preparation["reason"])
+    assert FRAMEWORK_NAME in reason
+    assert "no object store configured" in reason
 
 
 async def test_a_lab_contract_that_states_no_procedure_parks_the_node(

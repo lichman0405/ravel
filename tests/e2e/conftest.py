@@ -93,6 +93,7 @@ from ravel.execution.backends import BackendRegistry
 from ravel.execution.loop import ProjectLoop, ProjectRun, Situation
 from ravel.execution.node_runs import ExecutionService
 from ravel.execution.temporal.client import NodeRunClient
+from ravel.execution.temporal.worker import materializers_for
 from ravel.gateway.app import create_app
 from ravel.gateway.auth.tokens import TokenService
 from ravel.gateway.conversation import Answer
@@ -506,7 +507,22 @@ class Headless:
         store: S3ArtifactStore,
     ) -> Headless:
         registry = BackendRegistry()
-        worker = await RunningWorker.start(settings, registry, database)
+        # The store and the materializers are what `ExecutionRuntime.
+        # from_settings` gives a deployment's worker, and a harness worker
+        # without them is not a smaller deployment — it is a differently
+        # configured one. Both are passed here because this fixture already
+        # holds a real store (it hands the same one to the mock backends) and
+        # because the alternative is invisible until it is expensive: a
+        # contract naming an environment prepares on a deployment and refuses
+        # here, and the difference reads as a product fault rather than as a
+        # harness that answered for a machine RAVEL does not ship.
+        worker = await RunningWorker.start(
+            settings,
+            registry,
+            database,
+            store=store,
+            materializers=materializers_for(settings),
+        )
         client = await NodeRunClient.connect(settings)
         return cls(
             database=database,

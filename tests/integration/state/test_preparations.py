@@ -217,6 +217,64 @@ def test_each_contract_version_is_its_own_history(
     assert two is not None and two.workspace_path.endswith("/v2")
 
 
+def test_the_refusal_reported_as_stopping_a_node_is_the_newest_one(
+    database: Database, project: Project, prepare: Callable[..., Prepared]
+) -> None:
+    """A refusal that was answered is history, and is not the answer now.
+
+    The read exists for a node whose run the reader did not watch — Master,
+    handed a node that stopped. What it must not do is report the reason
+    something stopped *earlier*: a node that refused under version one, was
+    given new terms, built its workspace and ran, is not stopped by the first
+    refusal any more, and a Master told that it is would revise terms that were
+    already revised.
+
+    Both orderings are asserted, because only one of them is about the newest
+    record and the other is about a refusal that is not the newest: an earlier
+    refusal followed by a preparation is history, and a preparation followed by
+    a refusal is the reason the node is where it is.
+    """
+    node_id = prepare(node_type=NodeType.COMPUTATION).node_id
+    with database.transaction() as session:
+        PreparationRepository(session, project.project_id).record(
+            a_refusal(project, node_id)
+        )
+    with database.read_only() as session:
+        assert PreparationRepository(session, project.project_id).stopping_refusal(
+            node_id
+        ) is not None
+
+    with database.transaction() as session:
+        answered = a_prepared(project, node_id)
+        PreparationRepository(session, project.project_id).record(answered)
+    with database.read_only() as session:
+        assert (
+            PreparationRepository(session, project.project_id).stopping_refusal(node_id)
+            is None
+        ), "a refusal the next preparation answered is not why the node stopped"
+
+    # And the other way round: the newest record is a refusal, so it is the one
+    # reported — under the version it was refused at, not the first one.
+    with database.transaction() as session:
+        later = a_refusal(
+            project,
+            node_id,
+            execution_contract_version=2,
+            reason="the workspace root was not writable",
+        )
+        PreparationRepository(session, project.project_id).record(later)
+
+    with database.read_only() as session:
+        stopping = PreparationRepository(session, project.project_id).stopping_refusal(
+            node_id
+        )
+
+    assert stopping is not None
+    assert stopping.preparation_id == later.preparation_id
+    assert stopping.execution_contract_version == 2
+    assert stopping.reason == "the workspace root was not writable"
+
+
 def test_a_preparation_belongs_to_its_project(
     database: Database, project: Project, prepare: Callable[..., Prepared]
 ) -> None:

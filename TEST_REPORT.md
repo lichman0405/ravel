@@ -833,6 +833,62 @@ read never mentioned at all. `HANDED_OVER_NODE_STATUSES` is what the filter turn
 on: `REVIEWING` is where a seat leaves finished work, and `PASSED`, `FAILED` and
 `PARTIAL` are where a FINAL verdict moves it.
 
+### 7.5 P11-04: execution preparation
+
+An Execution Contract may name the environment its work needs — `{"software":
+"raspa"}`, `{"lab": "bench-chemistry"}` — and the sentence the layer exists to
+make true is that *a run happens in a workspace built from the contract, or it
+does not happen at all*. The materializers, the refusals and the record were
+already in place; what this item found is that a refusal could be written,
+correct, and invisible to the only seat that may answer it.
+
+**The finding is a live one, and its evidence is a Master's own words.** In a
+five-agent run a node refused preparation, the workflow parked it at
+`WAITING_DECISION`, and Master read the project state, found nothing that named
+a reason, and cancelled the node. Its cancel rationale is quoted in the
+acceptance module verbatim: "the state records no verdict from a seat, no run
+reconciliation from RAVEL, and no unexecutability reason". Every clause was
+true and the refusal had been in `execution_preparations` the whole time.
+`read_project_state`'s `stopped` block gained `preparation_refusal` as a third
+field beside `verdict` and `run_reconciliation`, `PreparationRepository.
+stopping_refusal` reads across contract versions and reports the refusal only
+when it is the *newest* thing RAVEL did for the node, and the Master turn names
+all three fields — because a reason in a record no prompt mentions is a reason a
+session will not go and read.
+
+Two smaller corrections came with it. A refusal now records `required_outputs`
+from the contract, so a refusal describes what the node owed and not only what
+went wrong; and the object store is required by a *resolved* input rather than a
+named one, so a contract whose inputs are all names the project holds nothing
+under — the research contract, a file the run produces itself — no longer
+refuses on a host with no store configured. That second one was a refusal about
+the host for a fact about the project.
+
+| | |
+|---|---|
+| Unit | `tests/unit/preparation/` — **82 passed** in 0.13s |
+| Integration | `tests/integration/temporal/test_preparation.py` — **9 passed** in 12.50s; `tests/integration/state/test_preparations.py` — **7 passed** in 1.15s |
+| Acceptance | `tests/acceptance/test_phase11_materialization.py` — **2 passed** in 4.12s |
+| Gate row | `compute-preparation` — **43 passed** in 16.47s |
+| Matrix | `make phase11-acceptance` — `PASS P11-04 execution preparation 2 passed` |
+
+The two acceptance cases are the two directions of one claim. `test_p11_04_a_
+contract_this_deployment_cannot_build_reaches_master` refuses, then reads the
+refusal back through Master's own tool field by field against the row, and
+asserts the prompt that hands Master the node names the field it is in.
+`test_p11_04_the_same_contract_prepares_where_the_environment_exists` runs the
+identical contract against a deployment that can build it, which is what keeps
+the item from being satisfiable by a layer that refuses everything — the
+distinction it asserts is between a limit of this machine and a fault in the
+work, and a suite with only the first case could not tell them apart.
+
+**A live Master writes contracts this deployment has not registered.** The same
+run produced `{"software": "python"}` and `{"lab": "four-point-probe"}` and both
+were refused as `UNSUPPORTED_ENVIRONMENT`. That is the layer working: a contract
+naming an environment RAVEL cannot build gets a refusal that says so rather than
+a workspace that pretends, and the refusal is attributed to RAVEL rather than to
+the host, which is a different sentence for Master to act on.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

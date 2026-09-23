@@ -271,7 +271,7 @@ class NodeRunActivities:
             )
         except MaterializationRefused as refused:
             return self._record_refusal(
-                plan, refused, workspace_path=str(workspace_root)
+                plan, refused, contract=contract, workspace_path=str(workspace_root)
             )
 
         record = PreparationRecord(
@@ -391,25 +391,38 @@ class NodeRunActivities:
         environment being built — a materializer that never reads that file
         does not care — and the materializer is the layer that knows.
 
+        **The store is required by a resolved input, not by a named one.** A
+        contract's `inputs` is a list of names the plan wrote, and resolving a
+        name is a database query against the project's artifacts; a name the
+        project holds nothing under — a plan naming the research contract, or a
+        file the run is meant to produce itself — resolves to `None`, and there
+        are no bytes to fetch for it. Refusing those because the deployment has
+        no store would refuse a run whose inputs are *all* absent, which is a
+        fact about the project rather than about this host, and it is the
+        materializer's to answer.
+
         Raises:
             MaterializationRefused: This deployment cannot read artifact bytes
-                at all. Raised rather than returned so that the caller records
-                it the same way it records every other reason a contract could
-                not be prepared.
+                it was asked for. Raised rather than returned so that the caller
+                records it the same way it records every other reason a
+                contract could not be prepared.
         """
-        if self.store is None and resolved:
+        wanted = [(name, version) for name, version in resolved if version is not None]
+        if self.store is None and wanted:
             raise MaterializationRefused(
                 PreparationRefusal.ENVIRONMENT_UNAVAILABLE,
                 f"node {plan.display_id}'s contract names inputs "
-                f"{[name for name, _ in resolved]} and this deployment has no "
+                f"{[name for name, _ in wanted]} and this deployment has no "
                 "object store configured to read them from; the bytes of an "
                 "artifact live in object storage and never in PostgreSQL",
             )
-        assert self.store is not None  # the check above
         found: list[PreparedInput] = []
         for name, version in resolved:
             if version is None:
                 continue
+            # The check above: a resolved version is exactly what makes the
+            # store required, so this branch cannot be reached without one.
+            assert self.store is not None
             try:
                 data = self.store.get(version.storage_key)
             except ArtifactStoreError as error:
@@ -429,7 +442,12 @@ class NodeRunActivities:
         return found
 
     def _record_refusal(
-        self, plan: RunPlan, refused: MaterializationRefused, *, workspace_path: str
+        self,
+        plan: RunPlan,
+        refused: MaterializationRefused,
+        *,
+        contract: ExecutionContract,
+        workspace_path: str,
     ) -> PreparationReport:
         """Write the refusal and park the node, in one transaction.
 
@@ -442,6 +460,14 @@ class NodeRunActivities:
         A node something else has already moved is left where it is: Master may
         have answered while this was running, and re-parking a node that was
         resumed would undo an answer already given.
+
+        **The contract comes in beside the plan because the record keeps what
+        the run owed.** `required_outputs` means the same thing on a refusal as
+        on a preparation — what this contract asked the work to deliver — and a
+        reader that had to open the contract for it on one outcome and not the
+        other would be reading a field whose meaning depended on which row it
+        was in. Master is the reader: a refusal that reported no required
+        outputs would describe a node that owed nothing.
         """
         record = PreparationRecord(
             project_id=plan.project_id,
@@ -452,6 +478,7 @@ class NodeRunActivities:
             refusal=refused.refusal,
             reason=refused.reason,
             workspace_path=workspace_path,
+            required_outputs=contract.required_outputs,
         )
         with self.database.transaction() as session:
             PreparationRepository(session, plan.project_id).record(record)
