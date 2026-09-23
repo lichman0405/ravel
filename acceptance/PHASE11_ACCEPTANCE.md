@@ -374,7 +374,7 @@ A release asks a different question — is the *system* certifiable — and the
 difference is where this item's risk lives. A matrix can be all green while lint
 is red, while a suite nobody runs is broken, or while a live certification was
 never attempted, and none of those is visible in a table that was never asked
-about them. `scripts/release_gate.py` is the answer: seventeen rows, each one an
+about them. `scripts/release_gate.py` is the answer: eighteen rows, each one an
 area Phase 11 promises, run in the order a reader would fix them — static
 analysis first, then the suites cheapest to most expensive, then the four that
 need something RAVEL does not own.
@@ -404,7 +404,7 @@ the same refusal one layer down.
 
 | Requirement | Demonstrated by |
 |---|---|
-| Every area Phase 11 promises is a row | `test_p11_07_every_area_phase_11_promises_is_a_row` — the seventeen named rather than counted, because a count passes if a row is swapped for a different one |
+| Every area Phase 11 promises is a row | `test_p11_07_every_area_phase_11_promises_is_a_row` — the eighteen named rather than counted, because a count passes if a row is swapped for a different one |
 | Every path a row names exists | `test_p11_07_a_row_that_names_a_file_that_does_not_exist_is_caught` — `compute-preparation` named a module that did not exist, and pytest exits 4 on that, so the row would have failed for a reason with nothing to do with what it was evidence for |
 | A row that did not run is not a row that passed | `test_p11_07_a_row_that_did_not_run_is_not_a_row_that_passed` — a skip and a row that never ran are both `PARTIALLY_CERTIFIED`, and the exit code is asserted with the word |
 | One failed row is not certified whatever the others say | `test_p11_07_one_failed_row_is_not_certified_whatever_the_others_say` — a failure outranks a gap, because it describes a known defect rather than an unknown one |
@@ -696,6 +696,17 @@ seventeen failed set-ups that were not about the product at all. Both leaks are
 closed and the case leaves no connection checked out — measured with a pool
 probe, not assumed — and the note in `tests/acceptance/test_review.py` on the
 same hazard is the precedent the case now follows.
+
+**The item also put this module on the release path.** `scripts/release_gate.py`
+gained an eighteenth row, `full-chain-e2e` — this module under `-k whole_chain`
+with `RAVEL_REQUIRE_DSH=1`, so that both cases run and the live one cannot skip
+— because a gate whose seventeen other rows each certify a suite can return
+`CERTIFIED` about a phase whose central claim, that the legs join, nothing has
+ever run. Its
+live half is twenty-four minutes of a real Master planning, which is why it is
+the last row. `test_p11_07_every_area_phase_11_promises_is_a_row` names it with
+the other seventeen, so deleting the row fails a test rather than quietly
+leaving the gate one row shorter.
 
 **Two cases, because there are two questions.** The first is scripted and
 complete — Master, Review and the three seats are scripts, everything under them

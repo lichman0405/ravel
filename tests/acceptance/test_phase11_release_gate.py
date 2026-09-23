@@ -115,7 +115,7 @@ def test_p11_07_every_area_phase_11_promises_is_a_row() -> None:
     Named rather than counted: a count would pass if a row were swapped for a
     different one, and what a reader needs to know is that the Slurm backend,
     the bench channel, the reconciliation sweep and the five-agent run are in
-    the run rather than that there are seventeen of something.
+    the run rather than that there are eighteen of something.
     """
     names = {row.name for row in rows()}
     required = {
@@ -136,6 +136,11 @@ def test_p11_07_every_area_phase_11_promises_is_a_row() -> None:
         "slurm-integration",
         "humanlab-integration",
         "five-agent-e2e",
+        # The row that certifies the join rather than a part: this module, both
+        # cases, with the live one required to run. It is the newest name here
+        # and the one a release most needs, since every other row can pass on a
+        # system whose legs have never run on one project in one run.
+        "full-chain-e2e",
     }
     assert required <= names, (
         f"the release gate no longer runs {sorted(required - names)}; a gate "

@@ -31,6 +31,10 @@ make acceptance    # A01-A20 plus the seven gates, printed as a matrix
 make phase10-acceptance  # P10-01..P10-20 and the twenty worker items — 57 cases,
                          # two of them live runs of a whole project, ~26 minutes
 make phase11-acceptance  # the Phase 11 items, printed as a matrix
+make release-gate  # the suites above plus the item-level rows, in one
+                   # command, then a verdict: CERTIFIED / PARTIALLY_CERTIFIED /
+                   # NOT_CERTIFIED. About fifty minutes, most of it the live
+                   # rows. See §7.8 and §7.12
 ```
 
 Three warnings, each of which costs time when ignored:
@@ -1010,14 +1014,17 @@ The matrix above answers "does every item have a case, and did the cases pass".
 A release asks a different question — is the *system* certifiable — and the
 difference is where this item's risk lives, because a matrix can be all green
 while lint is red, while a suite nobody runs is broken, or while a live
-certification was never attempted. `scripts/release_gate.py` runs seventeen rows
+certification was never attempted. `scripts/release_gate.py` runs eighteen rows
 and prints one of three words. `CERTIFIED` is every row ran and passed;
 `PARTIALLY_CERTIFIED` is every row that could run passed and at least one could
 not, for a reason outside this repository, printed with the dependency it named;
 `NOT_CERTIFIED` is a row that ran and failed. The exit code is the verdict, and
 a skip that matches no dependency this repository knows is reported as
 **unattributed** rather than filed under "external" — an unexamined skip is
-exactly what a certification must not absorb.
+exactly what a certification must not absorb. `make release-gate-rows` prints
+the eighteen without running any of them. The last of them,
+`full-chain-e2e`, is P11-11's and is described in §7.12: seventeen rows certify
+the parts, and one certifies the join.
 
 **The first full run returned `NOT_CERTIFIED`, and that is the item working.**
 Twelve rows passed, including all four that need something RAVEL does not own —
@@ -1443,6 +1450,24 @@ which went from one to zero. So the five failing rows and seventeen failed set-u
 matrix run *before* that fix were the leak and not a product regression: they
 are the tests downstream of a locked `TRUNCATE`, and each one passes in a
 process that starts after it.
+
+**The item also added the gate's eighteenth row.** A release that can be called
+`CERTIFIED` while nothing has ever run the legs on one project in one run is a
+release certifying parts; the seventeen rows before this one each run a suite,
+and not one of them asserts the join. `scripts/release_gate.py` now runs
+`full-chain-e2e` — this module under `-k whole_chain`, with `RAVEL_REQUIRE_DSH=1`
+so that the live case runs rather than skipping — so both certification cases sit
+on the release's path and not only on the matrix's. Its live half alone is
+twenty-four minutes of a real Master planning, which is why the row is last.
+
+**The live case is reached three times in one full run.** The module carries the
+`acceptance` marker its sibling Phase 11 acceptance modules carry, so the
+`v0-acceptance` and `phase11-acceptance` rows each sweep it up by marker before
+`full-chain-e2e` names it — an hour of the gate inside one case, and not a
+redundancy: each row's verdict is about a different claim, and the alternative,
+narrowing the marker, would take the phase's central case out of `make
+acceptance`. What it does mean is that a release verdict costs about twice what
+it did before this item, and §7.8's fifty minutes are no longer the number.
 
 | | |
 |---|---|
