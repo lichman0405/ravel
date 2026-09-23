@@ -46,13 +46,14 @@ from tests.support.lab import (
     OUTPUTS,
     RAW_BYTES,
     UPLOADER,
+    prepare_for_the_bench,
     raise_a_deviation,
-    terms,
+    start_and_wait,
     upload,
 )
 
 from ravel.backends.lab import HumanLabBackend
-from ravel.domain.enums import CompletenessVerdict, JobState, NodeStatus, NodeType
+from ravel.domain.enums import CompletenessVerdict, JobState, NodeStatus
 from ravel.domain.execution import BackendJob, ExecutionRecord
 from ravel.domain.lab import LabHandover
 from ravel.domain.roles import AgentRole
@@ -70,39 +71,6 @@ ACTOR = "experimental-worker"
 
 #: The two files a bench delivers, keyed by the output each answers.
 DELIVERED = {OUTPUTS[0]: LOG_BYTES, OUTPUTS[1]: RAW_BYTES}
-
-
-def prepare_for_the_bench(
-    headless: Headless, prepare: Callable[..., Prepared]
-) -> Prepared:
-    """A contract this run will send to a bench, and the bench to send it to.
-
-    The backend is registered on the harness's own registry, so the workflow
-    resolves it exactly as a deployment's would — the registry is what a worker
-    process builds from its settings, and a case that resolved the backend some
-    other way would be testing a channel no deployment has. The contract is
-    built from `tests/support/lab.py`'s terms, which are the *contract's* terms
-    rather than the test's: a materializer refuses a contract that states no
-    procedure, no samples, no conditions and no outputs, because filling any of
-    those in would be making a scientific decision nobody delegated to software.
-    """
-    headless.registry.register(
-        NodeType.EXPERIMENT, HumanLabBackend(database=headless.database)
-    )
-    return prepare(**terms())
-
-
-async def start_and_wait(headless: Headless, prepared: Prepared) -> None:
-    """Begin the run and wait until the bench has the work."""
-    await headless.client.start_node_run(
-        project_id=prepared.project_id,
-        node_id=prepared.node_id,
-        actor_id=ACTOR,
-        execution_contract_version=prepared.contract.version,
-    )
-    await await_state(
-        lambda: headless.status_of(prepared.node) is NodeStatus.WAITING_EXTERNAL
-    )
 
 
 def handover_of(database: Database, prepared: Prepared) -> LabHandover:

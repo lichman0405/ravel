@@ -33,12 +33,12 @@ from typing import Any
 from fastapi import FastAPI
 
 #: Fewer routes than this means the enumeration has broken again rather than
-#: that the application shrank. The Gateway declares thirty-odd; a change that
-#: removed half of them would be a deliberate rewrite with a test to update, and
+#: that the application shrank. The Gateway declares forty-nine; a change that
+#: removed nine of them would be a deliberate rewrite with a test to update, and
 #: this number being wrong is a much louder failure than a probe that silently
 #: examines nothing. Raise it when routes are added; never lower it to make a
 #: test pass.
-EXPECTED_ROUTE_FLOOR = 30
+EXPECTED_ROUTE_FLOOR = 45
 
 
 @dataclass(frozen=True, slots=True)

@@ -81,13 +81,22 @@ class LabScreen(Scrolling):
         with TabbedContent(id="task-record"):
             with TabPane("Instruction", id="tab-instruction"):
                 yield Panel("Contract", id="instruction")
+            with TabPane("Prepared", id="tab-prepared"):
+                yield Panel("What was handed over", id="prepared")
             with TabPane("Status", id="tab-status"):
                 yield Panel("Status", id="status")
+            with TabPane("Messages", id="tab-messages"):
+                yield Panel("Messages", id="messages")
             with TabPane("Reported", id="tab-reported"):
                 yield Panel("What was reported", id="reported")
         yield Panel("Send a result", id="upload-panel")
         with Horizontal(id="upload-row"):
             yield Input(placeholder="path to the file to send", id="upload-path")
+            # Which output the file answers, asked rather than inferred: the
+            # names are the contract's, and a screen that guessed one from a
+            # filename would be deciding what a person's data is. The list is
+            # the handover's owed outputs and is filled in `refresh_everything`.
+            yield Select([], prompt="answers which output", id="upload-output")
         yield Panel("Report a deviation", id="deviation-panel")
         with Horizontal(id="deviation-row"):
             yield Select(DEVIATION_KINDS, prompt="what happened", id="deviation-kind")
@@ -117,20 +126,63 @@ class LabScreen(Scrolling):
         table.fill(fmt.lab_task_row(task) for task in self.tasks)
         if not self.tasks:
             self.selected = ""
+            self._offer_outputs([])
             self.panel("instruction").show(
                 ["No experiment tasks in this project yet. Master has not planned any."]
             )
-            self.panel("status").show([])
-            self.panel("reported").show([])
+            for name in ("prepared", "status", "messages", "reported"):
+                self.panel(name).show([])
             return
 
         identifiers = [str(task["node"]["node_id"]) for task in self.tasks]
         if self.selected not in identifiers:
             self.selected = identifiers[0]
         task = next(task for task in self.tasks if str(task["node"]["node_id"]) == self.selected)
+        self._offer_outputs(self._uploadable(task))
         self.panel("instruction").show(fmt.instruction_lines(task))
+        self.panel("prepared").show(fmt.preparation_lines(task))
         self.panel("status").show(self._status_lines(task))
+        self.panel("messages").show(self._message_lines(task))
         self.panel("reported").show(self._reported_lines(task))
+
+    @staticmethod
+    def _uploadable(task: dict[str, Any]) -> list[tuple[str, str]]:
+        """What this bench may send a file for, as `(label, output)` pairs.
+
+        **The contract's names, in the contract's order.** `output` is a term
+        the contract states, and this list is that term read back rather than a
+        list of filenames the screen has decided to accept — which is why an
+        upload answering a name nobody required is refused at the door and
+        cannot be reached from here.
+
+        An output that has *already* arrived is still offered. A bench sending a
+        corrected log is doing the ordinary thing, and the upload door records
+        the second file as a second version of the same output rather than as a
+        second output. The label says which is which, because a person who has
+        already sent one should be able to see that they are about to add to it.
+        """
+        handover = task.get("handover") or {}
+        owed = set(handover.get("missing_outputs") or [])
+        names = (handover.get("handover") or {}).get("required_outputs") or []
+        return [
+            (f"{name} — still owed" if name in owed else f"{name} — already sent", str(name))
+            for name in names
+        ]
+
+    def _offer_outputs(self, options: list[tuple[str, str]]) -> None:
+        """Put the owed outputs in the selector, keeping a choice that is still valid.
+
+        Re-read on every refresh, because a file arriving is what changes the
+        list — so the labels go stale the moment the bench uploads. A choice
+        that is still among them survives, so a refresh triggered by somebody
+        else's upload does not quietly re-point the field under the hand of
+        whoever is standing at the terminal.
+        """
+        field = self.query_one("#upload-output", Select)
+        chosen = field.value
+        field.set_options(options)
+        if isinstance(chosen, str) and any(value == chosen for _label, value in options):
+            field.value = chosen
 
     @staticmethod
     def _status_lines(task: dict[str, Any]) -> list[str]:
@@ -166,10 +218,33 @@ class LabScreen(Scrolling):
                 lines.append(f"the backend says: {fmt.elide(str(job['backend_state']), 100)}")
             if job.get("failure_class"):
                 lines.append(f"failure class {job['failure_class']}")
-        for message in task.get("messages", []):
+        return lines
+
+    @staticmethod
+    def _message_lines(task: dict[str, Any]) -> list[str]:
+        """What the Worker said to this bench, oldest first.
+
+        Its own panel rather than three lines inside the status panel, because
+        a message is addressed to the person at the terminal: an `ESCALATE` is
+        the Worker asking for authority it does not have, and it is the one
+        thing on this screen a lab user may need to act on — by waiting, or by
+        reporting a deviation — rather than merely read past.
+
+        `approved_by_contract` is printed when it is false, which is the case
+        where the Worker said something its contract did not let it say. That
+        is a fact about the project, and hiding it would make the two
+        indistinguishable on the screen the bench is actually looking at.
+        """
+        messages = task.get("messages", [])
+        if not messages:
+            return ["The Worker has not sent anything about this task."]
+        lines = []
+        for message in messages:
+            outside = "" if message.get("approved_by_contract", True) else "  [not in contract]"
             lines.append(
-                f"{message.get('kind', '')}: {fmt.elide(str(message.get('body', '')), 100)}"
+                f"{fmt.moment(message.get('sent_at'))}  {message.get('kind', '')}{outside}"
             )
+            lines.append(f"    {fmt.elide(str(message.get('body', '')), 120)}")
         return lines
 
     @staticmethod
@@ -208,21 +283,37 @@ class LabScreen(Scrolling):
         self.notice("Up to date.", level="good")
 
     async def action_upload(self) -> None:
-        """Send the file named in the path field.
+        """Send the file named in the path field, as the output named beside it.
 
-        The bytes are read here and posted here, in one request, because that
-        is what the Gateway's upload route takes. A path that does not exist, or
-        that is a directory, is refused before the request is made — a person
-        who mistyped a filename should be told so by the screen rather than by
-        a 500 from a Gateway that tried to read it.
+        **Both fields are needed and the screen says which is missing**, because
+        the Gateway's door asks which required output the bytes answer and
+        refuses a file that answers nothing. Leaving the choice to the filename
+        would make the screen the thing deciding what a person's data is; the
+        contract already said, and this control is where a bench repeats it.
+
+        The bytes are read here and posted here, in one request, because that is
+        what the route takes. A path that does not exist, or that is a
+        directory, is refused before the request is made — a person who mistyped
+        a filename should be told so by the screen rather than by a 500 from a
+        Gateway that tried to read it.
+
+        What comes back decides what the screen says. The route reports which
+        outputs have arrived and which are still owed, so the notice repeats the
+        contract's own arithmetic rather than counting anything here, and a
+        delivery that did not reach the run is said out loud instead of being
+        left to look like a success.
         """
         field = self.query_one("#upload-path", Input)
+        chosen = self.query_one("#upload-output", Select)
         if not self.selected:
             self.notice("No task is selected, so there is nothing to attach this to.", level="bad")
             return
         named = field.value.strip()
         if not named:
             self.notice("Name a file to send.", level="bad")
+            return
+        if not isinstance(chosen.value, str) or not chosen.value:
+            self.notice("Say which required output this file answers.", level="bad")
             return
 
         path = Path(named).expanduser()
@@ -235,21 +326,31 @@ class LabScreen(Scrolling):
             self.notice(f"could not read {named}: {refused}", level="bad")
             return
 
-        node = self._selected_node()
-        self.notice(f"Sending {path.name} ({len(content)} bytes)…", level="wait")
+        output = chosen.value
+        self.notice(f"Sending {path.name} as {output} ({len(content)} bytes)…", level="wait")
         try:
-            await self.client.upload(
+            answer = await self.client.send_output(
                 self.project_id,
+                self.selected,
+                output,
                 content,
-                name=path.name,
                 filename=path.name,
                 media_type=_media_type(path),
             )
         except Exception as refused:  # a refusal is shown, not swallowed
             self.notice(f"the Gateway refused the upload: {refused}", level="bad")
             return
+
         field.value = ""
-        self.notice(f"Sent {path.name} for {node.get('display_id', 'this task')}.", level="good")
+        missing = [str(name) for name in answer.get("missing_outputs") or []]
+        said = f"Sent {path.name} as {output}."
+        said += (
+            f" Still owed: {', '.join(missing)}." if missing else " That was everything owed."
+        )
+        if not answer.get("delivered_to_run", False):
+            said += " The run has not been told, so its wait is still open."
+        self.notice(said, level="good")
+        await self.refresh_everything()
 
     async def action_report_deviation(self) -> None:
         """Record that the plan and the bench disagree.

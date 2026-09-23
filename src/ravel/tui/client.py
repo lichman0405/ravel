@@ -337,6 +337,42 @@ class GatewayClient:
             description=description,
         )
 
+    async def send_output(
+        self,
+        project_id: str,
+        task_id: str,
+        output: str,
+        content: bytes,
+        *,
+        filename: str = "",
+        media_type: str = "",
+    ) -> dict[str, Any]:
+        """Send the file that answers one output the bench was asked to produce.
+
+        **The output is named, and that is the difference between this and
+        `upload`.** The artifact door below files bytes as an artifact and
+        nothing more; this one files them *against a handover*, under a name
+        the contract required, and tells the waiting run. The run then decides
+        from what is recorded whether it has everything — which is why a file
+        that answers nothing is refused here with the names that are owed, and
+        why the answer says which of them are still missing.
+
+        A name rather than a guess from the filename: which file answers which
+        output is the contract's statement, and a screen that inferred it would
+        be deciding what a person's data is.
+        """
+        return await self._request(
+            "POST",
+            f"/projects/{project_id}/lab/tasks/{task_id}/uploads",
+            params={
+                "output": output,
+                "filename": filename,
+                "media_type": media_type,
+            },
+            content=content,
+            headers={"Content-Type": media_type or "application/octet-stream"},
+        )
+
     async def upload(
         self,
         project_id: str,
@@ -373,6 +409,38 @@ class GatewayClient:
 
     async def harness_health(self, project_id: str) -> dict[str, Any]:
         return await self._request("GET", f"/projects/{project_id}/runtime/harness")
+
+    async def service_health(self, project_id: str) -> dict[str, Any]:
+        """Whether the long-running processes are still reporting.
+
+        One panel is not like the others on the admin screen and this is it:
+        the answer is a process's own account of itself, because a supervisor
+        that died leaves nothing else behind. What the Gateway adds is the
+        judgement — how long the silence has been, against the cadence the
+        service promised.
+        """
+        return await self._request("GET", f"/projects/{project_id}/runtime/services")
+
+    async def backend_health(self, project_id: str) -> dict[str, Any]:
+        """Which backends have run this project's work, and the cluster's setup.
+
+        Not which backends are *registered*: the registry belongs to the
+        worker's command line, in another process. What this answers is a fact
+        in the database — what the work was actually handed to — plus the Slurm
+        configuration with the secret represented by the name of the setting
+        that holds it.
+        """
+        return await self._request("GET", f"/projects/{project_id}/runtime/backends")
+
+    async def jobs(self, project_id: str) -> dict[str, Any]:
+        """Backend jobs, split into the ones still open and the ones that ended."""
+        return await self._request("GET", f"/projects/{project_id}/runtime/jobs")
+
+    async def reconciliations(self, project_id: str) -> dict[str, Any]:
+        """Runs RAVEL found dead, and what it did about them."""
+        return await self._request(
+            "GET", f"/projects/{project_id}/runtime/reconciliations"
+        )
 
     # ── The live view ───────────────────────────────────────────────────────
 

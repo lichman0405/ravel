@@ -1392,6 +1392,43 @@ class ProjectEventCounterRow(Base):
     next_seq: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
 
 
+class RuntimeServiceRow(Base):
+    """A long-running process saying it is still there.
+
+    **One row per service, not one per process start.** This is not a record of
+    what happened — the log is — it is the *current* answer to "is the thing
+    that drives projects actually running", which is a question about now. So
+    `service` is the key and everything else is overwritten on every beat: a
+    process that restarts takes its own row over with a new `instance` and a
+    new `started_at`, and there is never more than one supervisor row to
+    reconcile. A table of restarts would answer a question nobody asks on this
+    screen and would have to be pruned.
+
+    **`heartbeat_at` is the only column that has to keep moving**, and that is
+    what makes this table worth having rather than inferring liveness from the
+    work: a supervisor that died leaves a project that is merely idle looking
+    exactly like one that is being driven. Nothing about the project's own
+    state distinguishes the two, and no amount of reading the DAG will.
+
+    `detail` is JSONB for the reason every aggregate's inside is: it is a
+    process's own summary of itself — which projects it holds, how many
+    runtimes are open — and it is never queried on its own. Note that it is
+    *not* project-scoped and must not be handed out as it stands: the routes
+    that read this filter it to the project the caller is asking about.
+    """
+
+    __tablename__ = "runtime_services"
+
+    service: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: Which process, as `host:pid`. A restart changes it, which is how a
+    #: reader tells "the supervisor has been up for six hours" from "the
+    #: supervisor came back a minute ago".
+    instance: Mapped[str] = mapped_column(String(255), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
 def _install_guards(_target: Any, connection: Any, **_: Any) -> None:
     """Attach the DDL guards whenever the metadata creates its tables.
 

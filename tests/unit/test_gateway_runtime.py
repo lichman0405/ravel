@@ -124,7 +124,7 @@ def test_every_administrator_route_is_a_read() -> None:
     }
 
     assert methods == {"GET"}
-    assert len(router.routes) >= 4, "the admin surface shrank to almost nothing"
+    assert len(router.routes) >= 8, "the admin surface shrank to almost nothing"
 
 
 @pytest.mark.parametrize("field", ["dsh_provider", "dsh_model"])

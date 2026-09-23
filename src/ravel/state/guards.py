@@ -67,6 +67,13 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: deviation *asked for* is as fixed as any other record's contents; what may
 #: change is which decision answered it, and the identity trigger below is what
 #: keeps that the only thing.
+#:
+#: `runtime_services` is the one entry that is not a record at all. It holds a
+#: process's account of itself — when it started, when it last spoke — and the
+#: whole row is meant to be rewritten on every beat, so it is here because
+#: `UPDATE` is its only write. What the identity trigger protects is the row's
+#: *name*, so that a process cannot make a dead service look alive by beating
+#: on its row.
 UPDATABLE_TABLES: frozenset[str] = frozenset(
     {
         "projects",
@@ -80,6 +87,7 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "deviation_records",
         "project_memberships",
         "project_event_counters",
+        "runtime_services",
     }
 )
 
@@ -209,6 +217,17 @@ MEMBERSHIP_IDENTITY_COLUMNS: tuple[str, ...] = (
     "granted_by",
 )
 
+#: The one column on `runtime_services` a heartbeat may not touch.
+#:
+#: Everything else on the row is the reporting process's own account of itself
+#: — which instance it is, when it started, when it last spoke — and all of it
+#: is meant to be rewritten on every beat, which is why this list is one name
+#: long rather than the usual "everything except the state columns". `service`
+#: is the row's identity, so protecting it is what stops a process from taking
+#: over *another* service's row and making a dead supervisor look alive by
+#: writing `temporal-worker`'s beat onto it.
+RUNTIME_SERVICE_IDENTITY_COLUMNS: tuple[str, ...] = ("service",)
+
 _TRANSITION_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS ravel_node_transitions (
     from_status text NOT NULL,
@@ -322,6 +341,7 @@ _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
 _LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
 _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
 _MEMBERSHIP_IDENTITY_TRIGGER = "ravel_project_memberships_identity"
+_RUNTIME_SERVICE_IDENTITY_TRIGGER = "ravel_runtime_services_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -338,6 +358,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _LAB_HANDOVER_IDENTITY_TRIGGER,
     _DEVIATION_IDENTITY_TRIGGER,
     _MEMBERSHIP_IDENTITY_TRIGGER,
+    _RUNTIME_SERVICE_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -502,6 +523,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=MEMBERSHIP_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "runtime_services" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_RUNTIME_SERVICE_IDENTITY_TRIGGER,
+                table="runtime_services",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=RUNTIME_SERVICE_IDENTITY_COLUMNS,
             )
         )
 

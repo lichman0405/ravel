@@ -297,6 +297,42 @@ class RavelTUI(App[None]):
         self.project_id = identifiers[(here + 1) % len(identifiers)]
         await self.show_project()
 
+    async def reload_memberships(self) -> None:
+        """Re-read what this person is in, and redraw only if that matters here.
+
+        Called when the membership list itself has changed underneath the
+        screen — chiefly when an owner opens a project, which `ctrl+n` could
+        not otherwise reach, since the list is read at sign-in. The current
+        project is deliberately kept: opening a project is not the same wish as
+        leaving the one being looked at.
+
+        **The screen is only rebuilt when the caller's standing in *this*
+        project has changed.** A role granted, withdrawn or altered arrives
+        here too, and the Gateway has been enforcing it since the moment it was
+        written — what this redraw does is bring the *screen* into line with a
+        decision already in force. But a change to some other project does not
+        make the mounted screen wrong, and tearing it down for one would throw
+        away the notice line, the open tab and the reader's place in it. A
+        demotion still lands on the screen its new role gets, because
+        `show_project` picks by role rather than by remembering which one was
+        drawn last.
+        """
+        before = self._standing_key()
+        self.memberships = await self.client.projects()
+        if self._standing_key() != before:
+            await self.show_project()
+
+    def _standing_key(self) -> tuple[str, str] | None:
+        """This caller's place in the current project, as something comparable.
+
+        `None` when they are in none, which is a different fact from a
+        membership in a project they have since been withdrawn from — and the
+        one case where the mounted screen has to go, because there is no
+        standing left to pick a screen from.
+        """
+        standing = self.standing()
+        return None if standing is None else (str(standing["project_id"]), str(standing["role"]))
+
     async def action_quit_app(self) -> None:
         self.exit()
 

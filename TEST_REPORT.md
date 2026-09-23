@@ -1143,6 +1143,75 @@ rather than implied: an account cannot be deactivated, and no membership expires
 on a clock. `README.md`'s security list said the same thing and now says this
 instead.
 
+### 7.10 P11-09: role-specific surfaces
+
+`docs/08` §5 gave three people three views and the console had one screen with a
+role check in front of it. This item is the claim that the surfaces are
+*genuinely different* — three screens whose actions differ because the authority
+behind them differs — and the differences that matter are absences: the
+administrator's console has no approval control because an administrator has no
+approval authority, and an absent method is the honest rendering of absent
+authority rather than a disabled button.
+
+**Two of the three screens already existed and grew; the operator's is new.**
+The reason it is new is that everything an operator needs — is the supervisor
+alive, is Temporal reachable, what has the work actually been handed to, which
+jobs are stuck, what had to be recovered — is a fact about the runtime rather
+than about a project, and there was nowhere to read it. It is answered
+*project-scoped*: the panel reports how many projects a service holds and not
+which, because a membership in this project is what admits the caller and other
+people's research is not the price of an uptime check.
+
+**The one panel that reads a process's account of itself says so.** Whether a
+supervisor is running is not derivable from any row — a project it stopped
+driving and a project with nothing left to do are the same state — so the
+alternative to trusting the report is not verifying it, it is having no answer.
+What is not taken on trust is the service's word for its own health: the age is
+computed by the Gateway from a clock it owns, against a cadence the service
+promised in its own report, and `runtime_services` is guarded so that a
+service's identity columns cannot be rewritten. A service that has never
+reported is drawn as one that has never reported, which is a different sentence
+from one that has gone quiet, because the two send an operator to different
+places. `KNOWN_LIMITATIONS.md` L-30 records what remains unverified about it.
+
+**One real defect, found by the acceptance case and fixed in the screen.** The
+bench's Send-a-result control posted the file to the generic artifact route and
+never said which required output it answered. That route files bytes as an
+artifact and nothing more, so an upload from the console could not become part
+of a delivery: the prepared panel's split of sent-and-owed could never move, and
+the one control the item names beside *required outputs* was disconnected from
+them. The fix gives the panel a selector built from the contract's own names —
+so a file is attached to an output that was actually owed, and a filename cannot
+be mistaken for one — and routes the upload through the handover door, which
+checks the name against what was handed over, records the version against the
+handover, and tells the waiting run. The A/B is recorded: with the old screen the
+new acceptance case fails, and the failure is the panel never leaving
+`still owed`. A18's lab case moved with it, because a world nothing has been
+handed to has no output to answer; it now runs on a project a bench has really
+been given, and the e2e case that used the old door asserts the refusal instead.
+
+| | |
+|---|---|
+| Acceptance | `tests/acceptance/test_phase11_roles.py` — **5 passed** in 6.97s (the three screens, the operator's prohibitions, and the distinctness of the mapping) |
+| Acceptance, A18 | `tests/acceptance/test_surfaces.py` — **4 passed**, including the lab case rebuilt on a real handover |
+| Acceptance, P11-06 | `tests/acceptance/test_phase11_humanlab.py` — **3 passed**, unchanged, after its two preparation helpers moved into `tests/support/lab.py` for the second caller |
+| End to end | `make test-e2e` — **27 passed**; `tests/e2e/test_tui.py` alone is **19**, six of them added here |
+| Integration, gateway | `tests/integration/gateway/test_admin.py` and `tests/integration/state/test_services.py` — **38 passed** in 5.79s |
+| Integration, all | `make test-integration` — **579 passed, 126 deselected** |
+| Unit | `make test-unit` — **1088 passed** |
+| Static analysis | `ruff check src tests scripts` and `pyright src tests` — clean, 0 errors, 0 warnings |
+| Matrix | `make phase11-acceptance` — `PASS P11-09 role-specific surfaces 5 passed`, **9/9 demonstrated** |
+
+**What the acceptance case does that a screen test cannot.** The bench's case
+walks the whole channel through the console: the node is prepared by the real
+materializer, the run is a real workflow, and the two files are typed into the
+path field and attached to outputs chosen from the contract's list. After the
+first the panel splits and the node is *still waiting* — a file that answers
+half of what was owed finishes nothing; after the second the run reads what was
+recorded, closes the handover and moves the node to the seat that judges it.
+Nothing is asserted from the screen alone: the artifacts are read back out of
+MinIO through the repository, attributed to the account that sent them.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

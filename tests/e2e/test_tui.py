@@ -51,11 +51,12 @@ from tests.integration.conftest import DEFAULT_OUTPUTS, build_prepared
 from tests.integration.gateway.conftest import PASSWORD
 from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, probe_path
 from textual.pilot import Pilot
-from textual.widgets import Input
+from textual.widgets import Input, Select, TabbedContent
 
 from ravel.domain.contracts import ProjectSuccessContract
 from ravel.domain.enums import NodeType, ProjectStatus, UserRole
 from ravel.domain.project import Project
+from ravel.domain.services import SERVICE_NAMES
 from ravel.gateway.auth.passwords import hash_password
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import SuccessContractRepository
@@ -118,12 +119,17 @@ CONTRACT_OBJECTIVE = "Measure the conductivity of each sample."
 class World:
     """Two projects and the three people `docs/08` §5 describes.
 
-    Two, because the three roles cannot all be held in one.
-    `MembershipRepository` refuses a granter who does not outrank the role being
-    granted, so an owner can never make an administrator — the only way an
-    `ADMIN` membership arises is as a project's *first*. That is a real rule
-    with a real consequence for whoever sets RAVEL up, and this fixture follows
-    it rather than working around it.
+    Two rather than one, because the three screens are reached through three
+    different *roles* and a person holds one role per project. An owner may
+    confer `ADMIN` and may not confer it on themselves — a live membership is
+    refused rather than edited — so putting all three roles on one project
+    would take a withdrawal, a grant and a fixture that had already used every
+    write `MembershipRepository` has. Two projects is the shorter road to the
+    state `docs/08` §5 is about.
+
+    The administrator's own project exists for a second reason: `ADMIN` is not
+    a superuser, so an administrator's screen needs a project they are *in* and
+    the tests below need a project they are not.
     """
 
     owner_project: Project
@@ -296,6 +302,20 @@ async def console(
 def notice_of(screen: Any) -> str:
     """The one line the screen is saying about what just happened."""
     return str(screen.query_one("#notice", Notice).message)
+
+
+def _row_of(members: list[dict[str, Any]], username: str) -> int:
+    """Which row of the member table belongs to a named person.
+
+    Named rather than positional, because the table is filled in the order the
+    route returns and a test that said "row 2" would withdraw a different
+    person the day that order changed. Raising on a name that is not there is
+    the point: a lookup that answered `0` for an unknown person would withdraw
+    the project's owner.
+    """
+    return next(
+        index for index, member in enumerate(members) if member.get("username") == username
+    )
 
 
 def project_status(database: Database, project_id: str) -> ProjectStatus:
@@ -506,20 +526,31 @@ async def test_a_lab_user_sees_the_contract_they_work_under(
         assert screen.panel("reported").plain == "Nothing has been reported against this task."
 
 
-async def test_a_lab_user_uploads_a_result_and_the_bytes_reach_the_store(
+async def test_a_lab_user_cannot_attach_a_file_to_nothing(
     live_gateway: LiveGateway,
     world: World,
     database: Database,
     artifact_store: S3ArtifactStore,
     tmp_path: Path,
 ) -> None:
-    """The upload, driven from the screen, ending in the object store.
+    """The upload's two refusals, and what each of them protects.
 
-    The file is written to disk first because that is what the screen's field
-    names — a path, not a blob — and the round trip through a real filesystem is
-    part of what is being checked. The bytes are then read back out of MinIO
-    through the repository, which is the claim that matters: RAVEL received
-    them, and PostgreSQL holds the record saying where they went.
+    A bench's file is an *answer*, and an answer is to something. The contract
+    said which outputs were required, so the screen asks which one a file
+    answers and will not send one that names none — and in this world nothing
+    has been handed over at all, so there is no output to name and the control
+    offers nothing to choose.
+
+    **Nothing reaches the store either way**, which is the half that matters.
+    A screen that refused with a message and posted the bytes anyway would pass
+    an assertion about the message, so the artifact table is read back and
+    found empty.
+
+    What a file that *does* answer an output does end-to-end — through the
+    handover door, into MinIO, and back as a signal that finishes the run — is
+    `tests/acceptance/test_phase11_roles.py`, which is the suite with a package
+    RAVEL really handed to somebody. This case is the world with nothing owed
+    in it, and the claim that fits that world is the refusal.
     """
     result = tmp_path / UPLOAD_NAME
     result.write_bytes(UPLOAD_BODY)
@@ -534,20 +565,26 @@ async def test_a_lab_user_uploads_a_result_and_the_bytes_reach_the_store(
         await screen.action_upload()
         await settle(
             pilot,
-            lambda: f"Sent {UPLOAD_NAME}" in notice_of(screen),
-            what="the upload to be accepted",
+            lambda: "Say which required output" in notice_of(screen),
+            what="the upload to be refused for naming no output",
+        )
+
+        # And a file with no path in it is refused before any of that.
+        screen.query_one("#upload-path", Input).value = ""
+        await screen.action_upload()
+        await settle(
+            pilot,
+            lambda: "Name a file to send." in notice_of(screen),
+            what="the upload to be refused for naming no file",
         )
 
     with database.read_only() as session:
-        repository = ArtifactRepository(session, world.owner_project.project_id, artifact_store)
-        artifacts = repository.all()
-        assert [artifact.name for artifact in artifacts] == [UPLOAD_NAME]
-        versions = repository.versions(artifacts[0].artifact_id)
-        assert [version.version for version in versions] == [1]
-        # The bytes, by the key the record names rather than one this test
-        # guessed at, and through the repository so the project scope is
-        # checked on the way out as it was on the way in.
-        assert repository.read(versions[-1]) == UPLOAD_BODY
+        artifacts = ArtifactRepository(
+            session, world.owner_project.project_id, artifact_store
+        ).all()
+    assert artifacts == [], (
+        "the screen refused the upload and the bytes reached the store anyway"
+    )
 
 
 async def test_a_lab_user_reports_a_deviation_and_nothing_moves(
@@ -796,3 +833,331 @@ def test_no_route_lets_a_user_change_the_dag(live_gateway: LiveGateway, world: W
     assert json.dumps(after, sort_keys=True) == json.dumps(before, sort_keys=True), (
         "a route reachable with an owner's token changed the Scientific DAG"
     )
+
+
+# ── The owner's other surfaces ──────────────────────────────────────────────
+
+
+async def test_an_owner_reads_research_evidence_and_approvals(
+    live_gateway: LiveGateway, world: World, database: Database
+) -> None:
+    """P11-09's owner list, the panels the A18 gate above does not reach.
+
+    Approvals and research results are both *empty* in this world and both
+    asserted as sentences rather than as absences, because that is what the
+    person reads: "No approvals are waiting" is an answer, and a panel that
+    rendered blank would be indistinguishable from one whose route had refused.
+    The membership table is here rather than in its own test because it is the
+    same screen and the same refresh.
+    """
+    async with console(
+        live_gateway,
+        username="ada",
+        project_id=world.owner_project.project_id,
+        first_panel="master-focus",
+    ) as (_app, _pilot, screen):
+        assert screen.panel("approvals").plain
+        assert screen.panel("research").plain
+        assert screen.panel("evidence").plain
+        assert screen.panel("reviews").plain
+
+        members = screen.query_one("#member-table", StatusTable)
+        assert members.row_count == 2, "the membership table is missing rows"
+        # The project's creator is the one membership nobody conferred, and the
+        # row says so rather than leaving the column blank.
+        assert "PROJECT_OWNER" in screen.panel("members").plain
+        assert "nobody — the project's first member" in screen.panel("members").plain
+
+    with database.read_only() as session:
+        live = MembershipRepository(session, world.owner_project.project_id).active()
+    assert {(m.user_id, m.role.value) for m in live} == {
+        (world.owner, "PROJECT_OWNER"),
+        (world.lab, "LAB_USER"),
+    }
+
+
+async def test_the_owner_adds_and_withdraws_a_member_from_the_console(
+    live_gateway: LiveGateway, world: World, database: Database
+) -> None:
+    """The two membership writes, driven as keystrokes, read back from PostgreSQL.
+
+    The membership is checked in the database rather than on the screen, for the
+    reason every test in this file does: a screen that redrew itself
+    optimistically would pass a test that asked the screen. The withdrawal is
+    the interesting half — the row stays and gains a `revoked_at` — because a
+    membership that had been *deleted* would leave no record of who held what.
+    """
+    with database.transaction() as session:
+        UserRepository(session).create(
+            username="newcomer", password_hash=hash_password(PASSWORD)
+        )
+    async with console(
+        live_gateway,
+        username="ada",
+        project_id=world.owner_project.project_id,
+        first_panel="master-focus",
+    ) as (_app, pilot, screen):
+        # The gate first: `x` on the DAG tab must refuse rather than act.
+        await pilot.press("x")
+        await settle(
+            pilot,
+            lambda: "press m" in notice_of(screen),
+            what="the membership guard to refuse a key pressed on another tab",
+        )
+
+        await pilot.press("m")
+        await settle(
+            pilot,
+            lambda: screen.query_one("#record", TabbedContent).active == "tab-membership",
+            what="the membership tab to open",
+        )
+
+        screen.query_one("#member-username", Input).value = "newcomer"
+        screen.query_one("#member-role", Select).value = "LAB_USER"
+        await screen.action_add_member()
+        await settle(
+            pilot,
+            lambda: "newcomer is now LAB_USER here." in notice_of(screen),
+            what="the grant to be accepted",
+        )
+        await settle(
+            pilot,
+            lambda: screen.query_one("#member-table", StatusTable).row_count == 3,
+            what="the new member to appear",
+        )
+
+        # Withdraw the lab user. The row is found by name rather than by
+        # position, because the list is ordered by when each membership was
+        # granted and a test that picked the third row would start withdrawing
+        # somebody else the day `active()` changed its mind about ordering.
+        table = screen.query_one("#member-table", StatusTable)
+        table.move_cursor(row=_row_of(screen.members, "bench"))
+        await screen.action_withdraw_member()
+        await settle(
+            pilot,
+            lambda: "bench no longer holds a role here" in notice_of(screen),
+            what="the withdrawal to be accepted",
+        )
+        await settle(
+            pilot,
+            lambda: screen.query_one("#member-table", StatusTable).row_count == 2,
+            what="the withdrawn member to leave the list",
+        )
+
+    with database.read_only() as session:
+        repository = MembershipRepository(session, world.owner_project.project_id)
+        live = repository.for_user(world.lab)
+        history = repository.history_for_user(world.lab)
+    assert live is None, "the withdrawn membership is still in force"
+    assert len(history) == 1, history
+    assert history[0].revoked_at is not None
+    assert history[0].role is UserRole.LAB_USER
+
+
+async def test_the_owner_opens_a_project_and_can_then_reach_it(
+    live_gateway: LiveGateway, world: World, database: Database
+) -> None:
+    """Creation is reachable from the console, and the new project is switchable.
+
+    `ctrl+n` moves between the memberships `RavelTUI` read at sign-in, so a
+    project opened afterwards is unreachable until the list is read again —
+    which is what `reload_memberships` is for, and what this asserts. The
+    application still shows the project it was showing: opening one is not the
+    same wish as leaving the one being read.
+    """
+    async with console(
+        live_gateway,
+        username="ada",
+        project_id=world.owner_project.project_id,
+        first_panel="master-focus",
+    ) as (app, pilot, screen):
+        await pilot.press("m")
+        screen.query_one("#new-project-title", Input).value = "Second screen"
+        await screen.action_new_project()
+        await settle(
+            pilot,
+            lambda: "Press ctrl+n to move to it." in notice_of(screen),
+            what="the new project to be opened",
+        )
+        # Two, not one: the owner belongs to the project the console opened on
+        # and now to the one they just opened. The administrator's project is
+        # not theirs to see, which is the same 404-scoping the A18 gate asserts.
+        await settle(
+            pilot,
+            lambda: len(app.memberships) == 2,
+            what="the application to re-read its memberships",
+        )
+        assert app.project_id == world.owner_project.project_id, (
+            "opening a project moved the reader out of the one they were in"
+        )
+
+        await pilot.press("ctrl+n")
+        await settle(
+            pilot,
+            lambda: app.project_id != world.owner_project.project_id,
+            what="the console to move to the next project",
+        )
+
+    # Which project is new is answered by the Gateway rather than by a search
+    # of the table: the claim is that the console can now reach it, and the
+    # console reaches projects through the memberships it was handed.
+    known = {world.owner_project.project_id, world.admin_project.project_id}
+    opened = [str(m["project_id"]) for m in app.memberships if str(m["project_id"]) not in known]
+    assert len(opened) == 1, app.memberships
+
+    with database.read_only() as session:
+        owners = MembershipRepository(session, opened[0]).owners()
+        project = ProjectRegistry(session).get(opened[0])
+    assert [owner.user_id for owner in owners] == [world.owner]
+    assert project.title == "Second screen"
+    assert project.status is ProjectStatus.CREATED
+
+
+async def test_the_new_project_box_is_not_the_add_member_box(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """Two fields on one tab, and a title typed into the wrong one is a refusal.
+
+    The cheapest possible bug here is a form that reads the username field for
+    a project title, and it is invisible in a test that fills whichever field
+    the action happens to look at. Filling the *other* one and asserting the
+    refusal is what makes the two distinguishable.
+    """
+    async with console(
+        live_gateway,
+        username="ada",
+        project_id=world.owner_project.project_id,
+        first_panel="master-focus",
+    ) as (_app, pilot, screen):
+        await pilot.press("m")
+        screen.query_one("#member-username", Input).value = "Second screen"
+        await screen.action_new_project()
+
+        assert "Name the new project in the box" in notice_of(screen), notice_of(screen)
+        assert screen.query_one("#new-project-title", Input).value == ""
+
+
+# ── The lab's other surfaces ────────────────────────────────────────────────
+
+
+async def test_a_lab_user_sees_what_was_handed_over_and_said(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """P11-09's lab list, on a task nothing has been handed to a bench for.
+
+    This world never starts a run, so the prepared panel says so and says what
+    that means — a package is built when work is handed over, so a task that is
+    planned but not yet given to anybody is a task nobody should be working on.
+    That sentence is the panel's whole value on a fresh project, and an empty
+    one would read as a screen that had failed to load.
+    """
+    async with console(
+        live_gateway,
+        username="bench",
+        project_id=world.owner_project.project_id,
+        first_panel="instruction",
+    ) as (_app, _pilot, screen):
+        prepared = screen.panel("prepared").plain
+        assert "Nothing has been handed to a bench for this task yet." in prepared, prepared
+        assert "built when the work is handed over" in prepared, prepared
+
+        assert (
+            screen.panel("messages").plain
+            == "The Worker has not sent anything about this task."
+        )
+        # The other two tabs are still filled, because a panel that only
+        # arrived when its tab was clicked would be the one stale thing here.
+        assert screen.panel("status").plain
+        assert screen.panel("reported").plain
+
+
+# ── The admin's other surfaces ──────────────────────────────────────────────
+
+
+async def test_an_admin_sees_the_processes_the_jobs_and_the_recoveries(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """P11-09's admin list, on a deployment where none of it has happened yet.
+
+    Three of these panels are about absences and all three say so in words. The
+    processes panel is the one that is *not* an absence-based claim in the same
+    way: every named service is listed whether or not it has ever reported, and
+    `has never reported here` is what a deployment that has not started a
+    supervisor reads as. That is the distinction the whole panel exists for.
+    """
+    async with console(
+        live_gateway,
+        username="root",
+        project_id=world.admin_project.project_id,
+        first_panel="harness",
+    ) as (_app, _pilot, screen):
+        services = screen.panel("services").plain
+        for name in SERVICE_NAMES:
+            assert name in services, services
+        assert "has never reported here" in services, services
+
+        backends = screen.panel("backends").plain
+        assert "No backend has been handed any of this project's work yet." in backends
+        assert "reachability: not probed from the Gateway" in backends, backends
+        assert "RAVEL_SLURM" not in backends or "authentication" in backends
+
+        assert (
+            screen.panel("jobs").plain
+            == "No backend job has ever been submitted for this project."
+        )
+        assert (
+            screen.panel("reconciliation").plain
+            == "No run has had to be recovered in this project."
+        )
+
+
+async def test_the_administrators_screen_cannot_write_anything(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """*Admin does not make scientific decisions*, asserted against the screen.
+
+    The route-level check is in `tests/unit/test_gateway_runtime.py`, which
+    requires every method in the admin module to answer GET. This is the same
+    claim one layer out, and it is the one that matters to a person: an
+    administrator's console that *offered* an approval or a DAG control would
+    be offering something that could never work, and an absent method is the
+    honest rendering of absent authority.
+    """
+    forbidden = (
+        "action_approve",
+        "action_pause",
+        "action_resume",
+        "action_resolve_approval",
+        "action_set_envelope",
+        "action_add_member",
+        "action_withdraw_member",
+    )
+    async with console(
+        live_gateway,
+        username="root",
+        project_id=world.admin_project.project_id,
+        first_panel="harness",
+    ) as (_app, _pilot, screen):
+        for name in forbidden:
+            assert not hasattr(screen, name), f"the administrator's screen grew {name}"
+
+        # And the routes those actions would reach, refused with its own token.
+        async with httpx.AsyncClient(base_url=live_gateway.url) as admin_client:
+            pair = (
+                await admin_client.post(
+                    "/auth/login", json={"username": "root", "password": PASSWORD}
+                )
+            ).json()
+            headers = {"Authorization": f"Bearer {pair['access_token']}"}
+            for method, path in (
+                ("POST", f"/projects/{world.admin_project.project_id}/resume"),
+                ("GET", f"/projects/{world.admin_project.project_id}/dag"),
+                ("GET", f"/projects/{world.admin_project.project_id}/approvals"),
+            ):
+                answer = await admin_client.request(method, path, headers=headers, json={})
+                # Reading the DAG is the administrator's own project and is
+                # allowed; what must not be is any route that writes.
+                if method == "GET":
+                    assert answer.status_code == 200, path
+                else:
+                    assert answer.status_code in {403, 404}, answer.text

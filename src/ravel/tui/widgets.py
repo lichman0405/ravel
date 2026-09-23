@@ -71,10 +71,23 @@ class StatusTable(DataTable[Text]):
     A `DataTable` rather than a panel of lines because these are genuinely
     tabular — a DAG row and a task row both have a status, an identifier and a
     thing — and a person scanning for the failed one wants the columns lined up.
+
+    **A table whose first column is not a status says so.** The member table's
+    first column is a *role*, and running a role through this vocabulary would
+    put a `?` beside every one of them: `tokens` deliberately has no glyph for
+    something it does not know, because "this program does not recognise that
+    status" is worth seeing on a DAG. A role is not an unrecognised status, it
+    is not a status at all, and `first_column_is_a_status=False` is how a table
+    asks for the columns it actually has.
     """
 
     def __init__(
-        self, columns: Sequence[str], *, id: str | None = None, selectable: bool = False
+        self,
+        columns: Sequence[str],
+        *,
+        id: str | None = None,
+        selectable: bool = False,
+        first_column_is_a_status: bool = True,
     ) -> None:
         super().__init__(
             id=id,
@@ -92,18 +105,26 @@ class StatusTable(DataTable[Text]):
             show_cursor=selectable,
         )
         self._columns = list(columns)
+        self._first_is_a_status = first_column_is_a_status
         self.add_columns(*self._columns)
 
     def fill(self, rows: Iterable[tuple[str, str, str]]) -> None:
         """Replace every row. `(status, identifier, summary)`.
 
         The status column is drawn from `tokens`, so a new status is a row in
-        the token table and not a change here.
+        the token table and not a change here. With
+        `first_column_is_a_status=False` the first field is drawn as plain
+        text, in the muted style the second column uses.
         """
         self.clear()
         for status, identifier, summary in rows:
+            first = (
+                Text(f"{symbol_for(status)} {status}", style=colour_for(status))
+                if self._first_is_a_status
+                else Text(status, style=TOKENS["text"])
+            )
             self.add_row(
-                Text(f"{symbol_for(status)} {status}", style=colour_for(status)),
+                first,
                 Text(identifier, style=TOKENS["muted"]),
                 Text(summary, style=TOKENS["text"]),
             )

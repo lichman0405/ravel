@@ -27,26 +27,29 @@ from typing import Any
 import pytest
 from tests.dsh.mcp_probe import ProbeResult, ToolCall, probe
 from tests.e2e.conftest import Headless, LiveGateway
-from tests.e2e.test_tui import (
-    UPLOAD_BODY,
-    UPLOAD_NAME,
-    World,
-    console,
-    notice_of,
-    project_status,
-    settle,
-)
+from tests.e2e.test_tui import World, console, notice_of, project_status, settle
 from tests.integration.conftest import Prepared
+from tests.integration.gateway.conftest import PASSWORD
 from tests.integration.roles.conftest import RoleEnvironment
+from tests.support.lab import (
+    LOG_BYTES,
+    OUTPUTS,
+    a_bench_user,
+    start_and_wait,
+    terms,
+)
+from textual.widgets import Input, Select
 
+from ravel.backends.lab import HumanLabBackend
 from ravel.config import REPO_ROOT, Settings
 from ravel.domain.contracts import ProjectSuccessContract
-from ravel.domain.enums import NodeStatus, ProjectStatus
+from ravel.domain.enums import NodeStatus, NodeType, ProjectStatus
 from ravel.domain.roles import AgentRole
 from ravel.dsh.pool import DshRuntimePool
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import SuccessContractRepository
 from ravel.state.repositories.dag import DagRepository
+from ravel.state.repositories.lab import LabHandoverRepository, arrived_outputs
 from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.repositories.research import ArtifactRepository
@@ -289,7 +292,8 @@ async def test_a18_an_owner_sees_the_project_and_can_stop_and_start_it(
 
 async def test_a18_a_lab_user_sees_their_task_uploads_and_reports_a_deviation(
     live_gateway: LiveGateway,
-    world: World,
+    headless: Headless,
+    prepare: Callable[..., Prepared],
     database: Database,
     artifact_store: S3ArtifactStore,
     tmp_path: Path,
@@ -305,14 +309,38 @@ async def test_a18_a_lab_user_sees_their_task_uploads_and_reports_a_deviation(
     report is an observation, so the node does not move and the record says
     `permitted=False` — whether the action was allowed is Master's ruling,
     written later as a decision.
+
+    **The project is one a bench has really been given.** A18 was written when
+    the screen's upload door was the generic artifact route and any file could
+    be sent under any name; P11-09 made the control answer a *required output*,
+    which is what the contract's own split of sent-and-owed is about, and a
+    world nothing has been handed to has no output to answer. So the contract
+    here is built by the same fixture the laboratory suites use and run through
+    the real workflow, and the console is opened on the bench it left waiting —
+    which is also the only version of this case in which the file a bench sends
+    is an answer to something.
     """
-    project_id = world.owner_project.project_id
-    upload = tmp_path / UPLOAD_NAME
-    upload.write_bytes(UPLOAD_BODY)
+    headless.registry.register(
+        NodeType.EXPERIMENT, HumanLabBackend(database=headless.database)
+    )
+    prepared = prepare(
+        **terms(
+            allowed_actions=("run_measurement",),
+            allowed_ranges={"temperature_c": "18..24"},
+        )
+    )
+    await start_and_wait(headless, prepared)
+    bench_id = a_bench_user(
+        database, prepared.project_id, username="a18-bench", password=PASSWORD
+    )
+
+    upload = tmp_path / f"{OUTPUTS[0]}.csv"
+    upload.write_bytes(LOG_BYTES)
+    project_id = prepared.project_id
 
     async with console(
         live_gateway,
-        username="bench",
+        username="a18-bench",
         project_id=project_id,
         first_panel="instruction",
     ) as (_app, pilot, screen):
@@ -322,17 +350,25 @@ async def test_a18_a_lab_user_sees_their_task_uploads_and_reports_a_deviation(
         instruction = screen.panel("instruction").plain
         assert "allowed actions: run_measurement" in instruction, instruction
         assert "allowed ranges:  temperature_c 18..24" in instruction, instruction
+        assert "required outputs: " in instruction, instruction
 
-        screen.query_one("#upload-path").value = str(upload)
+        screen.query_one("#upload-path", Input).value = str(upload)
+        screen.query_one("#upload-output", Select).value = OUTPUTS[0]
         await screen.action_upload()
         await settle(
             pilot,
-            lambda: f"Sent {UPLOAD_NAME}" in notice_of(screen),
-            what="the upload to be accepted",
+            lambda: "That was everything owed." not in notice_of(screen)
+            and "Still owed:" in notice_of(screen),
+            what="the upload to be accepted and to say what is still outstanding",
+        )
+        await settle(
+            pilot,
+            lambda: f"✓ {OUTPUTS[0]} — sent" in screen.panel("prepared").plain,
+            what="the file to appear as an answer to the output it named",
         )
 
-        screen.query_one("#deviation-action").value = "hold at 30 C for an hour"
-        screen.query_one("#deviation-description").value = (
+        screen.query_one("#deviation-action", Input).value = "hold at 30 C for an hour"
+        screen.query_one("#deviation-description", Input).value = (
             "the contract's range stops at 24 C and the sample needs longer"
         )
         await screen.action_report_deviation()
@@ -343,13 +379,26 @@ async def test_a18_a_lab_user_sees_their_task_uploads_and_reports_a_deviation(
         )
 
     with database.read_only() as session:
+        handover = LabHandoverRepository(session, project_id).latest_for_node(
+            prepared.node_id
+        )
+        assert handover is not None
         repository = ArtifactRepository(session, project_id, artifact_store)
-        artifacts = repository.all()
-        assert [artifact.name for artifact in artifacts] == [UPLOAD_NAME]
-        versions = repository.versions(artifacts[0].artifact_id)
-        assert repository.read(versions[-1]) == UPLOAD_BODY
+        # The artifact is named for the *output*, and it is scoped to the
+        # handover: two files that happened to share a filename would be two
+        # answers, and this one is the answer to `experiment_log`.
+        answered = dict(arrived_outputs(session, handover))
+        assert list(answered) == [OUTPUTS[0]], list(answered)
+        artifact = answered[OUTPUTS[0]]
+        assert artifact.created_by == bench_id, (
+            "the record does not say who sent what the bench produced"
+        )
+        versions = repository.versions(artifact.artifact_id)
+        assert repository.read(versions[-1]) == LOG_BYTES
 
-        deviations = DeviationRepository(session, project_id).all(node_id=world.experiment)
+        deviations = DeviationRepository(session, project_id).all(
+            node_id=prepared.node_id
+        )
 
     assert len(deviations) == 1
     assert deviations[0].permitted is False, (

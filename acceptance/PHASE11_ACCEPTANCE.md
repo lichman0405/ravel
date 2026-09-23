@@ -480,3 +480,68 @@ caller is not in.
 | role 必须从 DB re-read, 不依赖旧 token 中缓存权限 | `test_p11_08_authority_comes_from_the_row_and_not_the_token` — one token through three states of the same membership: refused after withdrawal, and reading again as `ADMIN` after a re-grant, with no second login |
 | The project list means live memberships | `tests/integration/state/test_identity.py::test_a_withdrawn_membership_is_not_a_project_the_user_belongs_to` — the read the list and `/auth/me` are built from, and the one that did not filter on the revocation |
 | A withdrawal reaches an account that is still active | `tests/integration/gateway/test_projects.py` and `test_members.py` — the membership is the authority; the account is untouched |
+
+## P11-09 role-specific surfaces
+
+`docs/08` §5 gives three people three views, and until this item the console
+had one screen and a role check in front of it. This item is the claim that the
+surfaces are *genuinely different*: not one screen with fields hidden, but three
+screens whose actions differ because the authority behind them differs. The
+difference is not cosmetic — an administrator's console has no approval control
+because an administrator has no approval authority, and the absence is the
+honest rendering of that rather than a disabled button.
+
+**The mapping is data, not three branches.** `ROLE_SCREENS` is a dictionary from
+role to screen class and `screen_for_role` reads it, which is what makes "which
+role gets which screen" a thing a test can check without starting anything. A
+role the program does not know draws a sentence saying so instead of a default,
+because the only defensible default would be the *most* restricted screen and
+getting that wrong in the other direction shows a lab user the whole DAG.
+
+**The operator's screen is the one that had to be built.** The owner's and the
+bench's grew panels; the administrator's is new, and it exists because
+everything an operator needs — is the supervisor alive, is Temporal reachable,
+what has the work actually run on, which jobs are stuck, what had to be
+recovered — is scattered across the runtime rather than present in a project.
+It reads a *project-scoped* view of all of it: `projects_held` is a count and
+the supervisor's own report of the other projects is filtered out, because a
+membership in this project is what admits a caller and other people's research
+is not the price of an uptime check.
+
+**One panel reads a process's account of itself, and says so.**
+`runtime_services` is the one place a screen trusts something other than a
+record, for the reason that there is nothing else to read: whether a supervisor
+is running is not derivable from any row, because a project it stopped driving
+and a project with nothing left to do are the same state. What is *not* taken on
+trust is the service's word for its own health — the age is computed by the
+Gateway from a clock it owns, against a cadence the service promised in its own
+report — and a service that has never reported is drawn as one that has never
+reported rather than as one that died, because those send an operator to two
+different places.
+
+| Requirement | Demonstrated by |
+|---|---|
+| OwnerScreen ≥ Master 对话 | `test_p11_09_the_owners_screen_carries_every_thing_the_item_lists` — a line typed into the composer reaches a `MasterPort` and the answer comes back onto the panel |
+| OwnerScreen ≥ project state / Scientific DAG | the same case: the status line, `your role: PROJECT_OWNER`, and the DAG table's row count |
+| OwnerScreen ≥ research results / Evidence | the same case, plus `test_an_owner_reads_research_evidence_and_approvals` in `tests/e2e/test_tui.py` |
+| OwnerScreen ≥ execution / reviews / decisions / approvals | the same case: each panel is non-empty, and the two that are *empty* in this world say so in words rather than rendering blank |
+| OwnerScreen ≥ pause / resume | the same case, pressed as keys and read back from the project row in PostgreSQL; `test_the_owner_can_stop_and_start_the_project` is the same claim one layer down |
+| OwnerScreen ≥ membership | the same case reads the member table and who conferred each row; `test_the_owner_adds_and_withdraws_a_member_from_the_console` drives both writes and finds the withdrawn row still in the table |
+| OwnerScreen ≥ project switch / create | the same case opens a project from the console, then reaches it with `ctrl+n` and finds the creator is its first membership |
+| LabScreen ≥ assigned experiment tasks | `test_p11_09_the_benchs_screen_hands_the_work_back_through_the_console` — one row, the experiment, and the contract's objective and required outputs in the instruction panel |
+| LabScreen ≥ prepared protocol | the same case: the package's own manifest, named by the materializer that wrote it |
+| LabScreen ≥ required outputs, and what is owed | the same case, in both states — `still owed` for both before anything arrives, `✓ … — sent` and one still owed after the first file, and neither after the second |
+| LabScreen ≥ upload | the same case: two files typed into the path field, each attached to an output chosen from the contract's own list, and the run **finishes because of what was recorded** — not because the screen said so |
+| LabScreen ≥ deviation | `test_a18_a_lab_user_sees_their_task_uploads_and_reports_a_deviation` in `tests/acceptance/test_surfaces.py`, which raises one through the screen and checks the node did not move |
+| LabScreen ≥ messages / status | `test_p11_09_the_benchs_screen_hands_the_work_back_through_the_console` asserts both panels in words, including that RAVEL reports the bench as `WAITING_EXTERNAL` rather than as running — which is the P11-06 rule, read off the screen this item added |
+| AdminScreen ≥ DSH runtime / Temporal | `test_p11_09_the_operators_screen_carries_every_thing_the_item_lists` — the harness panel names the pin's own tag and provider, and the Temporal panel names the task queue |
+| AdminScreen ≥ Supervisor | the same case, with a report written the way the supervisor writes one: `alive`, how long ago it spoke and against what budget, and the instance that is answering |
+| AdminScreen ≥ backend health | the same case: what the work has actually been handed to, whether Slurm is configured, and the route's own sentence that reachability is **not probed from the Gateway** |
+| AdminScreen ≥ Slurm configuration | the same case, and `tests/integration/gateway/test_admin.py::test_the_slurm_panel_names_the_setting_that_holds_the_secret` — the secret is represented by the *name* of the setting that holds it, and the value never reaches the response |
+| AdminScreen ≥ running / failed jobs | the same case on a project nothing has run in, which is where the absence is a sentence: `No backend job has ever been submitted for this project.` |
+| AdminScreen ≥ reconciliation | the same case, `No run has had to be recovered in this project.`, and `test_a_recovery_is_reported_with_what_it_was_measured_against` for the state that is not an absence |
+| AdminScreen ≥ logs | the same case: where the harness home and the log root are on this deployment |
+| Admin 不得 approve science | `test_p11_09_an_administrator_can_neither_approve_nor_mutate_anything` — no such action exists on the screen, **and** the administrator's own token is refused at the approval door |
+| Admin 不得 modify DAG | the same case: six write routes refused with the administrator's token, and the DAG read back and compared whole — so a node that was cancelled or re-bound counts as a mutation too |
+| Admin 不得 modify experimental scientific conditions | the same case: the pause, the envelope and the message routes are all refused, so there is no path from the operator's screen to the terms a bench works under |
+| 三类 surface 必须真正不同 | `test_p11_09_no_two_roles_are_drawn_by_the_same_screen` — three roles, three distinct classes, each with its own bindings; and the owner/admin prohibitions above, which are what "different" means past the class list |

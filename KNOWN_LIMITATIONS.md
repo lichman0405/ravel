@@ -997,7 +997,7 @@ same run passed. The finding is about what a live Master does when it is handed 
 node type that will never move, and the answer is that it works around it at
 length rather than stopping.
 
-## L-28 — `make test-integration` runs 472 of the 580 tests in `tests/integration`
+## L-28 — `make test-integration` runs 579 of the 705 tests in `tests/integration`
 
 - **Since:** 2026-09-19, when `tests/integration/roles/` and
   `tests/integration/research/` were added without the marker
@@ -1005,17 +1005,17 @@ length rather than stopping.
   under `tests/integration/roles/` and `tests/integration/research/`
 
 The directory and the target disagree about what an integration test is.
-`make test-integration` runs `pytest tests/integration -m integration`, and 108
-of the 580 tests collected under that path carry no marker at all — the whole of
-`tests/integration/roles/` (80) and `tests/integration/research/` (28) — so the
-flag deselects them. `scripts/test_all.sh`, which is what `make test` runs,
-invokes the same path with no marker and collects all 580, the 17 e2e-marked
-cases inside the directory included. Both spellings are written down, and a
-report can be filled from either.
+`make test-integration` runs `pytest tests/integration -m integration`, and 126
+of the 705 tests collected under that path carry no marker at all — the whole of
+`tests/integration/roles/` (80) and `tests/integration/research/` (28) chief
+among them — so the flag deselects them. `scripts/test_all.sh`, which is what
+`make test` runs, invokes the same path with no marker and collects all 705, the
+e2e-marked cases inside the directory included. Both spellings are written down,
+and a report can be filled from either.
 
 What that costs is a number that means two things. Measured through the target
-the suite is 472; measured the way the canonical runner measures it, 580, and
-neither figure says which command produced it. The 108 are not incidental: they
+the suite is 579; measured the way the canonical runner measures it, 705, and
+neither figure says which command produced it. The 126 are not incidental: they
 are where a role's permission surface, the worker and review tool rosters, and
 every read-back case of Phase 11's deep read live, and each of them stands up a
 real database and a real tool server.
@@ -1030,6 +1030,11 @@ row was re-measured with the canonical command instead, and `TEST_REPORT.md` §1
 now names the command its numbers came from. The target itself was left alone:
 changing what CI runs is a decision for whoever owns the inventory of tests, not
 a side effect of an item about reading a source.
+
+The counts above are as of P11-09 and both keep moving: the directory grew by
+125 cases across Phase 11 and the deselected set grew with it, which is the
+reason the two figures are re-measured at the end of each item rather than
+carried forward.
 
 ## L-29 — The bench is a person, and RAVEL can neither see nor stop one
 
@@ -1081,3 +1086,43 @@ than against anything the backend could check.
 **Do not conclude** that a real laboratory is a configuration change away. It is
 a `WorkBackend` implementation *plus* the two things this one deliberately does
 not have: a way to observe the work, and a way to make it stop.
+## L-30 — The operator's health panel believes a row, and probes nothing
+
+- **Since:** Phase 11 (P11-09)
+- **Where:** `src/ravel/gateway/routes/admin.py`; `src/ravel/state/repositories/`
+  `services.py`; `src/ravel/state/migrations/versions/20260923_1700_c5a9e2f01b73_`
+  `a_process_can_say_it_is_alive.py`; `src/ravel/tui/screens/admin.py`
+
+The administrator's screen answers two questions that look like health checks and
+are not.
+
+**`runtime_services` is a process's account of itself.** Whether a long-running
+service is running is not derivable from any record — a project a supervisor
+stopped driving and a project with nothing left to do are the same rows — so the
+panel trusts a report, and the alternative to trusting it is not verifying it but
+having no answer at all. What the Gateway owns is the *arithmetic*: the age is
+computed here, from a clock this process holds, against the cadence the service
+promised in its own report, and the identity columns are guarded so a service
+cannot be renamed into another's place. What it does not own is the report's
+truth. A process that can write to the database can claim to be the supervisor,
+and nothing on this screen would notice; a process that is alive and wedged
+between beats reads as dead at the budget. There is no heartbeat the Gateway
+sends and no socket it opens to check.
+
+**Reachability is not probed, and the panel says so in as many words.** The
+Slurm half of the backend panel reads configuration: which user, which host,
+which port, which authentication method, and the *name* of the setting that
+holds the secret. It does not connect. A host that is down and a host that was
+never configured are both drawn from the same settings, and the only thing that
+separates them on this screen is the sentence the route prints underneath. That
+is deliberate — a health check that opens an SSH connection from the Gateway
+would put the credential in this process and give an operator a way to make the
+Gateway a client of the cluster — but a reader who skims the panel will take
+`slurm: ravel@cluster:22` for a working cluster.
+
+**Do not conclude** that either panel is useless. The absences are the useful
+part: a service that has never reported is drawn as exactly that, which is a
+different sentence from having gone quiet, and the two send an operator to
+different places. What they cannot do is tell an operator that the machine is
+well.
+

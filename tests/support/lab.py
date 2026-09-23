@@ -26,26 +26,34 @@ laboratory fixture cannot be built by writing a directory by hand.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tests.integration.conftest import Prepared
+from tests.integration.temporal.conftest import await_state
 
 from ravel.backends.lab import HumanLabBackend
 from ravel.config import Settings
 from ravel.domain.artifacts import Artifact, ArtifactVersion
-from ravel.domain.enums import NodeType
+from ravel.domain.enums import NodeStatus, NodeType, UserRole
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.lab import LabHandover
 from ravel.execution.backends import BackendRegistry, JobRequest
 from ravel.execution.temporal.activities import NodeRunActivities, _request
 from ravel.execution.temporal.contracts import PreparationReport, RunInput, RunPlan
+from ravel.gateway.auth.passwords import hash_password
 from ravel.preparation import LabMaterializer, MaterializerRegistry
 from ravel.state.database import Database
+from ravel.state.repositories.identity import MembershipRepository, UserRepository
 from ravel.state.repositories.lab import LabHandoverRepository, record_upload
 from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import RecordRepositories
 from ravel.state.store import S3ArtifactStore
+
+if TYPE_CHECKING:  # imported for its type only, so support does not pull the suite in
+    from tests.e2e.conftest import Headless
 
 #: The role whose contract this run executes. A string because that is what
 #: `RunInput.actor_id` carries everywhere else.
@@ -122,6 +130,67 @@ class Handed:
             return LabHandoverRepository(session, self.prepared.project_id).get(
                 handover_id=self.handover.handover_id
             )
+
+
+def prepare_for_the_bench(
+    headless: Headless, prepare: Callable[..., Prepared]
+) -> Prepared:
+    """A contract this run will send to a bench, and the bench to send it to.
+
+    The backend is registered on the harness's own registry, so the workflow
+    resolves it exactly as a deployment's would — the registry is what a worker
+    process builds from its settings, and a case that resolved the backend some
+    other way would be testing a channel no deployment has. The contract is
+    built from the terms above, which are the *contract's* terms rather than the
+    test's: a materializer refuses a contract that states no procedure, no
+    samples, no conditions and no outputs, because filling any of those in would
+    be making a scientific decision nobody delegated to software.
+    """
+    headless.registry.register(
+        NodeType.EXPERIMENT, HumanLabBackend(database=headless.database)
+    )
+    return prepare(**terms())
+
+
+async def start_and_wait(headless: Headless, prepared: Prepared) -> None:
+    """Begin the run and wait until the bench has the work."""
+    await headless.client.start_node_run(
+        project_id=prepared.project_id,
+        node_id=prepared.node_id,
+        actor_id=ACTOR,
+        execution_contract_version=prepared.contract.version,
+    )
+    await await_state(
+        lambda: headless.status_of(prepared.node) is NodeStatus.WAITING_EXTERNAL
+    )
+
+
+def a_bench_user(
+    database: Database, project_id: str, *, username: str, password: str
+) -> str:
+    """Give a prepared project somebody with an account to work at its bench.
+
+    A project built by `prepare` has one member — its owner — and the console
+    signs in the way a person does, with a username and a password. So this is
+    two rows: the account, with a real hash, and the `LAB_USER` membership the
+    project's owner confers. The owner is the granter rather than nobody,
+    because a first membership is the only one nobody confers and this is not
+    one.
+
+    Returns:
+        The account's identifier, which is what an upload's `created_by` will
+        say — the route attributes a file to whoever holds the token, and the
+        token names a user rather than a name.
+    """
+    with database.transaction() as session:
+        users = UserRepository(session)
+        bench = users.create(username=username, password_hash=hash_password(password))
+        owner = users.by_username("owner")
+        assert owner is not None, "the prepared project has no owner to grant the role"
+        MembershipRepository(session, project_id).grant(
+            user_id=bench.user_id, role=UserRole.LAB_USER, granted_by=owner.user_id
+        )
+    return bench.user_id
 
 
 def registry_for(bench: HumanLabBackend) -> BackendRegistry:
@@ -275,10 +344,13 @@ __all__ = [
     "SAMPLES",
     "UPLOADER",
     "Handed",
+    "a_bench_user",
     "hand_over",
     "lab_materializers",
+    "prepare_for_the_bench",
     "raise_a_deviation",
     "registry_for",
+    "start_and_wait",
     "terms",
     "upload",
 ]
