@@ -250,8 +250,9 @@ Temporal Execution Worker 托管 Temporal activity 的进程
                           这里要消除的歧义。
 
 Backend                  真正干活的东西（WorkBackend 的 implementor）。
-                          V0 只有 MockComputeBackend 与 MockLabBackend，
-                          见 KNOWN_LIMITATIONS.md L-22。
+                          默认部署是 MockComputeBackend 与 MockLabBackend；
+                          compute 侧另有真实的 SlurmComputeBackend
+                          （见 KNOWN_LIMITATIONS.md L-22）。
 ```
 
 三者的权限关系是单向的：`Backend` 报回状态，`Temporal Execution Worker` 把它落成 durable 记录，`Worker Agent` 在这些记录之上按 contract 行动。任何一个环节都不能替另一个做决定。

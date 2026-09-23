@@ -38,6 +38,13 @@ dependencies = [
     "websockets>=13",
     # Resilience
     "tenacity>=9.0",
+    # The SSH client the Slurm backend speaks to a cluster through. Chosen over
+    # shelling out to `ssh`/`scp` for one reason: password authentication. The
+    # OpenSSH client takes a password only from a terminal or from `sshpass`,
+    # and `sshpass -p <secret>` puts the cluster password in the process's
+    # argv, where every account on the worker host can read it out of `ps`.
+    # Paramiko keeps it in this process's memory and never in a command line.
+    "paramiko>=3.5",
     # Generates the per-runtime harness composition overlay.
     "pyyaml>=6.0",
     # Agent tool seam. The harness runtime binary arrives as a matched

@@ -29,7 +29,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: request. The model credential is the harness's own, resolved per request
 #: from the launching process's environment, and a process that has no use for
 #: a secret should not be holding one.
-_LAUNCHER_ONLY = ("dsh_", "deepseek_", "gateway_")
+#:
+#: `slurm_` is here for a stronger reason than the other three, and it is worth
+#: stating because it looks like the same rule applied again. The Slurm prefix
+#: carries a *cluster password*. A tool server is a process an agent's harness
+#: spawned, and its environment is readable by that agent the first time it runs
+#: `env`. Keeping the credential out of that environment is not hygiene — it is
+#: the structural form of "the model never sees the cluster password", the only
+#: form of that rule which does not depend on a model choosing not to look.
+_LAUNCHER_ONLY = ("dsh_", "deepseek_", "gateway_", "slurm_")
 
 
 def _env_name(field_name: str, alias: str | None) -> str:
@@ -132,6 +140,38 @@ class Settings(BaseSettings):
     # numbers that a result depends on, and one RAVEL made up would be a
     # result nobody could attribute to anything.
     raspa_data_dir: Path | None = None
+
+    # ── The Slurm cluster ──────────────────────────────────────────────────
+    # A compute environment RAVEL does not own. The host and the credential
+    # reach the backend process and nothing else: the whole `slurm_` prefix is
+    # in `_LAUNCHER_ONLY`, so no tool server is ever launched with these in its
+    # environment, and the backend redacts them from every string it returns —
+    # a `detail` line ends up in PostgreSQL, and a traceback ends up in a log.
+    #
+    # There is no default host. A deployment that has not named a cluster has
+    # not configured one, and a backend that invented `localhost` would submit
+    # work to whatever happened to be listening.
+    slurm_host: str | None = None
+    slurm_port: int = 22
+    slurm_username: str | None = None
+    slurm_password: SecretStr | None = None
+    #: A private key to authenticate with instead of a password. Named as a
+    #: path rather than inlined: a key that travels through the environment is
+    #: a key in `ps` on every process that inherited it.
+    slurm_key_filename: Path | None = None
+    #: Whether an unknown host key is refused or accepted on first sight. False
+    #: — refuse — is the default, because accepting one turns the transport
+    #: into an encrypted channel to whoever answered the address.
+    slurm_trust_unknown_host: bool = False
+    #: The root the remote workspaces live under. One directory per project,
+    #: then per node, then per attempt, so two runs of one node never share a
+    #: directory and a retry cannot read the attempt before it.
+    slurm_jobs_root: str = "/ravel/jobs"
+    slurm_connect_timeout_seconds: float = 15.0
+    #: How long one remote command may take. Long enough for `sbatch` and for
+    #: a directory listing; far too short for the job itself, which is what
+    #: `sbatch` returns immediately from rather than waiting on.
+    slurm_command_timeout_seconds: float = 60.0
 
     # ── Harness ────────────────────────────────────────────────────────────
     dsh_home: Path = Path("./runtime/dsh_home")

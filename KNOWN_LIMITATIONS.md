@@ -29,7 +29,10 @@ RAVEL can supply.
 
 **Do not conclude** that a duplicated experiment is impossible. It is
 impossible exactly to the extent that backends honour the port. `MockComputeBackend`
-and `MockLabBackend` do. A future Slurm or LIMS adapter must.
+and `MockLabBackend` do. `SlurmComputeBackend` does, by three overlapping checks
+— the run's own submission record, the scheduler's job-name lookup, and the
+`sbatch` command itself (see L-22 for what has and has not been run against a
+real cluster). A LIMS adapter must too.
 
 ## L-02 — Recovery after a worker dies takes up to `job_activity_timeout_seconds`
 
@@ -496,51 +499,77 @@ either.
 to success. It is not configurable per node at all, and `--compute-scenario` is
 a property of the process.
 
-## L-22 — Every backend in V0 is a mock, and Phase 10 did not add a real one
+## L-22 — The compute side has a real backend that has never met a real cluster
 
-- **Since:** Phase 4, restated in Phase 10
+- **Since:** Phase 4, restated in Phase 10, narrowed in Phase 11 (P11-05)
 - **Where:** `src/ravel/backends/mocks.py` (`MockComputeBackend`,
-  `MockLabBackend`); the registry `scripts/run_temporal_worker.build_registry`
-  builds; `tests/acceptance/test_phase10_backends.py`
+  `MockLabBackend`); `src/ravel/backends/slurm/` (`SlurmComputeBackend`);
+  `scripts/run_temporal_worker.py` (`build_registry`, `--compute-backend`);
+  `tests/acceptance/test_phase10_backends.py`
 
-Phase 10 put a live agent in each Worker seat, and the work those agents drive
-still runs on mocks. That is the phase's design, not an unfinished corner: V0's
-question is whether the *architecture* holds — five agents, separated powers, a
-durable run, an authoritative record — and a real instrument would answer a
-question about instruments while making every one of those harder to see.
+Until Phase 11 the answer here was "every backend is a mock". P11-05 added
+`SlurmComputeBackend`: a real adapter that submits a prepared workspace to a
+Slurm cluster over SSH, polls the scheduler, and files the outputs a run's
+manifest required as artifacts under the project the run's own submission record
+names. It is written and unit-tested against a scripted cluster that parses the
+commands it sends, and exercised against a real PostgreSQL and a real object
+store in `tests/integration/backends/test_slurm_collection.py`.
 
-Written out, because "we only run mocks" is the kind of sentence that gets
-softer every time it is paraphrased:
+**It has never been run against a real cluster.** No Slurm endpoint and no
+credentials were supplied to this build, so every claim about it is a claim
+about the code rather than about a queue. That is the limitation, stated first
+because it is the one that matters: the parts a real cluster would exercise —
+host key verification against a production scheduler, `sbatch` under a site's
+partition policy, a queue that answers slowly, a filesystem that returns a file
+no shell would — have not been exercised at all. It is recorded as
+`BLOCKED_EXTERNAL` on the Phase 11 item rather than as a completed
+certification.
+
+Written out, because this is the kind of sentence that gets softer every time it
+is paraphrased:
 
 ```text
-MockComputeBackend = YES
-MockLabBackend     = YES
+MockComputeBackend = YES  (the default; what an untouched deployment runs)
+MockLabBackend     = YES  (the default)
 
-Real Slurm         = NO
+SlurmComputeBackend = WRITTEN, opt-in, never run against a real cluster
 Real VASP          = NO
 Real LAMMPS        = NO
 Real GROMACS       = NO
-Real RASPA         = NO
+Real RASPA         = NO  (preparation generates its inputs; nothing runs them)
 Real laboratory    = NO
 Real LIMS          = NO
 Robot lab          = NO
 ```
 
-This is asserted rather than intended. The deployment's registry is checked to
-hold exactly those two classes, and the whole `ravel` package is walked for
-anything else with a backend's shape — a name and the five calls the durable
-layer makes — so an adapter that was written and never registered fails the
-same case as one that was registered.
+The three properties that made the old statement worth asserting are still
+asserted, each one now exact rather than inclusive:
+
+- **What a deployment runs.** `build_registry` with a worker's default arguments
+  builds the two mocks. The real backend is reached only by `--compute-backend
+  slurm`, and asking for it without a host or a username is refused at start-up
+  rather than at the first node that reaches the queue.
+- **What could be handed work.** The whole `ravel` package is walked for
+  anything with a backend's shape — a name and the five calls the durable layer
+  makes — and the exact set is the two mocks plus `SlurmComputeBackend`. No
+  laboratory, no LIMS, no robot, no wrapper around a simulation package.
+- **What a mock's output is.** Every artifact a mock produces is marked
+  `simulated` in a column, and the Evidence Ledger refuses a simulated artifact
+  as a source — so mock output can drive the loop without ever becoming a finding
+  RAVEL cites. What a cluster produces is *not* marked simulated, and is not
+  marked as evidence either: whether it satisfies a node's criteria is Review's
+  judgement against frozen criteria, not a backend's claim about itself.
 
 **Do not conclude** that a real backend is a configuration change away. It is a
 `WorkBackend` implementation *plus* the property that makes it safe to retry:
 `submit` must be idempotent in `(project_id, node_id, attempt)` (see L-01), and
-a real instrument is exactly where that is hard. The port is the easy half.
+a real instrument is exactly where that is hard. `SlurmComputeBackend` carries
+three overlapping idempotency checks for that reason — the run's own submission
+record, the scheduler's job-name lookup, and the `sbatch` command itself.
 
-**Do not conclude** either that a mock result is a result. Every artifact a mock
-produces is marked `simulated` in a column, and the Evidence Ledger refuses a
-simulated artifact as a source — so mock output can drive the loop without ever
-becoming a finding RAVEL cites.
+**Do not conclude** either that writing one is the same as certifying it. The
+gap between the two is the paragraph above about a real cluster, and the honest
+way to close it is to run a job on one rather than to read the tests.
 
 ## L-23 — A question nobody answers stops the project, and the retry repeats
 

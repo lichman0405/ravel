@@ -1,16 +1,24 @@
 """Phase 10 items about what the five agents are allowed to be reached by.
 
-Two claims, and they are the two halves of one: the work still runs on mocks
-rather than on a real instrument, and the agent that now sits beside the work
-cannot do it, stop it, or answer for it. Phase 10 put a session in each Worker
-seat; what it did not do is give either seat a way to the bench, or let one
-speak for a bench that has already spoken.
+Two claims, and they are the two halves of one: the work runs on mocks rather
+than on a real instrument unless a deployment asks otherwise, and the agent that
+now sits beside the work cannot do it, stop it, or answer for it. Phase 10 put a
+session in each Worker seat; what it did not do is give either seat a way to the
+bench, or let one speak for a bench that has already spoken.
 
 The first claim is checked against the composition a deployment actually builds
 — `scripts/run_temporal_worker.build_registry` — and against the tree, because
-"we only run mocks" is a statement about both: a registry that named a real
-adapter would be the obvious breach, and one that was imported and never
-registered would be the quiet one.
+"the mocks are what runs" is a statement about both: a registry that named a
+real adapter without being asked would be the obvious breach, and one that was
+imported and never registered would be the quiet one.
+
+**Phase 11 widened the tree on purpose.** P11-05 added a real compute backend — a
+cluster over SSH — and it is the one thing here that is not a mock. The item's
+premise is therefore no longer "mocks are all there is" but "mocks are all that
+runs unless a deployment names the real one, and the real one exists only on the
+compute side": there is still no LIMS, no robot lab, no VASP wrapper. The two
+assertions below were rewritten to that and left exact rather than widened — an
+adapter that appeared without this docstring changing is still a failure.
 """
 
 from __future__ import annotations
@@ -138,12 +146,18 @@ def test_p10_06_the_deployment_registers_the_mocks_and_nothing_else(
 
 
 def test_p10_07_nothing_else_in_ravel_can_be_handed_work() -> None:
-    """P10-07: the two mocks are the only things in the tree with a backend's shape.
+    """P10-07: mocks, plus the one real compute backend Phase 11 added.
 
-    The registry above says what a deployment *does* register; this says what
-    it *could*. A real HPC or LIMS adapter would be a third class with the
-    backend port's surface — a name and the five calls the durable layer makes
-    — whether or not anything pointed at it yet, and there is none.
+    The registry above says what a deployment *does* register; this says what it
+    *could*. Anything with the backend port's surface — a name and the five
+    calls the durable layer makes — is something RAVEL could hand work to
+    whether or not anything points at it yet, so the tree is walked and the
+    answer is compared exactly.
+
+    The list is two mocks and `SlurmComputeBackend`. What is still absent is the
+    rest of the sentence this item was written to enforce: no laboratory, no
+    LIMS, no robot, and no wrapper around a simulation package. Adding one is a
+    Phase 11 item with its own certification, not a line in this set.
 
     The walk is over RAVEL's own package and stops at the migration revisions,
     which are DDL scripts that nothing imports at runtime.
@@ -159,10 +173,35 @@ def test_p10_07_nothing_else_in_ravel_can_be_handed_work() -> None:
             if all(hasattr(member, attribute) for attribute in BACKEND_SURFACE):
                 found[f"{module_info.name}.{name}"] = member
 
-    assert set(found) == {
+    mocks = {
         "ravel.backends.mocks.MockComputeBackend",
         "ravel.backends.mocks.MockLabBackend",
-    }, f"RAVEL has a backend that is not a mock: {sorted(found)}"
+    }
+    real = {"ravel.backends.slurm.backend.SlurmComputeBackend"}
+    assert set(found) == mocks | real, (
+        f"RAVEL has a backend this item does not know about: "
+        f"{sorted(set(found) - mocks - real)}"
+    )
+    assert set(found) - mocks == real, (
+        f"the lab side gained a real implementation: {sorted(set(found) - mocks)}; "
+        "P11-06 is where a real laboratory channel arrives, with its own "
+        "certification, and nothing here anticipates it"
+    )
+
+
+def test_the_real_compute_backend_is_not_what_a_default_deployment_runs() -> None:
+    """The claim the two above rest on, asserted where it can be read.
+
+    `build_registry` with a worker's default arguments builds the mocks, so a
+    deployment that says nothing runs a project on one machine. The real backend
+    is reached by asking for it by name — and refusing to build it when the
+    cluster settings are absent is what keeps that opt-in from turning into a
+    stall at the first node that reaches the queue.
+    """
+    assert worker_script.parse_args([]).compute_backend == "mock"
+    assert worker_script.COMPUTE_BACKENDS == ("mock", "slurm")
+    assert worker_script.parse_args([]).lab_backend == "mock"
+    assert worker_script.LAB_BACKENDS == ("mock",)
 
 
 # ── P10-W10 / P10-W11 ─────────────────────────────────────────────────────

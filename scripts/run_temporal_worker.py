@@ -26,13 +26,22 @@ the same workflow, because the history is in Temporal and the job is in
 PostgreSQL. Nothing here keeps state in memory that matters, which is why the
 only thing a deployment needs from this script is that it stays running.
 
-What it registers are the V0 backends, and both are mocks. They are the honest
-answer at this pin — `docs/06` puts real compute and a real LIMS out of V0's
-scope — and every artifact they produce is marked as simulated in the record
-and refused by the Evidence Ledger. They are registered here rather than
-defaulted inside the runtime so that the file a deployment reads says which
-backends it is running, and so that replacing one is editing this list.
+What it registers is chosen here, and the choice is the deployment's. The
+default is the pair of mocks: they are what makes a project runnable end to end
+on one machine, and every artifact they produce is marked as simulated in the
+record and refused by the Evidence Ledger. `--compute-backend slurm` replaces
+the compute mock with the real thing — `ravel.backends.slurm.SlurmComputeBackend`
+— which submits to a cluster over SSH and brings back real results. The lab
+side has no real equivalent yet; a laboratory is a bench and a person, and
+`--lab-backend` arrives with P11-06.
 
+The registration is a list in this file rather than a lookup inside the runtime
+so that the file a deployment reads says which backends it is running, and so
+that replacing one is editing this list.
+
+**A misconfigured cluster is refused here, at start-up.** A deployment that
+asks for Slurm without a host gets an error before the worker starts rather
+than a project that stalls when its first computation node reaches the queue.
 The scenarios are the acceptance catalogue's, by name. A deployment normally
 plays the successful path and is pointed at a failure scenario deliberately,
 to watch what the loop does about it.
@@ -44,8 +53,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import sys
 
 from ravel.backends.mocks import MockComputeBackend, MockLabBackend
+from ravel.backends.slurm import (
+    ParamikoTransport,
+    SlurmComputeBackend,
+    SlurmConfigurationError,
+    SlurmTarget,
+)
 from ravel.config import Settings
 from ravel.domain.enums import NodeType
 from ravel.execution.backends import BackendRegistry
@@ -72,13 +88,44 @@ LAB_SCENARIOS = (
 )
 
 
+#: The node types a deployment can point somewhere real. Named here so that
+#: `--help` says what exists; a name this does not hold is refused by argparse
+#: before the worker starts.
+COMPUTE_BACKENDS = ("mock", "slurm")
+LAB_BACKENDS = ("mock",)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run RAVEL's execution worker.")
+    parser.add_argument(
+        "--compute-backend",
+        default="mock",
+        choices=COMPUTE_BACKENDS,
+        help=(
+            "where computation nodes are run: 'mock' simulates a result and "
+            "marks it simulated, 'slurm' submits a real job to the cluster "
+            "named by the RAVEL_SLURM_* settings (default: mock)"
+        ),
+    )
+    parser.add_argument(
+        "--lab-backend",
+        default="mock",
+        choices=LAB_BACKENDS,
+        help="where experiment nodes are handed over (default: mock)",
+    )
     parser.add_argument(
         "--compute-scenario",
         default="COMPUTE_SUCCESS",
         choices=COMPUTE_SCENARIOS,
         help="what the mock compute backend plays (default: COMPUTE_SUCCESS)",
+    )
+    parser.add_argument(
+        "--slurm-jobs-root",
+        default=None,
+        help=(
+            "the remote directory RAVEL's workspaces live under; overrides "
+            "RAVEL_SLURM_JOBS_ROOT, and ignored unless --compute-backend slurm"
+        ),
     )
     parser.add_argument(
         "--lab-scenario",
@@ -100,19 +147,27 @@ def build_registry(
 ) -> BackendRegistry:
     """The backends this deployment runs.
 
-    The store is opened once and shared: both mocks write artifacts through it,
-    and a store per backend would be two clients to the same bucket.
+    The store is opened once and shared: every backend writes artifacts through
+    it, and a store per backend would be two clients to the same bucket.
+
+    Raises:
+        SlurmConfigurationError: `--compute-backend slurm` was asked for and the
+            settings do not describe a cluster to reach.
     """
     store = S3ArtifactStore(settings)
     store.ensure_bucket()
     registry = BackendRegistry()
     registry.register(
         NodeType.COMPUTATION,
-        MockComputeBackend(
-            database=database,
-            store=store,
-            scenario=args.compute_scenario,
-            step_seconds=args.step_seconds,
+        (
+            slurm_backend(settings, database, store, args)
+            if args.compute_backend == "slurm"
+            else MockComputeBackend(
+                database=database,
+                store=store,
+                scenario=args.compute_scenario,
+                step_seconds=args.step_seconds,
+            )
         ),
     )
     registry.register(
@@ -120,6 +175,83 @@ def build_registry(
         MockLabBackend(database=database, store=store, scenario=args.lab_scenario),
     )
     return registry
+
+
+def slurm_backend(
+    settings: Settings,
+    database: Database,
+    store: S3ArtifactStore,
+    args: argparse.Namespace,
+) -> SlurmComputeBackend:
+    """The real compute backend, from the settings a deployment supplied.
+
+    The password is read here, from `Settings` — where it arrived from the
+    environment of *this* process — and passed to a `SlurmTarget` that the
+    transport reads once per connection. It never enters RAVEL's database, never
+    enters a job's `task_spec`, and is kept out of every tool server's
+    environment by `Settings._LAUNCHER_ONLY`.
+
+    Raises:
+        SlurmConfigurationError: The host or the username is missing. Refused
+            at start-up, where somebody is watching, rather than at the first
+            node that reaches the queue.
+    """
+    if not settings.slurm_host:
+        raise SlurmConfigurationError(
+            "--compute-backend slurm needs a cluster: set RAVEL_SLURM_HOST and "
+            "RAVEL_SLURM_USERNAME (and RAVEL_SLURM_PASSWORD or "
+            "RAVEL_SLURM_KEY_FILENAME) before starting the worker"
+        )
+    if not settings.slurm_username:
+        raise SlurmConfigurationError(
+            "RAVEL_SLURM_HOST is set but RAVEL_SLURM_USERNAME is not, so there "
+            "is no account to submit as"
+        )
+    target = SlurmTarget(
+        host=settings.slurm_host,
+        username=settings.slurm_username,
+        port=settings.slurm_port,
+        password=(
+            settings.slurm_password.get_secret_value() if settings.slurm_password else None
+        ),
+        key_filename=str(settings.slurm_key_filename) if settings.slurm_key_filename else None,
+        trust_unknown_host=settings.slurm_trust_unknown_host,
+        connect_timeout_seconds=settings.slurm_connect_timeout_seconds,
+        command_timeout_seconds=settings.slurm_command_timeout_seconds,
+    )
+    return SlurmComputeBackend(
+        target=target,
+        # A factory, not a connection: each operation opens its own, so a poll
+        # that waits minutes for a durable timer is not a socket held open for
+        # the length of it.
+        connect=lambda: ParamikoTransport.connect(
+            host=target.host,
+            port=target.port,
+            username=target.username,
+            password=target.password,
+            key_filename=target.key_filename,
+            trust_unknown_host=target.trust_unknown_host,
+            timeout=target.connect_timeout_seconds,
+        ),
+        database=database,
+        store=store,
+        jobs_root=args.slurm_jobs_root or settings.slurm_jobs_root,
+    )
+
+
+def _describe_compute(settings: Settings, args: argparse.Namespace) -> str:
+    """What the worker is about to run computation on, for the banner.
+
+    The host and the account, never the credential: this line goes to a
+    terminal, to a log file, and into whatever collects them.
+    """
+    if args.compute_backend != "slurm":
+        return f"{args.compute_scenario} (a mock; its output is marked simulated)"
+    root = args.slurm_jobs_root or settings.slurm_jobs_root
+    return (
+        f"slurm at {settings.slurm_username}@{settings.slurm_host}:{settings.slurm_port}, "
+        f"workspaces under {root}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,13 +267,20 @@ def main(argv: list[str] | None = None) -> int:
     # another would be two views of the same table with a transaction between
     # them, for no gain.
     database = Database.from_settings(settings)
-    registry = build_registry(settings, database, args)
+    try:
+        registry = build_registry(settings, database, args)
+    except (SlurmConfigurationError, ValueError) as error:
+        # Printed rather than raised: this is a deployment that has not been
+        # finished being configured, and a traceback is not the way to tell
+        # somebody which variable is missing.
+        print(f"\n  cannot start: {error}\n", file=sys.stderr)
+        database.dispose()
+        return 2
 
     print(
         f"\n  worker on {settings.temporal_task_queue} at {settings.temporal_host}\n"
-        f"  compute: {args.compute_scenario}\n"
-        f"  lab:     {args.lab_scenario}\n"
-        f"  these are mocks; everything they produce is marked simulated\n"
+        f"  compute: {_describe_compute(settings, args)}\n"
+        f"  lab:     {args.lab_scenario} (a mock; its output is marked simulated)\n"
         f"\n  Ctrl-C to stop\n"
     )
     try:

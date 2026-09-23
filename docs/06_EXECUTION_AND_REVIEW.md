@@ -57,13 +57,43 @@ Deterministic RAVEL interface, not an Agent.
 See `schemas/compute_backend_contract.yaml`.
 
 V0:
-- MockComputeBackend
+- MockComputeBackend — plays a named scenario; everything it writes is marked
+  simulated and the Evidence Ledger refuses it.
+- SlurmComputeBackend — a real cluster over SSH. Selected with
+  `--compute-backend slurm` and configured by the `RAVEL_SLURM_*` settings; with
+  no host or username the worker refuses to start rather than stalling on the
+  first node that reaches the queue. It submits the job script preparation
+  wrote, polls `squeue`/`sacct`, and collects the outputs the contract required
+  as artifacts under the project the run's own submission record names.
 
 Future:
-- Slurm/HPC adapter
 - local/cloud compute
 
 Compute Worker never directly hardcodes sbatch/SSH in its core logic.
+
+### Cluster credentials
+
+The Slurm password is read by the worker process from its own environment and by
+the SSH transport. It is listed in the settings' launcher-only prefix set, so it
+is stripped from the environment of every DSH runtime and tool server RAVEL
+starts — the model never has it to leak — and it is redacted out of every
+`detail`, progress fact, exception message and `completion_metadata` the backend
+produces, because those end up in PostgreSQL and in logs that outlive the
+process that held the secret. Paramiko rather than the `ssh`/`scp` clients for
+the same reason: the OpenSSH client takes a password only from a terminal or
+from `sshpass`, and `sshpass -p <secret>` puts it in a command line every
+account on the host can read from `ps`.
+
+### What a Slurm result is
+
+An artifact collected off a cluster is **not** marked simulated — it came off a
+real machine — and it is **not** marked as evidence either. Whether it satisfies
+a node's acceptance criteria is Review's judgement against the frozen criteria;
+a backend that asserted its own result was admissible would be deciding its own
+case. A run that ends without producing everything the contract required is
+reported as a missing output rather than raised: the run ended and produced what
+it produced, and `INCOMPLETE_DELIVERY` is the layer that decides what that
+means.
 
 ## 5. Experiment Backend
 
