@@ -32,7 +32,7 @@ from ravel.domain.reconciliation import (
     WorkflowLiveness,
 )
 from ravel.domain.roles import AgentRole
-from ravel.domain.state_machines import WORKER_RUN_NODE_TYPES
+from ravel.domain.state_machines import PLANNABLE_NODE_TYPES, WORKER_RUN_NODE_TYPES
 from ravel.execution.reconcile import ExecutionReconciler, WorkflowProbe
 from ravel.execution.temporal.worker import workflow_id_for
 from ravel.state.database import Database
@@ -44,13 +44,21 @@ from ravel.state.repositories.records import BackendJobRepository, RecordReposit
 
 pytestmark = pytest.mark.integration
 
-#: Every node type that is *not* executed as a durable run. Derived from the
-#: enum rather than listed, so that a node type added later is covered by
-#: `test_a_node_no_worker_runs_is_never_asked_about` without anybody
-#: remembering to add it — see that case for why a type nobody remembered
-#: would be probed by mistake.
+#: Every node type a plan may hold that is *not* executed as a durable run.
+#: Derived from the domain rather than listed, so that a node type added later
+#: is covered by `test_a_node_no_worker_runs_is_never_asked_about` without
+#: anybody remembering to add it — see that case for why a type nobody
+#: remembered would be probed by mistake.
+#:
+#: Derived from `PLANNABLE_NODE_TYPES` rather than from `NodeType` because the
+#: two stopped being the same set: REVIEW is readable and not creatable (L-27),
+#: so a node of that type cannot exist to be probed, and the parametrisation
+#: would fail in its fixture rather than in its assertion.
 NON_WORKER_RUN_NODE_TYPES: tuple[NodeType, ...] = tuple(
-    sorted(set(NodeType) - set(WORKER_RUN_NODE_TYPES), key=lambda kind: kind.value)
+    sorted(
+        PLANNABLE_NODE_TYPES - WORKER_RUN_NODE_TYPES,
+        key=lambda kind: kind.value,
+    )
 )
 
 

@@ -54,6 +54,7 @@ from ravel.domain.enums import (
 from ravel.domain.planning import HorizonError
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
 from ravel.dsh import runtime as runtime_module
 from ravel.dsh.agents import HarnessAgent, WorkerAgent
 from ravel.dsh.pool import create_pool
@@ -1402,6 +1403,81 @@ async def test_p10_03_a_master_can_read_why_a_node_stopped(
     with headless.database.read_only() as session:
         written = ReviewRepository(session, project_id).for_node(task.node_id)
     assert len(written) == 1 and written[0].diagnosis == diagnosis
+
+
+async def test_l27_a_node_nobody_can_run_is_named_to_master(
+    headless: Headless, prepare: Callable[..., Prepared]
+) -> None:
+    """L-27: the half of the gap that was left after the type was abolished.
+
+    A plan can still hold a node no seat is ever given — HYPOTHESIS and DECISION
+    are plannable, both are Master's, and neither is handed to a Worker or to a
+    Research session — so the loop puts such a node to Master
+    (`Situation.needs_decision` includes the `unexecutable` bucket) and stops.
+    What it did not do, until this case existed, was say so: the prompt's "what
+    is waiting on you" listed only the stopped, the blocked and the escalations,
+    so a round could ask Master a question with nothing under it — which reads
+    as a mistake in the prompt and was taken for one twice in live runs, once
+    for forty-three minutes and thirty cancelled nodes.
+
+    Asserted on both windows Master has, and asserted to be the *same sentence*:
+    a read that exists and a prompt that paraphrases it are two statements that
+    can come to disagree, and the one that reaches the model is the prompt.
+    """
+    project_id = headless.project.project_id
+    master = seat_scope(headless.database, project_id, AgentRole.MASTER)
+    # A DECISION node: plannable, and the type a live Master has actually
+    # committed and then had to withdraw. It needs no acceptance criteria —
+    # nothing about it is measured against anything, because nothing runs it.
+    task = prepare(node_type=NodeType.DECISION, with_acceptance=False)
+
+    reason = unexecutable_reason(NodeType.DECISION)
+    assert NodeType.DECISION.value in reason
+
+    stopped = (await seat_tool("read_project_state", master)())["stopped"]
+    assert [entry["node"] for entry in stopped] == [task.node.display_id], (
+        "a node no seat can run is not reported as waiting on Master, so the one "
+        f"role that could resolve it cannot see it: {stopped}"
+    )
+    entry = stopped[0]
+    assert entry["status"] == NodeStatus.READY.value
+    assert entry["node_type"] == NodeType.DECISION.value
+    assert entry["unexecutable"] == reason, (
+        "the project-state read does not carry the domain's own sentence for why "
+        f"this node is not work: {entry}"
+    )
+    # The other two reasons are absent rather than empty strings, because a
+    # node this read calls stopped has exactly one of them.
+    assert entry["verdict"] is None
+    assert entry["run_reconciliation"] is None
+
+    # The turn Master is handed, read the way the loop reads it: with the seats
+    # this process holds, which is what makes the node unexecutable rather than
+    # merely unfinished.
+    situation = read_situation(
+        headless.database, project_id, executable=SEATED_NODE_TYPES
+    )
+    assert situation.unexecutable == (task.node,)
+    assert situation.needs_decision, (
+        "the loop stopped asking Master about a node nothing can run, which "
+        "leaves the project holding it forever"
+    )
+    prompt = HarnessAgent(
+        pool=None,  # type: ignore[arg-type]
+        project_id=project_id,
+        role=AgentRole.MASTER,
+    )._master_prompt(situation)
+
+    assert task.node.display_id in prompt, (
+        f"Master is asked to decide about a node the turn never names: {prompt}"
+    )
+    assert reason in prompt, (
+        "Master is told a node is waiting without being told what is wrong with "
+        f"it, which is how a plan gets rewired around a node that cannot move: {prompt}"
+    )
+    assert "Nothing in the DAG is waiting on a decision." not in prompt, (
+        "the turn was asked about nothing, which is the defect this case is for"
+    )
 
 
 async def test_p10_03_a_master_can_plan_a_project_that_has_no_roadmap(

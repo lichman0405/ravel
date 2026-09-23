@@ -49,6 +49,7 @@ from typing import Any
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import NodeStatus
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import unexecutable_reason
 from ravel.dsh.pool import DshRuntimePool
 from ravel.dsh.runtime import RoleRuntime, TurnOutcome
 from ravel.execution.loop import Situation
@@ -301,6 +302,17 @@ class HarnessAgent(RoleSession):
     @staticmethod
     def _waiting_on_master(situation: Situation) -> list[str]:
         waiting: list[str] = []
+        # First, because it is the one question whose subject this list used to
+        # leave out: `needs_decision` asks Master about a node no seat can run,
+        # and until L-27 was resolved neither this prompt nor `read_project_state`
+        # named one — so the round put a question to Master with nothing under
+        # "what is waiting on you", which is a prompt that reads as a mistake
+        # and was, twice, taken for one.
+        for node in situation.unexecutable:
+            waiting.append(
+                f"- {node.display_id} {node.node_type.value} is READY and cannot "
+                f"run: {unexecutable_reason(node.node_type)}"
+            )
         for node in situation.nodes:
             if node.status is NodeStatus.WAITING_DECISION:
                 waiting.append(

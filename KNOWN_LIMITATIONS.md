@@ -782,11 +782,60 @@ the one to check this against.
 ## L-27 — A REVIEW-typed node is planned, promoted, and never handed to anybody
 
 - **Since:** Phase 10, since the supervisor's loop has held seats at all
-- **Where:** `src/ravel/execution/loop.py` (`ProjectLoop._executor_for`,
-  `Situation.unexecutable`, `Situation.needs_decision`);
-  `src/ravel/domain/state_machines.py` (`NODE_EXECUTOR`)
+- **Resolved:** 2026-09-23, in Phase 11, by abolishing the type rather than by
+  teaching the loop to dispatch it. A review is not a kind of work the plan
+  contains; it is a checkpoint *on* a node that runs, and RAVEL already asks for
+  it through that node's own status — a COMPUTATION or EXPERIMENT node is
+  cleared to run by a PRE_RUN verdict, and every node that ran holds at
+  REVIEWING until a FINAL verdict moves it. A REVIEW node asked for a second
+  copy of that question, on a node that did not exist, and no seat was ever
+  going to be given one: `NODE_EXECUTOR` assigned it to the Review Agent, whose
+  whole surface is verdicts about *other* nodes, and the loop has no execution
+  path into one. So the domain table and the runtime now say the same thing, and
+  they say it about a type that is no longer plannable.
+  `ravel.domain.state_machines.PLANNABLE_NODE_TYPES` is the set a node may be
+  created as; `DagNode.create` refuses anything outside it, so every path into
+  the DAG meets the same refusal, and `add_dag_node`/`expand_dag_phase` report
+  it to the model with the sentence that says where the checking goes instead.
+  `NodeType.REVIEW` stays a member of the enum and stays in the database's check
+  constraint, because a node written while the type existed is a record of what
+  a project did and has to remain readable — `executor_for` answers `None` for
+  it rather than raising, and the model validator tolerates a stored executor
+  that no longer has a table entry. No migration was written and none is needed:
+  cancelling a node is a DAG mutation that requires Master and a Decision
+  Record (`DagRepository.transition_node` refuses the target outright, and says
+  so), so a migration that cancelled every surviving REVIEW node would be RAVEL
+  taking an act that is Master's — and with the second half of the fix it no
+  longer has to.
+- **Where:** `src/ravel/domain/state_machines.py` (`PLANNABLE_NODE_TYPES`,
+  `SEATED_NODE_TYPES`, `NODE_EXECUTOR`, `unexecutable_reason`);
+  `src/ravel/domain/dag.py` (`DagNode.create`);
+  `src/ravel/execution/loop.py` (`Situation.unexecutable`)
 - **Seen:** 2026-09-23, live, in two Phase 10 acceptance runs — the certification
   and the research-driven case
+
+### The half that was about the plan, and the half that was about the telling
+
+Abolishing the type closes one door. It does not close the class: `HYPOTHESIS`
+and `DECISION` are still plannable, still Master's, and still never handed to an
+execution seat — that is by design, because Master's part in the loop is to be
+*asked* — so a plan can still hold a node nothing will ever run, and the loop
+still puts it to Master. What was wrong was that **nothing told Master why**. A
+round whose only question was such a node produced a prompt with "Nothing in the
+DAG is waiting on a decision." under "What is waiting on you", and
+`read_project_state`'s `stopped` list — the read a session is pointed at when a
+node stops — filtered on `WAITING_DECISION` and `BLOCKED` only, so a READY node
+nobody could run appeared in neither window. Master was asked a question and
+shown nothing; twice, live, it concluded that the prompt was mistaken rather
+than the plan. `unexecutable_reason` is now the one sentence both windows
+carry — "why no execution seat is ever handed a node of this type", stated for
+the type and derived from `NODE_EXECUTOR`, so a type added later is explained
+the day it exists — and `tests/acceptance/test_phase10_agents.py::test_l27_a_node_nobody_can_run_is_named_to_master`
+asserts that the prompt and the read say the same thing, because a read that
+exists and a prompt that paraphrases it are two statements that can disagree.
+
+The evidence that follows is what was true before the change, kept because the
+cost of the gap is the reason the fix is shaped the way it is.
 
 `NODE_EXECUTOR` assigns REVIEW nodes to the Review seat, and the comment on
 `WORKER_RUN_NODE_TYPES` counts REVIEW among the types "performed by the agent of
@@ -797,13 +846,21 @@ and `None` for everything else, so a READY REVIEW node lands in
 and nobody will ever be given them".
 
 For DECISION that is right, and the reason is written down: Master's part in the
-loop is to be *asked*, not handed a task. Review is in the same position for the
-same reason — its part in the loop is to return PRE_RUN and FINAL verdicts on
-other seats' nodes — but nothing says so, and the domain table and the comment
-above it say the opposite. The loop does put such a node to Master
+loop is to be *asked*, not handed a task. Review was in the same position for
+the same reason — its part in the loop is to return PRE_RUN and FINAL verdicts
+on other seats' nodes — but nothing said so, and the domain table and the
+comment above it said the opposite. The loop does put such a node to Master
 (`needs_decision` includes `unexecutable`), so a run does not hang on it; it
 costs a Master turn to find out, and a Master that does not work it out rewires
 around it.
+
+The reading that settled it was the second one, and it is the one the codebase
+had already written down elsewhere: `WORKER_RUN_NODE_TYPES` counts a Research
+Agent's work as work a seat does *inside its own turn*, and `PRE_RUN`/`FINAL`
+are the Review Agent's turns for exactly the same reason. Review's turn is a
+verdict about a node somebody else performed. A REVIEW node would have needed a
+verdict about a verdict, which is why making the loop dispatch one was never the
+fix: there was nothing for the seat to do when it got there.
 
 What that cost, measured. On 2026-09-23 a live Master built nine REVIEW-typed
 nodes across one certification run. Two reached READY and neither was ever
@@ -830,21 +887,21 @@ a RESEARCH node (RES-01C6E229) also sits READY undispatched shows the block is
 not specific to review executors, so re-placing this gate elsewhere in the chain
 would not make it run." The observation is exact and the inference is not. A
 RESEARCH node waiting its turn is work in a loop that dispatches one thing at a
-time; a REVIEW node at READY is work that will never be dispatched, however many
-cycles pass. Nothing a Master can read distinguishes the two, so it generalised
-from the case in front of it to the dispatch path as a whole, cancelled both
-gates, and re-based their checking onto a node that would run. Fourteen sources
+time; a REVIEW node at READY was work that would never be dispatched, however
+many cycles pass. Nothing a Master could read distinguished the two, so it
+generalised from the case in front of it to the dispatch path as a whole,
+cancelled both gates, and re-based their checking onto a node that would run. Fourteen sources
 were read, nine of them papers, and the run ended INCONCLUSIVE on research nodes
 that had come back PARTIAL — a defensible ending reached by a route that a
 one-line note in the situation would have shortened.
 
-**Do not conclude** that this is a dispatch defect waiting for a fix in the loop.
-It may be exactly right: a verdict is Review's turn, and a REVIEW node is a way
-of asking for one that the shipped wiring does not implement. What is wrong is
-that nothing says so — not the domain table, not the tool that lets Master create
-such a node, not the situation Master is shown — and that no test covers a REVIEW
-node in the unexecutable bucket: the four cases that cover that bucket all use
-DECISION, which is the one node type whose presence there is documented.
+It was not a dispatch defect, and it was not only a missing sentence. Both were
+true at once: a verdict is Review's turn and a REVIEW node asked for one the
+shipped wiring does not implement, *and* nothing said so — not the domain table,
+not the tool that let Master create such a node, not the situation Master was
+shown. Fixing either alone would have left the other standing, which is why the
+resolution did both: the type is gone from the plan, and the node types that
+remain unexecutable are now explained where Master reads them.
 
 **The same class, one step over, with a cheaper outcome.** On 2026-09-23 a
 different live Master — a later run of the same case — committed a `DECISION`

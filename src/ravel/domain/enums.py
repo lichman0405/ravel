@@ -11,12 +11,20 @@ from enum import StrEnum
 
 
 class NodeType(StrEnum):
-    """The six Scientific DAG node types. V0 adds no others."""
+    """The Scientific DAG's node-type vocabulary. V0 adds no others.
+
+    Six values, five of them plannable. `REVIEW` is the exception: a review is
+    a checkpoint on a node that runs rather than a node of its own, so nothing
+    may create one — see `PLANNABLE_NODE_TYPES` in `ravel.domain.state_machines`
+    for the rule and for why the value is still here.
+    """
 
     RESEARCH = "RESEARCH"
     HYPOTHESIS = "HYPOTHESIS"
     COMPUTATION = "COMPUTATION"
     EXPERIMENT = "EXPERIMENT"
+    #: Not a kind of work. Readable so a node written before 2026-09-23 can
+    #: still be read; never creatable.
     REVIEW = "REVIEW"
     DECISION = "DECISION"
 

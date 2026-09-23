@@ -25,6 +25,7 @@ from ravel.domain.ids import new_id
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import (
     NODE_TRANSITIONS,
+    PLANNABLE_NODE_TYPES,
     TransitionCheck,
     can_transition_node,
     executor_for,
@@ -32,6 +33,10 @@ from ravel.domain.state_machines import (
 )
 
 #: Node type -> the display prefix its human identifier uses.
+#:
+#: Total, including the type nothing may create any more: a display identifier
+#: is how a human names a node, and a node written under the old vocabulary
+#: still has one.
 _NODE_PREFIX: dict[NodeType, str] = {
     NodeType.RESEARCH: "RES",
     NodeType.HYPOTHESIS: "HYP",
@@ -60,6 +65,35 @@ class DagEdge(Record):
         if self.from_node == self.to_node:
             raise ValueError(f"node {self.from_node} cannot depend on itself")
         return self
+
+
+def _unplannable(node_type: NodeType) -> str:
+    """Why a node may not be created as this type, in a planner's terms.
+
+    REVIEW gets a sentence of its own, because it is the one type with a
+    mechanism standing behind it. A planner that asked for a REVIEW node wants
+    something RAVEL already does for every node that runs, and the refusal is
+    the only place that can say so — a node type that is simply missing from a
+    list teaches nothing about where the checking went.
+    """
+    if node_type is NodeType.REVIEW:
+        return (
+            "a REVIEW node is not a kind of work and cannot be planned. A review "
+            "is a checkpoint on a node that runs, asked for through that node's "
+            "own status: write what you want checked into the `criteria` of the "
+            "COMPUTATION or EXPERIMENT node it is about, and Review is asked to "
+            "clear that node before it runs (PRE_RUN) and to judge its result "
+            "afterwards (FINAL). Every node of every type that ran waits at "
+            "REVIEWING until a FINAL verdict moves it, so a separate node of "
+            "review would add a second copy of a question already being asked"
+        )
+    known = ", ".join(
+        kind.value for kind in NodeType if kind in PLANNABLE_NODE_TYPES
+    )
+    return (
+        f"{node_type.value} is not a node type a plan may contain; a node may be "
+        f"one of {known}"
+    )
 
 
 class DagNode(Record):
@@ -117,10 +151,14 @@ class DagNode(Record):
             )
         if self.node_id in self.dependencies:
             raise ValueError(f"node {self.node_id} lists itself as a dependency")
-        if self.executor_role is not executor_for(self.node_type):
+        # A type nobody performs has no executor to agree with, and a node of
+        # one is a row written while it was still a node type: what it holds is
+        # the seat the domain assigned then, and it is the record of that.
+        seat = executor_for(self.node_type)
+        if seat is not None and self.executor_role is not seat:
             raise ValueError(
                 f"a {self.node_type.value} node is executed by "
-                f"{executor_for(self.node_type).value}, not {self.executor_role.value}"
+                f"{seat.value}, not {self.executor_role.value}"
             )
         return self
 
@@ -139,13 +177,26 @@ class DagNode(Record):
         failure_policy: FailurePolicy | None = None,
         roadmap_phase: str | None = None,
     ) -> DagNode:
-        """Build a node, deriving its executor and display identifier."""
+        """Build a node, deriving its executor and display identifier.
+
+        Raises:
+            ValueError: The type is not one a node may be created as, or the
+                domain assigns it to no role at all. Both are the same refusal
+                from the caller's side — the plan would hold work with no
+                ending — and it is made here rather than at the tool so that
+                every path into the DAG meets it, the test fixtures included.
+        """
+        if node_type not in PLANNABLE_NODE_TYPES:
+            raise ValueError(_unplannable(node_type))
+        seat = executor_role or executor_for(node_type)
+        if seat is None:  # pragma: no cover - PLANNABLE covers this today
+            raise ValueError(_unplannable(node_type))
         return cls(
             display_id=f"{_NODE_PREFIX[node_type]}-{new_id()[:8].upper()}",
             project_id=project_id,
             node_type=node_type,
             objective=objective,
-            executor_role=executor_role or executor_for(node_type),
+            executor_role=seat,
             dependencies=dependencies,
             join_policy=join_policy,
             join_threshold=join_threshold,

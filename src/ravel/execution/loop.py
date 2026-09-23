@@ -214,12 +214,20 @@ class Situation:
         """READY nodes of a type nothing in this wiring has a seat for.
 
         A node type is in `executable` when the process reading this holds the
-        seat that begins it. `NODE_EXECUTOR` assigns one to every type, but
-        assigning it to a role is not the same as a session in that role having
-        an execution path into the node: a DECISION node is Master's, and
-        Master's part in the loop is to be *asked*, not to be handed a task. So
-        these are not work and nobody will ever be given them — they sit here
-        until Master cancels them or replaces them with work that runs.
+        seat that begins it. Being assigned to a role is not the same as a
+        session in that role having an execution path into the node: a DECISION
+        node is Master's, and Master's part in the loop is to be *asked*, not
+        to be handed a task. So these are not work and nobody will ever be
+        given them — they sit here until Master cancels them or replaces them
+        with work that runs.
+
+        Why a type is here rather than in `runnable` is
+        `unexecutable_reason`, and it is stated for the type rather than for
+        the reader: a node nobody can be given is a fact about the plan, and
+        whoever is told about it — Master in its prompt, a person reading the
+        project state — is owed the same sentence. Nothing said it until
+        KNOWN_LIMITATIONS L-27 was resolved, and what that cost is in the
+        record.
         """
         return tuple(
             node

@@ -24,6 +24,7 @@ from ravel.domain.enums import (
 from ravel.domain.identity import MasterCheckpoint
 from ravel.domain.reconciliation import RunReconciliation
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
 from ravel.master.service import ENDING_DECISION, MasterService
 from ravel.mcp.context import ToolContext, as_json, require_master
 from ravel.mcp.registry import tools_for
@@ -176,12 +177,30 @@ def read_project_state(context: ToolContext) -> Any:
             # plan changes — and it has no verdict, which is itself the answer:
             # a node whose dependencies cannot all be satisfied was stopped by
             # the graph rather than by anyone's judgement.
+            #
+            # The third reason is a node nothing will ever run, and it is in
+            # this list because it is the same question from Master's side:
+            # `needs_decision` asks Master about it, so a read that left it out
+            # asked Master about something it did not name. Two live runs took
+            # that for a mistake — one reasoned at length about a READY node
+            # that never moved, the other spent a turn discovering that the
+            # file a DECISION node owed was one no role could write — and
+            # neither had to (KNOWN_LIMITATIONS L-27).
             "stopped": [
                 {
                     "node": node.display_id,
                     "node_type": node.node_type.value,
                     "status": node.status.value,
                     "objective": node.objective,
+                    # Why this node is not work, for the one case where the
+                    # status does not say it: READY reads as progress, and a
+                    # node of a type no execution seat is given has none.
+                    "unexecutable": (
+                        unexecutable_reason(node.node_type)
+                        if node.status is NodeStatus.READY
+                        and node.node_type not in SEATED_NODE_TYPES
+                        else None
+                    ),
                     # Only a verdict that *withheld* something is a reason a
                     # node stopped. A PASS is the clearance a node needed to
                     # enter RUNNING, and a node that ran and was then parked —
@@ -233,6 +252,10 @@ def read_project_state(context: ToolContext) -> Any:
                 }
                 for node in nodes
                 if node.status in (NodeStatus.WAITING_DECISION, NodeStatus.BLOCKED)
+                or (
+                    node.status is NodeStatus.READY
+                    and node.node_type not in SEATED_NODE_TYPES
+                )
             ],
             # Whether the project has stated its own question, reported here
             # because this is the read a session starts from: a contract that

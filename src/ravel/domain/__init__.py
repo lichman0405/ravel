@@ -85,7 +85,9 @@ from ravel.domain.state_machines import (
     FROZEN_CRITERIA_NODE_TYPES,
     NODE_EXECUTOR,
     NODE_TRANSITIONS,
+    PLANNABLE_NODE_TYPES,
     PROJECT_TRANSITIONS,
+    SEATED_NODE_TYPES,
     TERMINAL_NODE_STATUSES,
     TERMINAL_PROJECT_STATUSES,
     WORKER_RUN_NODE_TYPES,
@@ -96,6 +98,7 @@ from ravel.domain.state_machines import (
     executor_for,
     is_join_satisfied,
     requires_frozen_criteria,
+    unexecutable_reason,
 )
 
 __all__ = [
@@ -104,7 +107,9 @@ __all__ = [
     "FROZEN_CRITERIA_NODE_TYPES",
     "NODE_EXECUTOR",
     "NODE_TRANSITIONS",
+    "PLANNABLE_NODE_TYPES",
     "PROJECT_TRANSITIONS",
+    "SEATED_NODE_TYPES",
     "TERMINAL_NODE_STATUSES",
     "TERMINAL_PROJECT_STATUSES",
     "WORKER_RUN_NODE_TYPES",
@@ -182,5 +187,6 @@ __all__ = [
     "is_opaque_id",
     "new_id",
     "requires_frozen_criteria",
+    "unexecutable_reason",
     "utcnow",
 ]

@@ -118,14 +118,70 @@ TERMINAL_PROJECT_STATUSES: frozenset[ProjectStatus] = frozenset(
 #: Enforced rather than advisory. A COMPUTATION node executed by Master would
 #: let the role that decides what the result means also produce the result,
 #: which is exactly the separation the role model exists to keep.
+#:
+#: Partial, and deliberately so: a node type that is not a key here is a type
+#: no role performs. REVIEW was one, and is the reason this table stopped
+#: being total — see `PLANNABLE_NODE_TYPES`.
 NODE_EXECUTOR: dict[NodeType, AgentRole] = {
     NodeType.RESEARCH: AgentRole.RESEARCH,
     NodeType.HYPOTHESIS: AgentRole.MASTER,
     NodeType.COMPUTATION: AgentRole.COMPUTE_WORKER,
     NodeType.EXPERIMENT: AgentRole.EXPERIMENTAL_WORKER,
-    NodeType.REVIEW: AgentRole.REVIEW,
     NodeType.DECISION: AgentRole.MASTER,
 }
+
+#: The node types a node may be created as.
+#:
+#: A node is a unit of work in the plan, and a plan is only a plan if every
+#: node in it has an ending somebody is meant to give it. Five of the six have
+#: one. Three — RESEARCH, COMPUTATION, EXPERIMENT — are carried out by a seat
+#: that runs the work. Two — HYPOTHESIS and DECISION — are Master's control
+#: nodes: the DAG holds a claim or a decision the rest of the plan depends on,
+#: Master is asked about them for as long as they are unfinished (the loop's
+#: `Situation.unexecutable` is what asks), and cancelling one or replacing it
+#: with work that runs is the ordinary ending.
+#:
+#: **REVIEW is not in this set, and is not a node type any more.** A review is
+#: not work the plan contains; it is a checkpoint *on* a node that runs, and
+#: RAVEL asks for it through that node's own status: a COMPUTATION or
+#: EXPERIMENT node is cleared to run by a PRE_RUN verdict, and every node that
+#: ran holds at REVIEWING until a FINAL verdict moves it. A REVIEW node asked
+#: for a second copy of that — a node whose whole content was "review
+#: something else" — and no seat was ever going to perform it: `NODE_EXECUTOR`
+#: assigned it to the Review Agent, whose entire surface is verdicts about
+#: *other* nodes, and the loop has no execution path into one. Live runs
+#: planned nine of them across a single project and cancelled every one of
+#: them, spending forty-three minutes and thirty CANCEL_NODE decisions on work
+#: nobody could be given (KNOWN_LIMITATIONS L-27). The type was abolished
+#: instead, and the mechanism it duplicated was left as the only one.
+#:
+#: `NodeType.REVIEW` stays a member of the enum so that a node written while
+#: the type still existed can still be read: the DAG is history as well as a
+#: plan, and history is allowed to contain a type the plan may no longer hold.
+#: Nothing may create one. Ending the ones already written is Master's act and
+#: not RAVEL's — cancelling a node is a DAG mutation, and a migration that
+#: cancelled every surviving REVIEW node would be RAVEL taking a decision that
+#: requires Master — so no migration was written, and the read paths explain
+#: such a node instead: `executor_for` answers `None` for it, and
+#: `unexecutable_reason` is what Master is told.
+PLANNABLE_NODE_TYPES: frozenset[NodeType] = frozenset(
+    node_type for node_type in NodeType if node_type is not NodeType.REVIEW
+)
+
+#: The node types an execution seat is given: the ones whose executor carries
+#: work out rather than deciding about it.
+#:
+#: Master is not an execution seat, so its own node types are not here. That is
+#: the distinction `Situation.unexecutable` turns on — a READY node of one of
+#: these types is work somebody will be handed, and a READY node of any other
+#: type is a question for Master and is never handed to anybody. Derived from
+#: `NODE_EXECUTOR` rather than written out beside it, because a list next to a
+#: table is a list that can disagree with it.
+SEATED_NODE_TYPES: frozenset[NodeType] = frozenset(
+    node_type
+    for node_type, seat in NODE_EXECUTOR.items()
+    if seat is not AgentRole.MASTER
+)
 
 #: Node types whose acceptance criteria must be frozen before they run.
 FROZEN_CRITERIA_NODE_TYPES: frozenset[NodeType] = frozenset(
@@ -135,7 +191,7 @@ FROZEN_CRITERIA_NODE_TYPES: frozenset[NodeType] = frozenset(
 #: Node types a Worker performs as a *run*: a durable workflow that starts a
 #: backend job and reports through its own activities.
 #:
-#: The other four are performed by the agent of their seat, inside its own
+#: The rest of the plannable types are performed by an agent inside its own
 #: turn. The distinction is invisible in `NodeStatus` — a RESEARCH node and a
 #: COMPUTATION node are both `RUNNING` while somebody works on them — and it
 #: matters to anything that asks a system *outside* PostgreSQL whether that
@@ -276,14 +332,56 @@ def can_transition_job(current: JobState, target: JobState) -> TransitionCheck:
     return TransitionCheck(True, f"{current.value} -> {target.value}")
 
 
-def executor_for(node_type: NodeType) -> AgentRole:
-    """The role that executes a node type."""
-    return NODE_EXECUTOR[node_type]
+def executor_for(node_type: NodeType) -> AgentRole | None:
+    """The role that executes a node type, or `None` when no role does.
+
+    `None` is a real answer and not a missing one. A node type nobody performs
+    is a type the plan may not hold (`PLANNABLE_NODE_TYPES`), and the one that
+    reached that state — REVIEW — keeps its member in the enum so that rows
+    written while it was plannable can still be read. Reading one asks this
+    function about it, and "nobody performs this" is what the record should
+    yield rather than a `KeyError` out of a history read.
+    """
+    return NODE_EXECUTOR.get(node_type)
 
 
 def requires_frozen_criteria(node_type: NodeType) -> bool:
     """Whether a node type must freeze acceptance criteria before RUNNING."""
     return node_type in FROZEN_CRITERIA_NODE_TYPES
+
+
+def unexecutable_reason(node_type: NodeType) -> str:
+    """Why no execution seat is ever handed a node of this type.
+
+    A READY node of such a type is the one thing in a plan that no amount of
+    waiting resolves, and there are two ways to be one. A type the domain
+    assigns to nobody has no performer at all. A type it assigns to Master has
+    a performer who is not an execution seat: Master's part in the loop is to
+    be *asked*, not to be handed a task, so a node of its own is resolved by a
+    decision rather than by work somebody carries out.
+
+    Read wherever such a node has to be explained, rather than written out at
+    each of them: a loop that puts one to Master, the prompt that tells Master
+    what is waiting on it, and the project-state read a session makes are three
+    windows onto one fact, and a sentence copied into three files is a sentence
+    that can come to disagree with itself (KNOWN_LIMITATIONS L-27).
+    """
+    seat = executor_for(node_type)
+    if seat is None:
+        return (
+            f"nothing in RAVEL performs a {node_type.value} node: it has no "
+            "executor, no run, and no seat that would be handed it, so it stays "
+            "READY however long the project waits. It was planned while the type "
+            "was still plannable; cancelling it, or replacing it with work that "
+            "runs, is the only thing that moves it"
+        )
+    return (
+        f"a {node_type.value} node is {seat.display_name}'s own, and that is not "
+        "an execution seat: no Worker and no Research session is ever handed "
+        "one, because that role's part in the loop is to be asked rather than "
+        "given a task. The loop puts it to that role while it is unfinished, and "
+        "cancelling it or replacing it with work that runs is how it ends"
+    )
 
 
 def is_join_satisfied(

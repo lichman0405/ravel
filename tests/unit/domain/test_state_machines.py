@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from ravel.domain.dag import DagNode
 from ravel.domain.enums import (
     TERMINAL_JOB_STATES,
     FailureClass,
@@ -18,7 +19,9 @@ from ravel.domain.state_machines import (
     ACTIVE_NODE_STATUSES,
     JOB_TRANSITIONS,
     NODE_TRANSITIONS,
+    PLANNABLE_NODE_TYPES,
     PROJECT_TRANSITIONS,
+    SEATED_NODE_TYPES,
     TERMINAL_NODE_STATUSES,
     TERMINAL_PROJECT_STATUSES,
     WORKER_RUN_NODE_TYPES,
@@ -184,13 +187,77 @@ def test_pause_is_reversible_but_completion_is_not() -> None:
 # ── Executor separation ─────────────────────────────────────────────────────
 
 
-def test_each_node_type_has_exactly_one_executor() -> None:
+def test_each_plannable_node_type_has_exactly_one_executor() -> None:
     assert executor_for(NodeType.RESEARCH) is AgentRole.RESEARCH
     assert executor_for(NodeType.COMPUTATION) is AgentRole.COMPUTE_WORKER
     assert executor_for(NodeType.EXPERIMENT) is AgentRole.EXPERIMENTAL_WORKER
-    assert executor_for(NodeType.REVIEW) is AgentRole.REVIEW
     assert executor_for(NodeType.HYPOTHESIS) is AgentRole.MASTER
     assert executor_for(NodeType.DECISION) is AgentRole.MASTER
+
+
+def test_no_role_executes_a_review_node_and_no_plan_may_hold_one() -> None:
+    """L-27, as a rule rather than as a wiring accident.
+
+    `NODE_EXECUTOR` used to assign REVIEW to the Review Agent, and the loop
+    never gave that seat an execution path into a node — so the domain said one
+    thing and the runtime did another, and a live Master spent forty-three
+    minutes and thirty cancellations on the difference. The two now agree, and
+    they agree on the true statement: a review is a checkpoint on a node that
+    runs, so there is no such node to execute.
+
+    Asserted from both ends, because either one alone leaves the trap half open:
+    no executor means the loop has nothing to dispatch, and a type outside
+    `PLANNABLE_NODE_TYPES` means no plan can hold one in the first place.
+    """
+    assert executor_for(NodeType.REVIEW) is None
+    assert NodeType.REVIEW not in PLANNABLE_NODE_TYPES
+    assert set(NodeType) - {NodeType.REVIEW} == PLANNABLE_NODE_TYPES
+
+
+def test_a_node_may_not_be_created_as_the_retired_type() -> None:
+    """The refusal is at the domain, so every path into the DAG meets it.
+
+    Not only the tool: a fixture that built one directly would be a test of a
+    plan no live Master can write, and the point of the change is that no plan
+    can hold one at all.
+    """
+    with pytest.raises(ValueError) as refusal:
+        DagNode.create(
+            project_id="p1",
+            node_type=NodeType.REVIEW,
+            objective="Review the conductivity series.",
+            created_by="master",
+        )
+
+    said = str(refusal.value)
+    assert "REVIEW node is not a kind of work" in said
+    assert "criteria" in said, (
+        "the refusal tells a planner what to do instead or it teaches nothing: "
+        "a request for review work is answered by the criteria of the node the "
+        "review is about"
+    )
+
+
+def test_a_legacy_review_node_can_still_be_read() -> None:
+    """History is allowed to contain a type the plan may not.
+
+    A row written while REVIEW was plannable holds the executor the domain
+    assigned then, and reading it must not raise: the DAG is the record of what
+    a project did, and a record that cannot be read is not one. `create` is the
+    door that closes; the model validator stays open for the rows behind it.
+    """
+    legacy = DagNode(
+        node_id="n1",
+        display_id="REV-00000001",
+        project_id="p1",
+        node_type=NodeType.REVIEW,
+        objective="Review the conductivity series.",
+        executor_role=AgentRole.REVIEW,
+        created_by="master",
+    )
+
+    assert legacy.executor_role is AgentRole.REVIEW
+    assert legacy.node_type is NodeType.REVIEW
 
 
 def test_master_does_not_execute_computation_or_experiment() -> None:
@@ -199,9 +266,24 @@ def test_master_does_not_execute_computation_or_experiment() -> None:
         assert executor_for(node_type) is not AgentRole.MASTER
 
 
-def test_review_is_never_executed_by_the_role_being_reviewed() -> None:
-    assert executor_for(NodeType.REVIEW) is AgentRole.REVIEW
-    assert AgentRole.REVIEW is not AgentRole.MASTER
+def test_the_seats_are_the_node_types_a_worker_or_a_researcher_carries_out() -> None:
+    """Master decides about a node; it is never handed one.
+
+    This is the split `Situation.unexecutable` turns on, so it is stated once,
+    here, and derived from `NODE_EXECUTOR` rather than written down beside it.
+    A type Master were assigned to and left out of this set would be one the
+    loop dispatches to a seat that does not perform it.
+    """
+    assert {
+        NodeType.RESEARCH,
+        NodeType.COMPUTATION,
+        NodeType.EXPERIMENT,
+    } == SEATED_NODE_TYPES
+    assert not {
+        node_type
+        for node_type in SEATED_NODE_TYPES
+        if executor_for(node_type) is AgentRole.MASTER
+    }, "an execution seat was assigned to Master, which is asked rather than handed work"
 
 
 def test_only_computation_and_experiment_freeze_criteria() -> None:
