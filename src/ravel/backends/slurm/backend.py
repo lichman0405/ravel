@@ -639,12 +639,18 @@ class SlurmComputeBackend:
         """Put the prepared workspace on the cluster.
 
         Every regular file, at the same relative path, so that what runs is what
-        preparation built and hashed. Symlinks are skipped rather than followed:
-        a workspace is written by RAVEL and a link in one is either a mistake or
-        an escape from the directory, and neither is something to upload.
+        preparation built and hashed. A symlink is refused rather than followed:
+        `is_file` is true of a link to a file, so a walk that only asked that
+        would `scp` whatever the link points at — bytes from outside the
+        workspace, under a name the manifest hashed as something else. Nothing
+        legitimate puts one there (`Workspace._target` refuses to write through
+        one, and refuses a name that is not a plain file name), so a link found
+        here means the directory is not the one preparation built, and copying
+        part of it to a cluster is not a thing to do quietly.
 
         Raises:
-            SlurmSubmissionError: The workspace is not there, or holds nothing.
+            SlurmSubmissionError: The workspace is not there, holds nothing, or
+                holds a symlink.
         """
         if not workspace.is_dir():
             raise SlurmSubmissionError(
@@ -652,7 +658,16 @@ class SlurmComputeBackend:
                 "run is prepared and submitted by the same worker, so a missing "
                 "directory means the work was prepared somewhere else"
             )
-        files = sorted(path for path in workspace.rglob("*") if path.is_file())
+        everything = sorted(workspace.rglob("*"))
+        links = [path for path in everything if path.is_symlink()]
+        if links:
+            raise SlurmSubmissionError(
+                f"the prepared workspace {workspace} holds symlinks "
+                f"({', '.join(str(path.relative_to(workspace)) for path in links)}), "
+                "and uploading one would send its target's bytes to the cluster "
+                "under the name the manifest hashed"
+            )
+        files = [path for path in everything if path.is_file()]
         if not files:
             raise SlurmSubmissionError(f"the prepared workspace {workspace} is empty")
         ssh.run(f"mkdir -p {_quote(remote_dir)}", timeout=self.target.command_timeout_seconds)

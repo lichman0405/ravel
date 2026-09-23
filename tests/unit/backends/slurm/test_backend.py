@@ -260,6 +260,47 @@ def test_a_workspace_with_nothing_in_it_is_refused(
     assert "is empty" in str(refused.value)
 
 
+def test_a_symlink_in_a_workspace_is_refused_rather_than_uploaded(
+    connections: Connections,
+    target: SlurmTarget,
+    cluster: ScriptedCluster,
+    request_for,
+    tmp_path: Path,
+) -> None:
+    """The workspace that runs on the cluster has to be the one that was hashed.
+
+    `is_file` is true of a symlink to a file, so a walk that asked only that
+    would `scp` whatever the link points at — bytes from outside the workspace,
+    arriving under a name the manifest hashed as something else. Nothing
+    legitimate creates one (`Workspace._target` refuses to write through a link
+    and refuses a name that is not a plain file name), so finding one means this
+    directory is not the one preparation built, and the answer is to refuse the
+    submission rather than to upload part of it.
+
+    Asserted on the cluster's side as well as the backend's: the point is that
+    the file never left this machine, and a refusal after `put` would be a
+    refusal that had already leaked the bytes.
+    """
+    outside = tmp_path / "secret.txt"
+    outside.write_bytes(b"not part of this experiment")
+    inside = tmp_path / "linked"
+    inside.mkdir()
+    (inside / "simulation.input").symlink_to(outside)
+    (inside / "job.slurm").write_bytes(WORKSPACE_FILES["job.slurm"])
+
+    backend = a_backend(connections, target)
+    with pytest.raises(SlurmSubmissionError) as refused:
+        backend.submit(request_for(workspace_path=str(inside)))
+
+    assert "symlink" in str(refused.value)
+    assert "simulation.input" in str(refused.value), (
+        "the refusal has to name the link, or the person reading it has to go "
+        "looking through the workspace for which one it meant"
+    )
+    uploaded = [path for path in cluster.files if "simulation.input" in path]
+    assert uploaded == [], f"the link's target was uploaded anyway: {uploaded}"
+
+
 def test_a_scheduler_that_refuses_the_job_says_what_it_said(
     connections: Connections,
     target: SlurmTarget,
