@@ -28,6 +28,14 @@ from ravel.config import Settings
 #: Settings the launcher holds and a tool server has no use for. Named here as
 #: a list of examples rather than as the rule itself, so that a change to the
 #: rule has to disagree with a written-down expectation.
+#:
+#: `slurm_` joined the rule in P11-05 and is the one family here excluded for
+#: more than uselessness. A tool server has no cluster to reach — the backend
+#: that speaks to one lives in the worker process — so every `RAVEL_SLURM_*`
+#: value is one no tool acts on. The password is the one that must not travel:
+#: the Compute Worker's session is a model, and "the model never sees the
+#: cluster password" is a property of the environment it is launched with
+#: rather than of the model choosing not to look.
 LAUNCHER_ONLY = (
     "dsh_model",
     "dsh_bin",
@@ -36,6 +44,9 @@ LAUNCHER_ONLY = (
     "deepseek_base_url",
     "gateway_jwt_secret",
     "gateway_port",
+    "slurm_host",
+    "slurm_password",
+    "slurm_jobs_root",
 )
 
 #: Settings a tool server does act on, one per family it reaches.
@@ -114,7 +125,7 @@ def test_every_setting_but_the_launchers_own_travels() -> None:
     derived = {
         env_name(name)
         for name in Settings.model_fields
-        if not name.startswith(("dsh_", "deepseek_", "gateway_"))
+        if not name.startswith(("dsh_", "deepseek_", "gateway_", "slurm_"))
     }
     assert set(env) == derived
 
