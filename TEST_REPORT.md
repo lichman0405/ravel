@@ -1295,6 +1295,31 @@ predicate rather than the stack under it.
 | Static analysis | `ruff check src tests scripts` and `pyright src tests` — clean |
 | Matrix | `make phase11-acceptance` — `PASS P11-10 managed services`, **10/10 demonstrated** |
 
+**The item's change cost a Phase 10 acceptance case, and the release gate is
+what found it — one item later, and in the phase that had no reason to look.**
+`scripts/run_v0.sh` used to start the Gateway as `uvicorn
+ravel.gateway.app:create_app …`; this item moved it onto `scripts/run_gateway.py`,
+the entry point `infra/systemd/ravel-gateway.service` starts, so that a launcher
+and a unit cannot disagree about how the Gateway comes up. P10-20's acceptance
+case asserts that the one command starts the Gateway, and it asserted it as that
+string *in the shell script*. The case is marked `phase10`, so it is in neither
+this phase's matrix nor any suite this item ran: every number in the table above
+was green while a Phase 10 acceptance case was red, and had been since `443fb37`.
+`make release-gate` (§7.8) runs `tests/acceptance -m phase10` as one of its
+eighteen rows, and that row is where it surfaced — `1 failed, 58 passed` in
+48m16s, with the live Phase 10 runs in the same row green.
+
+The claim is unchanged; the assertion follows it to where the application is now
+named. `run_v0.sh` must start `run_gateway.py`; that file's own `uvicorn.run(...)`
+call must serve `ravel.gateway.app:create_app` with `factory=True`; and the unit
+file must start the same entry point, which is the agreement the shared entry
+point exists for. It is read as code with `ast` rather than as text, because the
+entry point's docstring names the application in prose too and a search over the
+file would pass on the sentence that explains the import rather than on the line
+that runs it. What this does not change is the finding's shape: an item's own
+suites cannot see a case in a phase behind it, and a script every phase shares is
+exactly where that costs something.
+
 ### 7.12 P11-11: the whole chain, certified end to end
 
 Ten items certified ten parts, and none of them said the parts join. This one is

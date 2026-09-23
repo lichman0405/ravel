@@ -609,6 +609,19 @@ them: a deployment that edits its installed copy has units this repository has
 not verified, which is why `install_services.sh` rewrites only the two
 coordinates it is given.
 
+**The launcher change cost a Phase 10 acceptance case, and the release gate is
+what found it.** `run_v0.sh` used to start the Gateway as `uvicorn
+ravel.gateway.app:create_app …`, and this item moved it onto
+`scripts/run_gateway.py` so that the launcher and `ravel-gateway.service` cannot
+disagree. P10-20's case asserted the old spelling inside the shell script and is
+marked `phase10` — so it is in no suite this item ran, and the row that caught it
+is the gate's `phase10-acceptance` row (`1 failed, 58 passed`). The claim is
+unchanged and the assertion now follows the application to where it is named:
+the script starts the entry point, that file's own `uvicorn.run(...)` call serves
+`ravel.gateway.app:create_app` as a factory, and the unit starts the same entry
+point. It is read as code rather than as text, because the docstring names the
+application too.
+
 ## P11-11 the whole chain, certified end to end
 
 The ten items above each certify a part. This one is the claim that they join:

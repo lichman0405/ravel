@@ -22,6 +22,7 @@ survives a console that came and went.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -175,11 +176,50 @@ def test_p10_20_one_command_starts_the_whole_server() -> None:
     script = RUN_V0.read_text(encoding="utf-8")
 
     for service in (
-        "ravel.gateway.app:create_app",  # the Gateway the console signs in to
+        "run_gateway.py",  # the Gateway the console signs in to
         "run_temporal_worker.py",  # the activities' host
         "run_supervisor.py",  # what finds and drives projects
     ):
         assert service in script, f"run_v0.sh does not start {service}"
+
+    # What the script starts is the deployment's entry point rather than
+    # `uvicorn` with the application on its command line, which is P11-10's
+    # change: a deployment wants no reloader, RAVEL's log format, and the
+    # address read from the settings rather than from a second place a unit
+    # file could disagree with. So the application is named in that entry point
+    # — once, where this launcher and the systemd unit both read it — and the
+    # assertion follows it there instead of pinning the shell script to a
+    # spelling it no longer has. The claim is unchanged: one command, and what
+    # it starts is the Gateway.
+    # Read as code and not as text: the entry point's own docstring names the
+    # application too, and a search over the file would pass on the sentence
+    # that explains the import rather than on the line that runs it.
+    entry = ast.parse((SCRIPTS / "run_gateway.py").read_text(encoding="utf-8"))
+    served = [
+        node
+        for node in ast.walk(entry)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+        and getattr(node.func.value, "id", "") == "uvicorn"
+    ]
+    assert len(served) == 1, (
+        f"the Gateway's entry point calls uvicorn.run {len(served)} times"
+    )
+    (call,) = served
+    assert [ast.unparse(argument) for argument in call.args] == [
+        "'ravel.gateway.app:create_app'"
+    ], "the entry point run_v0.sh starts does not run the Gateway application"
+    assert "factory=True" in {f"{kw.arg}={ast.unparse(kw.value)}" for kw in call.keywords}, (
+        "`create_app` is a factory, and uvicorn is being told to call it as one"
+    )
+    unit = (REPO_ROOT / "infra" / "systemd" / "ravel-gateway.service").read_text(
+        encoding="utf-8"
+    )
+    assert "run_gateway.py" in unit, (
+        "the launcher and the unit file have drifted onto different entry "
+        "points, which is the disagreement the shared entry point exists to stop"
+    )
 
     assert "alembic" in script, (
         "run_v0.sh does not bring the schema to head, so the first run against a "
