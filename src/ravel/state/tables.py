@@ -65,6 +65,7 @@ from ravel.domain.enums import (
     WorkerMessageKind,
 )
 from ravel.domain.events import ActorType, ProjectEventType
+from ravel.domain.lab import HANDOVER_STATES
 from ravel.domain.preparation import PreparationOutcome, PreparationRefusal
 from ravel.domain.reconciliation import RunFailureClass, WorkflowLiveness
 from ravel.domain.roles import AgentRole
@@ -1239,6 +1240,91 @@ class PreparationRow(Base):
     refusal: Mapped[str | None] = mapped_column(String(32))
     reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+#: The states a lab handover may be in, as SQL literals, derived from the
+#: domain's own tuple so a state added there cannot leave this constraint
+#: behind. Narrower than `JobState` on purpose: a handover is never `SUBMITTED`
+#: or `RUNNING`, and the constraint is where that stops being a convention.
+_HANDOVER_STATES_SQL = ", ".join(f"'{state.value}'" for state in HANDOVER_STATES)
+
+
+class LabHandoverRow(Base):
+    """One piece of work handed to a laboratory, while it is in their hands.
+
+    **This is a cluster job's `submission.json`, in the database.** A Slurm run
+    is found again by reading the note the backend uploaded next to it; a bench
+    has nowhere to upload a note to, so the same fact lives here — which work
+    was handed over, under which contract version, out of which prepared
+    package, and what it owed. `HumanLabBackend` is handed a reference and
+    nothing else, so without this row it would have to reassemble its own work
+    out of four tables that can move under it.
+
+    **`one_handover_per_attempt` is what makes handing work over idempotent.**
+    The requirement is the port's, on every backend: a worker killed between the
+    backend accepting work and the job reference being recorded is retried, and
+    the retry must find the handover it already made. Enforced by the database
+    rather than by a check-then-insert, so two activities racing produce one row
+    and one conflict rather than two handovers with the same bench.
+
+    **Mutable for its state columns only.** It is in `guards.UPDATABLE_TABLES`
+    with an identity trigger, like `backend_jobs`: a handover moves from waiting
+    to one of its endings while the bench works, and everything describing what
+    was handed over is fixed at the handover. `required_outputs` is the column
+    that matters most here — it is what a delivery is checked against, and a
+    list that could be edited after the fact would let the check be made to
+    agree with whatever arrived.
+
+    `execution_contract_ref` carries no foreign key, for the reason
+    `ExecutionRecordRow`'s does not: the row quotes the contract version the
+    bench was handed, and the contract is not deleted out from under the record
+    of what was asked for.
+    """
+
+    __tablename__ = "lab_handovers"
+    __table_args__ = (
+        CheckConstraint(
+            f"state IN ({_HANDOVER_STATES_SQL})", name="state_is_a_handover_state"
+        ),
+        CheckConstraint("attempt >= 1", name="attempt_is_positive"),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        CheckConstraint(
+            f"(state = '{JobState.WAITING_EXTERNAL.value}') = (closed_at IS NULL)",
+            name="closing_is_all_or_nothing",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "node_id",
+            "execution_contract_version",
+            "attempt",
+            name="uq_lab_handovers_attempt",
+        ),
+        Index("ix_lab_handovers_project_node", "project_id", "node_id"),
+    )
+
+    handover_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    backend: Mapped[str] = mapped_column(String(64), nullable=False)
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    preparation_id: Mapped[str] = mapped_column(REF, nullable=False, default="")
+    workspace_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    protocol: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    required_outputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    handed_over_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # ── The event stream ────────────────────────────────────────────────────────

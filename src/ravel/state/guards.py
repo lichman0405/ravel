@@ -69,6 +69,7 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "acceptance_contracts",
         "execution_contracts",
         "backend_jobs",
+        "lab_handovers",
         "deviation_records",
         "project_event_counters",
     }
@@ -131,6 +132,32 @@ BACKEND_JOB_IDENTITY_COLUMNS: tuple[str, ...] = (
     "execution_contract_version",
     "backend",
     "submitted_at",
+)
+
+#: Columns on `lab_handovers` that a state change may not touch. `handover_id`
+#: is first because it is what the trigger names the row by.
+#:
+#: The mutable columns are `state`, `detail` and `closed_at` — a bench finishes,
+#: or RAVEL gives up waiting — and what is absent from this list is the point.
+#: `required_outputs` is what a delivery is checked against, so a handover whose
+#: owed outputs could be rewritten after the bench delivered would let the
+#: check be made to agree with whatever arrived. `execution_contract_version`
+#: is what makes the run identifiable; `preparation_id` is the package the
+#: bench was actually given, which is what makes a result traceable to a
+#: document rather than to whichever preparation happened to be newest.
+LAB_HANDOVER_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "handover_id",
+    "project_id",
+    "node_id",
+    "attempt",
+    "backend",
+    "execution_contract_ref",
+    "execution_contract_version",
+    "preparation_id",
+    "workspace_path",
+    "protocol",
+    "required_outputs",
+    "handed_over_at",
 )
 
 #: Columns on `deviation_records` that its one permitted UPDATE may not touch.
@@ -264,6 +291,7 @@ _NODE_TRANSITION_TRIGGER = "ravel_dag_nodes_transition"
 _PROJECT_TRANSITION_TRIGGER = "ravel_projects_transition"
 _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
 _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
+_LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
 _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
@@ -278,6 +306,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _PROJECT_TRANSITION_TRIGGER,
     _DAG_NODE_IDENTITY_TRIGGER,
     _BACKEND_JOB_IDENTITY_TRIGGER,
+    _LAB_HANDOVER_IDENTITY_TRIGGER,
     _DEVIATION_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
@@ -410,6 +439,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=BACKEND_JOB_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "lab_handovers" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_LAB_HANDOVER_IDENTITY_TRIGGER,
+                table="lab_handovers",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=LAB_HANDOVER_IDENTITY_COLUMNS,
             )
         )
 

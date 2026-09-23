@@ -429,6 +429,17 @@ class DeviationRepository(ProjectScopedRepository[DeviationRecord]):
         """
         return self.row_type.raised_at
 
+    def find(self, deviation_id: str) -> DeviationRecord | None:
+        """One deviation by identifier, or `None` if this project has none.
+
+        The non-raising read, for a caller that has an identifier from outside
+        RAVEL and a legitimate reason for it to name nothing: a report arriving
+        after the deviation it is about was resolved, or after the project it
+        belongs to turned out to be a different one. `get` is still the right
+        read where an absent row is a fault.
+        """
+        return self._one(deviation_id=deviation_id)
+
     def raise_(self, deviation: DeviationRecord) -> DeviationRecord:
         """Record that a Worker was asked for something its contract did not allow."""
         self.add(deviation)
