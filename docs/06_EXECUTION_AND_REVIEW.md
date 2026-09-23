@@ -21,6 +21,46 @@ Typical fields:
 
 Worker never invents authority.
 
+### Preparation: the workspace a contract runs in
+
+A contract may name the environment its work happens in —
+`execution_requirements`, a one-entry mapping such as `{"software": "raspa"}` or
+`{"lab": "bench-chemistry"}` — and when it does, the run happens in a workspace
+RAVEL builds from the contract or it does not happen. `requires_preparation` is
+whether a contract names one, so preparation is opt-in per contract: a contract
+that names nothing runs exactly as it did before this layer existed.
+
+A `MaterializerRegistry` resolves the environment to a materializer, and the
+deployment registers exactly two — `RaspaMaterializer` and `LabMaterializer`.
+The materializer resolves the contract's inputs to artifact versions and reads
+them out of the object store, writes the files with their hashes, records a
+manifest of what was built from what, and names the entry point a job starts
+from. **It decides nothing.** Everything in a workspace is a rendering of
+something the contract states; where the contract does not say enough, it refuses
+and names the term, because choosing a method, filling in a concentration or
+picking a solvent is science and no role has delegated that to software. The
+acceptance criteria in a bench package are the node's own frozen binding, read
+out of the DAG by the activity and handed in — a materializer that looked them up
+itself would be free to build a package against criteria the delivery is not
+measured by.
+
+A refusal is recorded, not raised, and its class is what routes it:
+
+- `MISSING_SCIENTIFIC_PARAMETER` — a gap in the terms, and Master's to fill.
+- `INCONSISTENT_CONTRACT` — terms that disagree with themselves.
+- `ENVIRONMENT_UNAVAILABLE` — this machine: RASPA code with no RASPA installed,
+  or a resolved input with no object store to read it from. The sentence names
+  the setting that would fix it.
+- `UNSUPPORTED_ENVIRONMENT` — RAVEL: no materializer for that environment at
+  all, which is a different sentence for Master than a broken host.
+
+Every refusal parks the node at `WAITING_DECISION`, writes no Execution Record,
+starts no job and ends the run with no termination status: nothing was tried, so
+there is nothing to fail, and the contract is what is wrong. `read_project_state`
+reports it under `stopped` as `preparation_refusal`, alongside the verdict a seat
+gave and the `run_reconciliation` a lost run left — the three reasons a node
+stops, and the one the Master turn names as RAVEL's own.
+
 ## 2. Experimental deviation rule
 
 Worker does not judge "execution vs scientific".
