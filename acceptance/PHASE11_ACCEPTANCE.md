@@ -264,3 +264,53 @@ produces itself resolves to nothing rather than to bytes. A run whose inputs are
 all absent needs no object store, and refusing it would have blamed the host for
 a fact about the project.
 
+## P11-05 the real Slurm backend
+
+Computation can run on a real cluster, over SSH, through a real `sbatch`. That
+is the whole of it, and both halves of the item are about what "real" costs:
+something outside RAVEL has to be configured, and something outside RAVEL has to
+be true.
+
+The configuration half is `SlurmComputeBackend`, selected with
+`--compute-backend slurm` and pointed at a cluster by the `RAVEL_SLURM_*`
+settings. A worker told to use a cluster it was not given **refuses to start**,
+naming the variable to set. The alternative is the failure this item was written
+against: a worker that comes up, takes work, and stalls on the first node that
+reaches the queue — an hour later, on a node somebody was watching, with the
+reason in a traceback rather than in front of the person who started it.
+
+The other half is the credential, which is the one secret in RAVEL that is not
+RAVEL's own. It is read by the worker process from its own environment and
+handed to the transport; it is in the settings' launcher-only prefix set, so it
+is stripped from the environment of every DSH runtime and tool server RAVEL
+starts, and the model never has it to leak; and the backend redacts it out of
+every `detail`, progress fact, exception message and `completion_metadata` it
+produces, because those end up in PostgreSQL and in logs that outlive the
+process that held the secret. Paramiko rather than the `ssh`/`scp` clients for
+the same reason: the OpenSSH client takes a password only from a terminal or
+from `sshpass`, and `sshpass -p <secret>` puts it in a command line every
+account on the host can read from `ps`.
+
+What a Slurm result *is* is stated in `docs/06`. An artifact collected off a
+cluster is not marked simulated — it came off a real machine — and it is not
+marked as evidence either: whether it satisfies a node's acceptance criteria is
+Review's judgement against criteria frozen before the run, and a backend that
+asserted its own result was admissible would be deciding its own case.
+
+| Requirement | Demonstrated by |
+|---|---|
+| A worker told to use a cluster it was not given refuses to start, and says what to set | `test_p11_05_a_worker_told_to_use_a_cluster_it_was_not_given_refuses_to_start` — `build_registry` under `--compute-backend slurm`, with neither coordinate, with a host and no account, and with both |
+| The password reaches the worker and nothing else | `test_p11_05_the_cluster_password_reaches_the_worker_and_nothing_else` — asserted by *value* against a deployment that really has a password, in the tool-server environment, in the start-up banner, and through the redactor |
+| Submission, polling, collection and the state vocabulary | `tests/integration/backends/test_slurm_collection.py` (nine cases, against a scripted cluster) and `tests/unit/backends/slurm/` |
+| The credential is not in what collection records | `tests/integration/backends/test_slurm_collection.py::test_the_credential_is_not_in_what_collection_records` — a cluster that echoes the password on every command |
+| **Live certification against a real cluster** | `test_p11_05_a_real_cluster_runs_the_workspace_preparation_built` — **`BLOCKED_EXTERNAL`**: no Slurm endpoint or credentials have been supplied, so the case skips naming `RAVEL_SLURM_HOST`, `RAVEL_SLURM_USERNAME`, a credential and `RAVEL_RASPA_DATA_DIR` |
+
+The item is therefore **PARTIAL** and not done, and the honest statement of what
+is missing is one sentence: whether a given cluster accepts RAVEL's job script
+is a fact about that cluster — whether the account may submit, whether the
+filesystem RAVEL writes into is mounted, whether the software the contract names
+is installed — and no test in this repository can establish it. The release gate
+reports the row as skipped rather than as certified, which is the reason its two
+verdicts are different words. Supplying an endpoint and running
+`RAVEL_REQUIRE_SLURM=1 make phase11-acceptance` is what closes it.
+

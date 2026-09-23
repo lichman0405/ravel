@@ -889,6 +889,54 @@ naming an environment RAVEL cannot build gets a refusal that says so rather than
 a workspace that pretends, and the refusal is attributed to RAVEL rather than to
 the host, which is a different sentence for Master to act on.
 
+### 7.6 P11-05: the real Slurm backend
+
+Computation can run on a real cluster, over SSH, through a real `sbatch`, and
+both halves of the item are about what "real" costs: something outside RAVEL has
+to be configured, and something outside RAVEL has to be true. Only the first
+half is testable here, and the item says so in its own words rather than
+counting the cluster it does not have.
+
+The configuration half is what the two unskipped acceptance cases assert. A
+worker told to use a cluster it was not given **refuses to start**, naming the
+variable to set — `build_registry` under `--compute-backend slurm`, with neither
+coordinate, with a host and no account, and with both. The alternative is the
+failure the item was written against: a worker that comes up, takes work, and
+stalls on the first node that reaches the queue, an hour later, with the reason
+in a traceback rather than in front of the person who started it.
+
+The credential is the one secret in RAVEL that is not RAVEL's own, and the
+second case asserts by *value* that it reaches the worker and nothing else: not
+the environment of the DSH runtime or any tool server RAVEL starts (it is in the
+settings' launcher-only prefix set), not the start-up banner, and not what the
+redactor leaves in a `detail`, a progress fact, an exception message or
+`completion_metadata`. The integration suite adds the case that makes the
+redaction worth asserting — a cluster that echoes the password on every command
+— because a redactor tested only against strings that never contained the
+credential is a redactor nobody has run.
+
+| | |
+|---|---|
+| Unit | `tests/unit/backends/slurm/` — **98 passed** in 0.10s |
+| Integration | `tests/integration/backends/test_slurm_collection.py` — **9 passed** in 1.53s |
+| Acceptance | `tests/acceptance/test_phase11_slurm.py` — **2 passed, 1 skipped** in 0.74s |
+| Gate row | `slurm-integration` — **115 passed, 1 skipped** in 7.19s |
+| Matrix | `make phase11-acceptance` — `PASS P11-05 the real Slurm backend 2 passed, 1 skipped` |
+
+**The item is PARTIAL, and the missing part is not a test that was not written.**
+`test_p11_05_a_real_cluster_runs_the_workspace_preparation_built` skips, naming
+four things at once: `RAVEL_SLURM_HOST`, `RAVEL_SLURM_USERNAME`, a credential
+(`RAVEL_SLURM_PASSWORD` or `RAVEL_SLURM_KEY_FILENAME`) and `RAVEL_RASPA_DATA_DIR`.
+Whether a given cluster accepts RAVEL's job script is a fact about that cluster —
+whether the account may submit, whether the filesystem RAVEL writes into is
+mounted, whether the software the contract names is installed — and no test in
+this repository can establish it. The release gate reports the row as skipped
+rather than certified, which is the reason its two verdicts are different words.
+Supplying an endpoint and running `RAVEL_REQUIRE_SLURM=1 make phase11-acceptance`
+is what closes it, and until somebody does, the honest statement is that the
+adapter is exercised against a scripted cluster and has never been run against a
+real one.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

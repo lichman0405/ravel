@@ -505,7 +505,9 @@ a property of the process.
 - **Where:** `src/ravel/backends/mocks.py` (`MockComputeBackend`,
   `MockLabBackend`); `src/ravel/backends/slurm/` (`SlurmComputeBackend`);
   `scripts/run_temporal_worker.py` (`build_registry`, `--compute-backend`);
-  `tests/acceptance/test_phase10_backends.py`
+  `tests/acceptance/test_phase10_backends.py`;
+  `tests/acceptance/test_phase11_slurm.py` (the live case that is skipped, and
+  the two claims about the deployment that are not)
 
 Until Phase 11 the answer here was "every backend is a mock". P11-05 added
 `SlurmComputeBackend`: a real adapter that submits a prepared workspace to a
