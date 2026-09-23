@@ -31,9 +31,18 @@ default is the pair of mocks: they are what makes a project runnable end to end
 on one machine, and every artifact they produce is marked as simulated in the
 record and refused by the Evidence Ledger. `--compute-backend slurm` replaces
 the compute mock with the real thing — `ravel.backends.slurm.SlurmComputeBackend`
-— which submits to a cluster over SSH and brings back real results. The lab
-side has no real equivalent yet; a laboratory is a bench and a person, and
-`--lab-backend` arrives with P11-06.
+— which submits to a cluster over SSH and brings back real results, and
+`--lab-backend human-lab` replaces the lab mock with
+`ravel.backends.lab.HumanLabBackend`, which hands a prepared package to a person
+and waits. The two real backends are independent: a deployment may run real
+compute with a mock bench, or a real bench with mock compute, and the records
+say which was which on every artifact.
+
+**The laboratory backend needs no credential and no host**, which is the
+difference between it and Slurm worth stating: what it needs is a person, and
+there is nothing to validate at start-up. A deployment that selects it and has
+no lab user standing at a bench simply has runs that wait — which is the honest
+state, and why a wait has its own clock rather than being an error.
 
 The registration is a list in this file rather than a lookup inside the runtime
 so that the file a deployment reads says which backends it is running, and so
@@ -55,6 +64,7 @@ import asyncio
 import logging
 import sys
 
+from ravel.backends.lab import HumanLabBackend
 from ravel.backends.mocks import MockComputeBackend, MockLabBackend
 from ravel.backends.slurm import (
     ParamikoTransport,
@@ -92,7 +102,13 @@ LAB_SCENARIOS = (
 #: `--help` says what exists; a name this does not hold is refused by argparse
 #: before the worker starts.
 COMPUTE_BACKENDS = ("mock", "slurm")
-LAB_BACKENDS = ("mock",)
+LAB_BACKENDS = ("mock", "human-lab")
+
+#: What the real laboratory backend is called on the command line. The two
+#: spellings are the same string on purpose: `HumanLabBackend.name` is what it
+#: writes into every record it produces, and a deployment that had to translate
+#: between the flag and the backend would be one place for the two to disagree.
+HUMAN_LAB = "human-lab"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -111,7 +127,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--lab-backend",
         default="mock",
         choices=LAB_BACKENDS,
-        help="where experiment nodes are handed over (default: mock)",
+        help=(
+            "where experiment nodes are handed over: 'mock' simulates a bench "
+            "and marks its output simulated, 'human-lab' hands a prepared "
+            "package to a person through the Gateway and waits (default: mock)"
+        ),
     )
     parser.add_argument(
         "--compute-scenario",
@@ -172,9 +192,31 @@ def build_registry(
     )
     registry.register(
         NodeType.EXPERIMENT,
-        MockLabBackend(database=database, store=store, scenario=args.lab_scenario),
+        (
+            # No store and no credential: this backend reads the records an
+            # upload wrote, and a bench has nothing to authenticate to.
+            HumanLabBackend(database=database)
+            if args.lab_backend == HUMAN_LAB
+            else MockLabBackend(database=database, store=store, scenario=args.lab_scenario)
+        ),
     )
     return registry
+
+
+def _describe_lab(args: argparse.Namespace) -> str:
+    """What the worker is about to hand experiments to, for the banner.
+
+    A laboratory is a person, so there is nothing here to name the way a host
+    and an account name a cluster — and the difference is worth printing, since
+    it is the difference between a run that finishes on its own and one that
+    waits for somebody.
+    """
+    if args.lab_backend == HUMAN_LAB:
+        return (
+            f"{HUMAN_LAB}: packages are handed to a person, who uploads "
+            "through the Gateway and answers by working"
+        )
+    return f"{args.lab_scenario} (a mock; its output is marked simulated)"
 
 
 def slurm_backend(
@@ -280,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"\n  worker on {settings.temporal_task_queue} at {settings.temporal_host}\n"
         f"  compute: {_describe_compute(settings, args)}\n"
-        f"  lab:     {args.lab_scenario} (a mock; its output is marked simulated)\n"
+        f"  lab:     {_describe_lab(args)}\n"
         f"\n  Ctrl-C to stop\n"
     )
     try:

@@ -56,6 +56,7 @@ from ravel.domain.preparation import (
 from ravel.domain.roles import AgentRole
 from ravel.execution.backends import (
     BackendRegistry,
+    DeviationReport,
     ExternalDelivery,
     JobOutputs,
     JobRequest,
@@ -596,6 +597,18 @@ class NodeRunActivities:
            **in one transaction**, so a deviation that exists always has a job
            that was stopped because of it.
 
+        **A report that is already on the record is not recorded again.** Most
+        reports are the backend's own observation and the row here is the first
+        the project hears of it. A laboratory is the other case: the person at
+        the bench reported through the Gateway, that route wrote the deviation
+        with their name on it, and the report travelling up the signal names
+        the row it is about. Raising a second one would put two rows in the
+        project for one sentence — one attributed to a person and one to a
+        backend — and Master would be asked the same question twice. So the
+        existing row is what the run stops against, and what the Worker made of
+        it goes where the Worker's reading always goes: the message and the job
+        detail.
+
         The node is deliberately not moved here. Where it ends up is decided
         once, by `finish_node_run`, after the workflow has settled how the run
         ended — the same rule the rest of the node's status path follows.
@@ -622,16 +635,8 @@ class NodeRunActivities:
 
         with self.database.transaction() as session:
             records = RecordRepositories(session, project_id)
-            deviation = records.deviations.raise_(
-                DeviationRecord(
-                    project_id=project_id,
-                    node_id=job.node_id,
-                    execution_contract_ref=job.execution_contract_ref,
-                    requested_action=verdict.requested_action,
-                    description=verdict.reason,
-                    permitted=False,
-                    raised_by=f"backend:{job.backend}",
-                )
+            deviation_id = self._deviation_row(
+                records, project_id, job, report, verdict.requested_action, verdict.reason
             )
             records.messages.record(
                 WorkerMessage(
@@ -650,7 +655,41 @@ class NodeRunActivities:
                     "the work has stopped pending Master's decision"
                 ),
             )
-            return _snapshot(stored, deviation_id=deviation.deviation_id)
+            return _snapshot(stored, deviation_id=deviation_id)
+
+    def _deviation_row(
+        self,
+        records: RecordRepositories,
+        project_id: str,
+        job: BackendJob,
+        report: DeviationReport,
+        requested_action: str,
+        reason: str,
+    ) -> str:
+        """The row this report is about, raising one only if there is none.
+
+        The lookup is by identifier and it also checks the row belongs to the
+        node this job is running: an identifier is a value that arrived from
+        outside RAVEL, and a report naming a deviation raised about some other
+        node would otherwise be able to attribute this run's stop to it.
+        """
+        named = report.deviation_id
+        if named:
+            existing = records.deviations.find(named)
+            if existing is not None and existing.node_id == job.node_id:
+                return existing.deviation_id
+        raised = records.deviations.raise_(
+            DeviationRecord(
+                project_id=project_id,
+                node_id=job.node_id,
+                execution_contract_ref=job.execution_contract_ref,
+                requested_action=requested_action,
+                description=reason,
+                permitted=False,
+                raised_by=f"backend:{job.backend}",
+            )
+        )
+        return raised.deviation_id
 
     @activity.defn
     async def deliver_external_result(
@@ -662,6 +701,15 @@ class NodeRunActivities:
         restart in between. This is what makes the result a fact: the signal
         that carried it lived in the workflow's memory, and memory does not
         survive the process that holds it.
+
+        **A delivery can carry a report as well as files**, and that is the only
+        way a person's report reaches a waiting run. A job in `WAITING_EXTERNAL`
+        is never polled — the workflow is blocked in a durable wait, and
+        `check_job` is not called until the wait ends — so a lab user who says
+        the plan and the bench disagree has to be heard through the door their
+        delivery comes through. It is handled before anything is recorded, for
+        the reason `check_job` handles it first: its answer decides whether
+        there is any work left at all.
         """
         with self.database.transaction() as session:
             job = RecordRepositories(session, project_id).jobs.get(job_id=job_id)
@@ -674,6 +722,11 @@ class NodeRunActivities:
 
         backend = self.registry.named(job.backend)
         status = backend.deliver(job.backend_job_ref, _delivery(result))
+        if status.deviation is not None:
+            stopped = await self._stop_for_deviation(project_id, job, status, backend)
+            if stopped is not None:
+                return stopped
+
         with self.database.transaction() as session:
             stored = RecordRepositories(session, project_id).jobs.record_state(
                 job_id,

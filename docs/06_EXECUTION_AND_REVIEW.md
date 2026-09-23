@@ -102,12 +102,66 @@ Deterministic RAVEL interface, not an Agent.
 See `schemas/experiment_backend_contract.yaml`.
 
 V0:
-- MockLabBackend
+- MockLabBackend — plays a named scenario; everything it writes is marked
+  simulated and the Evidence Ledger refuses it.
+- HumanLabBackend — a real bench, reached through a person. Selected with
+  `--lab-backend human-lab`; it needs no credential and no host, because what it
+  needs is somebody standing at a bench, and a deployment that selects it with
+  nobody there simply has runs that wait.
 
 Future:
-- human lab channel
 - LIMS
 - robotic lab
+
+### What the human lab channel is
+
+`HumanLabBackend` hands the prepared package to a person and waits. The three
+things worth knowing before reading the code:
+
+**Nothing here ever reports `RUNNING`.** RAVEL cannot see a bench. A state
+meaning "somebody is probably working on it" would be an observation RAVEL never
+made, and `WAITING_EXTERNAL` is the state that says what is actually true — with
+its own clock, so an unanswered wait ends in `TIMED_OUT` rather than in a run
+that looks busy forever.
+
+**The handover is a row, not a file.** The Slurm backend finds a job again by
+reading a file it uploaded beside it; a bench has nowhere to upload a file to, so
+the durable record is `lab_handovers`, keyed by
+`(project_id, node_id, execution_contract_version, attempt)`. A revised contract
+is different work and gets its own handover, so files sent under the old terms
+cannot count towards the new run.
+
+**What arrived is a fact and what a delivery claims is not.** Uploads are
+artifact versions with an author, a time, a media type and a hash. A delivery
+completes a run when the *recorded* names cover every name in the handover's
+frozen `required_outputs` — never when the delivery says it brought everything,
+and never on a file a mock produced.
+
+### Who may upload, and what an upload proves
+
+The person at the bench uploads through the Gateway, against a named output. Any
+project member may: the person who ran the experiment is the one holding the
+file, and requiring the owner to relay it would mean recording that somebody
+uploaded a file they never saw. The version carries `created_by`, so the record
+says who it was.
+
+An upload answers a name the contract required or it is refused, with the owed
+list in the message — and refused *before* a byte is stored, so an arbitrary file
+never reaches the record at all. Uploading does not complete anything: what
+finishes a run is the backend's comparison of what is recorded against what was
+owed, which is not a claim a person's upload can make.
+
+A lab user's deviation is *recorded*, not adjudicated. It is written against the
+node's frozen contract with `permitted` false — the reporter did not permit it —
+and then travels to the run on the same signal a delivery does, because a run
+waiting on a bench is blocked in a durable wait and is never polled. Whether the
+contract permits what was asked is the Worker's question and goes to Master from
+there.
+
+**RAVEL cannot stop a person.** Withdrawing a handover ends the record so that a
+later delivery cannot complete a run that was given up on, and says out loud that
+this is RAVEL giving up rather than anybody being interrupted. Whether the bench
+stopped is not something RAVEL can see.
 
 ## 6. Mock Compute scenarios
 

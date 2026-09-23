@@ -12,13 +12,23 @@ The first claim is checked against the composition a deployment actually builds
 real adapter without being asked would be the obvious breach, and one that was
 imported and never registered would be the quiet one.
 
-**Phase 11 widened the tree on purpose.** P11-05 added a real compute backend — a
-cluster over SSH — and it is the one thing here that is not a mock. The item's
-premise is therefore no longer "mocks are all there is" but "mocks are all that
-runs unless a deployment names the real one, and the real one exists only on the
-compute side": there is still no LIMS, no robot lab, no VASP wrapper. The two
-assertions below were rewritten to that and left exact rather than widened — an
-adapter that appeared without this docstring changing is still a failure.
+**Phase 11 widened the tree on purpose, once per side.** P11-05 added a real
+compute backend — a cluster over SSH — and P11-06 added a real laboratory
+channel, a prepared package handed to a person. The item's premise is therefore
+no longer "mocks are all there is" but "mocks are all that runs unless a
+deployment names a real one, and the real ones are exactly these two": there is
+still no LIMS, no robot lab, no VASP wrapper, and nothing that would let a
+machine stand in for a bench. The assertions below were rewritten to that and
+left exact rather than widened — an adapter that appeared without this docstring
+changing is still a failure.
+
+The laboratory backend is the interesting one, because it is the case this item
+was written to keep honest. It is real in the sense that matters — what it hands
+over is a prepared package, and what completes a run is a file a person
+uploaded, recorded with a hash and an author — and it is not a *measurement*
+RAVEL performed: nothing here can make a bench produce a number, and the
+acceptance of a bench's delivery is Review's, against criteria frozen before the
+run.
 """
 
 from __future__ import annotations
@@ -146,7 +156,7 @@ def test_p10_06_the_deployment_registers_the_mocks_and_nothing_else(
 
 
 def test_p10_07_nothing_else_in_ravel_can_be_handed_work() -> None:
-    """P10-07: mocks, plus the one real compute backend Phase 11 added.
+    """P10-07: mocks, plus the two real backends Phase 11 added.
 
     The registry above says what a deployment *does* register; this says what it
     *could*. Anything with the backend port's surface — a name and the five
@@ -154,10 +164,10 @@ def test_p10_07_nothing_else_in_ravel_can_be_handed_work() -> None:
     whether or not anything points at it yet, so the tree is walked and the
     answer is compared exactly.
 
-    The list is two mocks and `SlurmComputeBackend`. What is still absent is the
-    rest of the sentence this item was written to enforce: no laboratory, no
-    LIMS, no robot, and no wrapper around a simulation package. Adding one is a
-    Phase 11 item with its own certification, not a line in this set.
+    The list is two mocks, `SlurmComputeBackend`, and `HumanLabBackend`. What is
+    still absent is the rest of the sentence this item was written to enforce:
+    no LIMS, no robot, and no wrapper around a simulation package. Adding one is
+    a Phase 11 item with its own certification, not a line in this set.
 
     The walk is over RAVEL's own package and stops at the migration revisions,
     which are DDL scripts that nothing imports at runtime.
@@ -177,15 +187,21 @@ def test_p10_07_nothing_else_in_ravel_can_be_handed_work() -> None:
         "ravel.backends.mocks.MockComputeBackend",
         "ravel.backends.mocks.MockLabBackend",
     }
-    real = {"ravel.backends.slurm.backend.SlurmComputeBackend"}
+    real = {
+        "ravel.backends.slurm.backend.SlurmComputeBackend",
+        "ravel.backends.lab.backend.HumanLabBackend",
+    }
+    # One assertion rather than the two this used to carry. The pair was
+    # written when the second one could fire on its own — "the lab side gained a
+    # real implementation" was a change nobody expected — and once both sides
+    # have one, an unexpected backend fails the equality below first and the
+    # second check can no longer say anything the first did not.
     assert set(found) == mocks | real, (
-        f"RAVEL has a backend this item does not know about: "
-        f"{sorted(set(found) - mocks - real)}"
-    )
-    assert set(found) - mocks == real, (
-        f"the lab side gained a real implementation: {sorted(set(found) - mocks)}; "
-        "P11-06 is where a real laboratory channel arrives, with its own "
-        "certification, and nothing here anticipates it"
+        f"RAVEL's backends are not the set this item knows about: "
+        f"unexpected {sorted(set(found) - mocks - real)}, missing "
+        f"{sorted((mocks | real) - set(found))}. Each real backend is a Phase 11 "
+        "item with its own certification, and the two named above are where they "
+        "are recorded."
     )
 
 
@@ -193,15 +209,20 @@ def test_the_real_compute_backend_is_not_what_a_default_deployment_runs() -> Non
     """The claim the two above rest on, asserted where it can be read.
 
     `build_registry` with a worker's default arguments builds the mocks, so a
-    deployment that says nothing runs a project on one machine. The real backend
-    is reached by asking for it by name — and refusing to build it when the
-    cluster settings are absent is what keeps that opt-in from turning into a
-    stall at the first node that reaches the queue.
+    deployment that says nothing runs a project on one machine. The real backends
+    are reached by asking for them by name — and refusing to build the cluster
+    one when its settings are absent is what keeps that opt-in from turning into
+    a stall at the first node that reaches the queue.
+
+    Both names are asserted, not just the compute one. The laboratory backend has
+    no settings to be missing, so the only thing standing between a default
+    deployment and a project whose experiments wait forever for a person is the
+    default on this flag.
     """
     assert worker_script.parse_args([]).compute_backend == "mock"
     assert worker_script.COMPUTE_BACKENDS == ("mock", "slurm")
     assert worker_script.parse_args([]).lab_backend == "mock"
-    assert worker_script.LAB_BACKENDS == ("mock",)
+    assert worker_script.LAB_BACKENDS == ("mock", worker_script.HUMAN_LAB)
 
 
 # ── P10-W10 / P10-W11 ─────────────────────────────────────────────────────

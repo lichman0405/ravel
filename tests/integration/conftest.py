@@ -369,6 +369,7 @@ def build_prepared(
     resource_limits: dict[str, str] | None = None,
     inputs: tuple[str, ...] = (),
     execution_requirements: dict[str, str] | None = None,
+    procedure: str = "",
 ) -> Prepared:
     """Build a READY node with frozen contracts, the way production does.
 
@@ -434,6 +435,11 @@ def build_prepared(
         project_id=project_id,
         node_id=node.node_id,
         objective="Measure the conductivity of each sample.",
+        # Empty by default, which is what a contract that names an environment
+        # but no method is: `requires_preparation` is about
+        # `execution_requirements`, so a caller that states one has to state
+        # this too or the materializer refuses — see `LabMaterializer`.
+        procedure=procedure,
         allowed_actions=allowed_actions,
         allowed_ranges=allowed_ranges or {},
         allowed_substitutions=allowed_substitutions,

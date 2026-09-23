@@ -290,6 +290,14 @@ make worker ARGS="--compute-backend slurm"
 
 没有 host 或 username 时这个开关会在启动时被拒绝，而不是等到第一个节点排到队列才卡住。集群密码只由 worker 进程读取，见 `.env.example` 与 `KNOWN_LIMITATIONS.md` L-22。
 
+lab 侧可以换成真实的 bench —— 也就是把准备好的 package 交给一个人（默认关闭）：
+
+```bash
+make worker ARGS="--lab-backend human-lab"
+```
+
+这个开关不需要任何 credential 或 host，因为它需要的是一个人：没人站在 bench 前时，实验就停在 `WAITING_EXTERNAL` 等，而不是报错。人通过 Gateway 上传文件、报告 deviation，两者都先写进 record 再投递给等待中的 run。RAVEL 看不到也无法叫停一个 bench，见 `KNOWN_LIMITATIONS.md` L-29。
+
 ---
 
 ## 运行测试

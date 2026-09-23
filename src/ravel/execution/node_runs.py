@@ -1,4 +1,4 @@
-"""Starting a node's run: the Execution Service, and the port under it.
+"""Starting a node's run, and telling one that what it waited for has happened.
 
 **Who starts a run.** The Worker Agent whose node it is — that is Phase 10H's
 chain, and it is why `ProjectLoop` holds no execution power at all:
@@ -12,6 +12,17 @@ handle, held by a process that already has a Temporal client; the service is
 what a caller holds when it may start a run but must not hold a client of its
 own — a Worker's tool server, which the harness spawns per session and which
 connects on the first call that needs one.
+
+**The second thing this module does is deliver, and it is the same shape.**
+A run waiting on something outside RAVEL is blocked in a durable wait and is
+never polled: `check_job` does not run again until the wait ends, so nothing
+RAVEL learns by looking will reach it. What ends the wait is a signal, and the
+callers that send one are not the deployment — a laboratory user uploading the
+data they were asked for, or reporting that the bench and the plan disagree,
+reaches the run through the Gateway, which holds no Temporal client of its own.
+So the delivery goes through the same lazily-connected service as the start,
+and for the same reason: a Gateway that only serves reads should not open a
+connection to anything.
 
 Nothing here decides *whether* a node may run. That is the DAG's answer
 (`DagNode.can_enter_running`), checked by the tool handler before it gets here,
@@ -41,16 +52,53 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 from ravel.config import Settings
 from ravel.domain.dag import DagNode
 from ravel.execution.temporal.client import NodeRunClient, RunAlreadyStarted
+from ravel.execution.temporal.contracts import ExternalResult
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import ExecutionContractRepository
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ExecutionService", "TemporalNodeRuns"]
+__all__ = ["ExecutionService", "ExternalResultPort", "TemporalNodeRuns"]
+
+
+@runtime_checkable
+class ExternalResultPort(Protocol):
+    """Telling a run that what it was waiting for has happened.
+
+    A protocol rather than `ExecutionService` itself, so that the caller that
+    needs this — the Gateway, on a route a laboratory user reaches — can be
+    handed something that does not connect to Temporal at all. That is not only
+    a testing convenience: the delivery is one sentence to a run that may not
+    exist, and a composition that could not serve an upload without a Temporal
+    connection would make the laboratory surface depend on the scheduler being
+    up when the *record* of an upload is what the caller actually needs.
+
+    `deliver` is addressed by the terms the run executes rather than by the job,
+    because that is what identifies a run: a node whose terms Master revised
+    runs again, and the one waiting is the one under the newest terms.
+    """
+
+    async def deliver(
+        self,
+        *,
+        node_id: str,
+        execution_contract_version: int,
+        result: ExternalResult,
+    ) -> None:
+        """Signal the run of this node under these terms.
+
+        Raises:
+            Exception: Whatever the transport raises. Callers decide what a
+                failure to reach a run means for them; this port does not
+                swallow it, because a signal that silently went nowhere is the
+                one outcome a caller cannot tell from success.
+        """
+        ...
 
 
 @dataclass
@@ -95,6 +143,29 @@ class TemporalNodeRuns:
         )
         return True
 
+    async def deliver(
+        self,
+        *,
+        node_id: str,
+        execution_contract_version: int,
+        result: ExternalResult,
+    ) -> None:
+        """Tell the run of this node, under these terms, that something happened.
+
+        The version is the caller's to state rather than read here, and that is
+        the difference between this method and `start`. A caller starting work
+        is asking "what do the terms currently say", which is a fact this
+        module reads. A caller delivering is answering a question that was put
+        to it *by a particular run* — a handover RAVEL made under one version of
+        a contract — and re-reading the newest version would send the answer to
+        a run that never asked, or to none at all.
+        """
+        await self.client.deliver_external_result(
+            node_id=node_id,
+            execution_contract_version=execution_contract_version,
+            result=result,
+        )
+
     def contract_version(self, node: DagNode) -> int:
         """Which version of the node's contract this run executes.
 
@@ -118,7 +189,7 @@ class TemporalNodeRuns:
 
 @dataclass
 class ExecutionService:
-    """Starting a node's run, for a caller that holds no Temporal client.
+    """Reaching a node's run, for a caller that holds no Temporal client.
 
     A Worker acts through tools, and its tools run in a server the harness
     spawns for one session. That process is not the deployment: it should not
@@ -126,6 +197,11 @@ class ExecutionService:
     of what a Worker asks never reaches execution at all. So the client is made
     on the first call that needs one, and a session that only ever reads its
     contract never opens a connection.
+
+    The Gateway holds one of these too, for `deliver`: the route a laboratory
+    user uploads through is a route that usually has nothing waiting at the
+    other end, and the cost of a connection nobody needed would be paid on
+    every request.
 
     The connection is made once and kept, because a Worker's turns are spread
     over the life of its task and reconnecting per call would pay setup on
@@ -149,6 +225,24 @@ class ExecutionService:
             way under the same terms.
         """
         return await (await self.port()).start(node, actor_id=actor_id)
+
+    async def deliver(
+        self,
+        *,
+        node_id: str,
+        execution_contract_version: int,
+        result: ExternalResult,
+    ) -> None:
+        """Tell a waiting run that something outside RAVEL happened.
+
+        Connects on the first call, like `start`, so that a Gateway serving a
+        project with nothing in anybody's hands never reaches Temporal at all.
+        """
+        await (await self.port()).deliver(
+            node_id=node_id,
+            execution_contract_version=execution_contract_version,
+            result=result,
+        )
 
     async def port(self) -> TemporalNodeRuns:
         """The port, connecting on first use.

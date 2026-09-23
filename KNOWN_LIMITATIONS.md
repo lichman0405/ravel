@@ -533,14 +533,23 @@ MockComputeBackend = YES  (the default; what an untouched deployment runs)
 MockLabBackend     = YES  (the default)
 
 SlurmComputeBackend = WRITTEN, opt-in, never run against a real cluster
+HumanLabBackend     = WRITTEN, opt-in, never run against a real bench (L-29)
 Real VASP          = NO
 Real LAMMPS        = NO
 Real GROMACS       = NO
 Real RASPA         = NO  (preparation generates its inputs; nothing runs them)
-Real laboratory    = NO
 Real LIMS          = NO
 Robot lab          = NO
 ```
+
+`HumanLabBackend` is P11-06's and is real where it counts and not where it would
+be a lie: what it hands over is a prepared package, and what completes a run is a
+file a person uploaded, recorded with a hash and an author and checked against
+the outputs the contract required. What it is *not* is a measurement RAVEL
+performed — nothing in this repository can make a bench produce a number — so
+`Real laboratory` is no longer `NO` in the sense of "there is no channel", and is
+still `NO` in the sense that matters to a reader of results: RAVEL has never
+received one from a bench. See L-29 for the laboratory's own limitation.
 
 The three properties that made the old statement worth asserting are still
 asserted, each one now exact rather than inclusive:
@@ -551,8 +560,9 @@ asserted, each one now exact rather than inclusive:
   rather than at the first node that reaches the queue.
 - **What could be handed work.** The whole `ravel` package is walked for
   anything with a backend's shape — a name and the five calls the durable layer
-  makes — and the exact set is the two mocks plus `SlurmComputeBackend`. No
-  laboratory, no LIMS, no robot, no wrapper around a simulation package.
+  makes — and the exact set is the two mocks, `SlurmComputeBackend` and
+  `HumanLabBackend`. Nothing else: no LIMS, no robot, no wrapper around a
+  simulation package.
 - **What a mock's output is.** Every artifact a mock produces is marked
   `simulated` in a column, and the Evidence Ledger refuses a simulated artifact
   as a source — so mock output can drive the loop without ever becoming a finding
@@ -985,3 +995,54 @@ row was re-measured with the canonical command instead, and `TEST_REPORT.md` §1
 now names the command its numbers came from. The target itself was left alone:
 changing what CI runs is a decision for whoever owns the inventory of tests, not
 a side effect of an item about reading a source.
+
+## L-29 — The bench is a person, and RAVEL can neither see nor stop one
+
+- **Since:** Phase 11 (P11-06)
+- **Where:** `src/ravel/backends/lab/` (`HumanLabBackend`); `src/ravel/domain/lab.py`;
+  `src/ravel/state/repositories/lab.py`; `src/ravel/gateway/routes/lab.py`;
+  `docs/06_EXECUTION_AND_REVIEW.md` §5
+
+`HumanLabBackend` is a real channel in the sense that a person at a bench is on
+the other end of it, and the three things that follow from that are limitations
+rather than design choices.
+
+**No bench has ever been on the other end of it.** Every claim about this backend
+is a claim about the code: the package is really built, the handover is really a
+row, the upload really is an artifact version with a hash and an author, and the
+run really does complete on the recorded outputs. What has never happened is a
+human being handed one of these packages and doing the experiment. The parts a
+real bench would exercise — whether the protocol reads as instructions to a
+chemist, whether the reagents named are the ones on the shelf, whether the
+measurement plan is physically possible, whether a person uploads the right file
+under the right name at the right moment — are exactly the parts no test can
+reach, and they are recorded as `BLOCKED_EXTERNAL` on the Phase 11 item rather
+than as a certification.
+
+**RAVEL cannot see the bench.** A handover is never `RUNNING`, because a state
+meaning "somebody is probably working on it" would be an observation RAVEL never
+made. The consequence is that a lab user who does nothing produces no signal at
+all: the run sits in `WAITING_EXTERNAL` until its wait expires and ends
+`TIMED_OUT`, and nothing distinguishes "working slowly" from "walked away". The
+wait has its own clock for that reason, and `--lab-backend human-lab` with nobody
+at a bench is a deployment whose experiments wait rather than a deployment that
+fails.
+
+**RAVEL cannot stop a person.** Withdrawing a handover (`cancel`) ends the record
+so a later delivery cannot complete a run that was given up on, and the record
+says out loud that whether the bench stopped is not something RAVEL can see. The
+person may work on, and RAVEL will neither know nor claim otherwise. An upload
+arriving after a withdrawal is refused because the handover has ended, not
+because anybody stopped anything.
+
+**There is no LIMS, no robot, and no instrument integration.** The channel is a
+package and a person. It does not schedule equipment, does not reserve reagents,
+does not read an instrument, and does not validate that a number a human typed
+came from a real measurement. What a lab user uploads is recorded as what they
+uploaded and attributed to them; whether it is true is not a question the record
+answers, and Review's acceptance is against criteria frozen before the run rather
+than against anything the backend could check.
+
+**Do not conclude** that a real laboratory is a configuration change away. It is
+a `WorkBackend` implementation *plus* the two things this one deliberately does
+not have: a way to observe the work, and a way to make it stop.
