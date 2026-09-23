@@ -380,6 +380,12 @@ def test_no_route_lets_a_user_change_the_dag(
             artifact_id="an-artifact-that-does-not-exist",
             approval_id="an-approval-that-does-not-exist",
             version="1",
+            # The laboratory package's document name. A name the package does
+            # not hold, which is the interesting probe for that route anyway:
+            # what is asserted below is that the DAG did not move, and a
+            # document read that succeeded would have to have gone through the
+            # manifest — which is a read of a record, not a write to the DAG.
+            document="a-document-that-does-not-exist",
         )
         # A placeholder this probe does not know about would leave a literal
         # `{name}` in the URL, and every method below would then be sent to a

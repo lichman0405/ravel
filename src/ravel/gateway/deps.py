@@ -38,6 +38,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ravel.config import Settings
 from ravel.domain.enums import UserRole
+from ravel.execution.node_runs import ExternalResultPort
 from ravel.gateway.auth.tokens import InvalidAccessToken, TokenService
 from ravel.gateway.conversation import MasterFactory
 from ravel.gateway.runtime import HarnessRuntime
@@ -93,6 +94,16 @@ class GatewayState:
     of behaviour a test cannot wait for at its production rate. It is a
     parameter so that a test can make the stream look every few milliseconds,
     which is the difference between a suite that runs and a suite that sleeps.
+
+    `deliver_external` is the fifth, and it is the only way a request reaches a
+    *run*. A laboratory user's upload or report has to reach the Worker that is
+    waiting for it, and that Worker is blocked in a durable wait inside a
+    Temporal workflow — so the request has to send a signal, which is the one
+    thing in this application that is neither a read of PostgreSQL nor a turn
+    of a model. It is a parameter rather than something built here for the same
+    reason `master_of` is: the composition that decides how a signal leaves the
+    process belongs to the application factory, and a test that is about what
+    the route records should not need a scheduler to be running.
     """
 
     def __init__(
@@ -103,6 +114,7 @@ class GatewayState:
         tokens: TokenService,
         master_of: MasterFactory,
         runtime: HarnessRuntime,
+        deliver_external: ExternalResultPort,
         cadence: Cadence | None = None,
     ) -> None:
         self.settings = settings
@@ -110,6 +122,7 @@ class GatewayState:
         self.tokens = tokens
         self.master_of = master_of
         self.runtime = runtime
+        self.deliver_external = deliver_external
         self.cadence = cadence or DEFAULT_CADENCE
 
 

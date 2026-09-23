@@ -27,6 +27,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from ravel.config import Settings, get_settings
+from ravel.execution.node_runs import ExecutionService, ExternalResultPort
 from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
 from ravel.gateway.conversation import MasterFactory
 from ravel.gateway.deps import GatewayState
@@ -57,6 +58,7 @@ def create_app(
     database: Database | None = None,
     tokens: TokenService | None = None,
     master_of: MasterFactory | None = None,
+    deliver_external: ExternalResultPort | None = None,
     cadence: Cadence | None = None,
 ) -> FastAPI:
     """Build the Gateway.
@@ -70,6 +72,11 @@ def create_app(
             through a factory that starts no runtime until somebody speaks to
             one — so a Gateway that only serves reads costs nothing extra, and
             a test can script Master without a model being involved.
+        deliver_external: How a waiting run is told that something outside
+            RAVEL happened. Defaults to the real one over Temporal, which
+            connects on the first delivery and not before — so a Gateway whose
+            laboratory surface is never used opens no connection, and a test
+            that is about what an upload *records* can supply its own.
         cadence: How often the event stream looks for new events and how often
             it speaks when there are none. Defaults to the production rates;
             a test lowers them rather than sleeping through them.
@@ -112,6 +119,8 @@ def create_app(
         tokens=tokens,
         master_of=master_of or runtime.master_of,
         runtime=runtime,
+        deliver_external=deliver_external
+        or ExecutionService(database=resolved_database, settings=resolved),
         cadence=cadence,
     )
 

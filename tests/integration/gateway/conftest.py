@@ -11,6 +11,15 @@ The secret is a genuine one rather than the development placeholder, so the
 tests exercise the code path a deployment takes. `require_a_real_secret`
 refuses that placeholder in production and would let it through here, which
 would leave the check itself untested.
+
+**One thing is scripted, and it is the boundary rather than a collaborator.**
+`ScriptedDeliveries` stands in for the port that reaches a waiting run, so that
+no route test opens a Temporal connection. What the routes owe at that boundary
+is that everything is *recorded* before anything is delivered and that a
+delivery which does not go is reported rather than raised — and both of those
+are asserted here, against the scripted port. What the durable layer does with
+a delivery is the subject of `tests/integration/temporal/`, where it runs
+against a real server.
 """
 
 from __future__ import annotations
@@ -26,6 +35,7 @@ from ravel.config import Settings
 from ravel.domain.clock import utcnow
 from ravel.domain.enums import UserRole
 from ravel.domain.project import Project
+from ravel.execution.temporal.contracts import ExternalResult
 from ravel.gateway.app import create_app
 from ravel.gateway.auth.passwords import hash_password
 from ravel.gateway.auth.tokens import TokenService
@@ -83,10 +93,63 @@ def tokens() -> TokenService:
     return TokenService(secret=SECRET, ttl_seconds=TTL_SECONDS)
 
 
+class ScriptedDeliveries:
+    """An `ExternalResultPort` that records what it was told, or refuses to be told.
+
+    The Gateway's part of this boundary is to *record* and then hand the signal
+    over; what the durable layer does with the signal is
+    `tests/integration/temporal/`'s subject. So the port is scripted here, and
+    for the reason the protocol itself gives: a lab user's upload has to be
+    recorded whether or not a scheduler is reachable, and a suite that could not
+    run without one would be unable to test the property it exists for.
+
+    `failure` is how a test plays the case that is not rare — a run whose worker
+    is gone. It is raised from `deliver`, which is where a transport failure
+    would come from.
+    """
+
+    def __init__(self) -> None:
+        #: Every delivery, in order: which node, under which contract version,
+        #: carrying what. The version is asserted rather than the node alone
+        #: because a node Master has revised runs again, and the run waiting is
+        #: the one under the newest terms.
+        self.deliveries: list[tuple[str, int, ExternalResult]] = []
+        self.failure: Exception | None = None
+
+    async def deliver(
+        self, *, node_id: str, execution_contract_version: int, result: ExternalResult
+    ) -> None:
+        if self.failure is not None:
+            raise self.failure
+        self.deliveries.append((node_id, execution_contract_version, result))
+
+
 @pytest.fixture
-def app(database: Database, gateway_settings: Settings, tokens: TokenService):
-    """The Gateway, wired to the test database."""
-    return create_app(settings=gateway_settings, database=database, tokens=tokens)
+def deliveries() -> ScriptedDeliveries:
+    """The scripted port, for a test that wants to read what was delivered."""
+    return ScriptedDeliveries()
+
+
+@pytest.fixture
+def app(
+    database: Database,
+    gateway_settings: Settings,
+    tokens: TokenService,
+    deliveries: ScriptedDeliveries,
+):
+    """The Gateway, wired to the test database and to a scripted delivery port.
+
+    The port is supplied rather than left to the default for every test in this
+    directory, not only the laboratory ones: the default reaches Temporal, and a
+    route test that opened a connection to the scheduler would be asserting
+    about a service that is not what it is testing.
+    """
+    return create_app(
+        settings=gateway_settings,
+        database=database,
+        tokens=tokens,
+        deliver_external=deliveries,
+    )
 
 
 @pytest.fixture
