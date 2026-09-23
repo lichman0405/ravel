@@ -40,6 +40,7 @@ from ravel.gateway.routes import (
     conversation,
     events,
     lab,
+    members,
     projects,
 )
 from ravel.gateway.runtime import HarnessRuntime
@@ -129,6 +130,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(projects.router)
     app.include_router(control.router)
+    app.include_router(members.router)
     app.include_router(conversation.router)
     app.include_router(events.router)
     app.include_router(artifacts.router)

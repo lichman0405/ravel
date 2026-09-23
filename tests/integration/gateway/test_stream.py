@@ -36,11 +36,17 @@ pytestmark = pytest.mark.integration
 #: production fifteen seconds.
 FAST = Cadence(poll_seconds=0.01, heartbeat_seconds=0.05)
 
-#: Creating a project emits `PROJECT_CREATED`, so a fresh project's stream is
-#: not empty — sequence 1 is the fact that the project exists. Every count
-#: below starts from here rather than from zero, because a stream that began at
-#: zero would be a stream that had lost the first thing that happened.
-BORN = 1
+#: The stream's first sequence: the project coming into being. A stream that
+#: began at zero would be a stream that had lost the first thing that happened.
+FIRST = 1
+
+#: A fresh project's head. Opening a project writes two events — the
+#: `PROJECT_CREATED` above, and the `MEMBER_ADDED` that says who owns it — so
+#: the last thing a project's creation writes is sequence 2, and it is the
+#: position a client that has drawn a fresh project is holding. Counts below
+#: are relative to one or the other, and they are two numbers rather than the
+#: one they used to be, which is exactly the change the second event made.
+BORN = FIRST + 1
 
 
 class Watcher:
@@ -136,10 +142,11 @@ async def test_a_project_nothing_has_been_done_to_holds_only_its_own_creation(
 ) -> None:
     """An anchor is never zero for a project that exists, and that is right.
 
-    The stream's first event is the project coming into being. It is not a
-    detail of the fixture: it is what makes the head sequence an honest position
-    rather than an offset, and a client that drew a fresh project and then asked
-    for what it had missed would otherwise be told it had missed nothing.
+    The stream's first events are the project coming into being and somebody
+    owning it. They are not a detail of the fixture: they are what make the
+    head sequence an honest position rather than an offset, and a client that
+    drew a fresh project and then asked for what it had missed would otherwise
+    be told it had missed nothing.
     """
     anchor = EventFeed(database=database, project_id=project.project_id).anchor()
 
@@ -186,7 +193,7 @@ async def test_a_client_that_claims_more_than_exists_is_sent_it_anyway(
         first = await watcher.next()
         second = await watcher.next()
 
-    assert [first["seq"], second["seq"]] == [BORN, BORN + 1]
+    assert [first["seq"], second["seq"]] == [FIRST, BORN]
 
 
 async def test_a_backlog_is_drained_a_page_at_a_time(
@@ -205,7 +212,7 @@ async def test_a_backlog_is_drained_a_page_at_a_time(
         await watcher.next()
         sequences = [(await watcher.next())["seq"] for _ in range(PAGE + 7)]
 
-    assert sequences == list(range(BORN, BORN + PAGE + 7))
+    assert sequences == list(range(FIRST, FIRST + PAGE + 7))
 
 
 # ── Following ───────────────────────────────────────────────────────────────
@@ -343,8 +350,12 @@ async def test_a_member_who_is_not_the_owner_sees_the_same_stream(
     account(database, username="lab", role=UserRole.LAB_USER, project=project)
 
     async with Watcher(following(database, project)) as watcher:
-        await watcher.next()
+        # Relative to the head the anchor reported rather than to `BORN`: this
+        # test adds a member first, so the head it catches up to is one past
+        # the project's creation. What is being asserted is that the note
+        # arrives on the frame after that head, whatever the head is.
+        anchor = await watcher.next()
         _note(database, project, "one")
         frame = await watcher.next()
 
-    assert frame["seq"] == BORN + 1
+    assert frame["seq"] == anchor["head_seq"] + 1

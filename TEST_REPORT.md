@@ -1071,6 +1071,78 @@ session on the deployment's queue — now carries its resolution.
 without running them. The full run takes about fifty minutes, most of it the
 live rows; the certification run for the phase is recorded in §2.
 
+### 7.9 P11-08: users, projects and membership
+
+The three Phase 11 items before this one gave RAVEL a real cluster and a real
+bench. This one decides who may point them at something, and every claim in it
+resolves to the same place: **authority is a row in `project_memberships`,
+re-read on the request that wants it.** Nothing a caller presents carries it,
+and the only thing that creates a person is an operator at a terminal.
+
+**The operator's own script is what makes an account.** `tests/acceptance/
+test_phase11_membership.py` runs `scripts/create_account.py`'s `main` — its
+flags, its one transaction, its refusals — against the database the Gateway is
+serving, and then logs in as the account it made, over a real socket, against a
+real uvicorn. The one substitution is where the script reads its configuration,
+because production's script is the only thing running and `Settings()` in a test
+is the deployment's; everything else, including the Argon2id hash the account is
+stored with, is the operator's path. The other half is asserted against the
+running Gateway: every `POST` route it declares is probed with an owner's token
+and with nobody's, and the accounts are counted afterwards. There is no open
+registration, and the probe is what says so rather than a reading of the routes.
+
+**A withdrawal is history, not an edit.** `revoke` writes `revoked_at` and
+`revoked_by` onto the row and emits `MEMBER_REVOKED`; the uniqueness constraint
+that used to be `(project, user)` became a partial unique index over live rows,
+which is what lets the same person be granted later without the two grants being
+confused for one; and the last owner cannot step down, refused in the repository
+so the script and the routes obey the same rule. A membership that is withdrawn
+is a project's history and no longer a project the person may open, and the
+acceptance case holds a token issued *before* the withdrawal to assert that:
+`/auth/me` still answers and names the same person, `/projects` is empty, and
+every route into the project answers 404 on that same credential.
+
+**One real defect, found by the acceptance case and fixed in the query.** The
+route that reads one project consults the membership on every request, so a
+withdrawal took effect there immediately. The route that lists the projects a
+caller may open did not: `memberships_of` — also what `/auth/me` builds its
+membership list from — filtered on the user and not on the revocation. That was
+correct for exactly as long as no membership could be withdrawn, which is why
+it survived every suite until this item gave it a withdrawal to be wrong about.
+The symptom is not a stale label: the client is offered a project that every
+other route refuses it, so the TUI draws a project it cannot open. The fix is
+one `revoked_at.is_(None)` and a docstring that says why; the case that pins it
+is `tests/integration/state/test_identity.py::test_a_withdrawn_membership_is_
+not_a_project_the_user_belongs_to`, which asserts the owner's own list too,
+because the cheap way to make the first half pass is to filter everything away.
+
+| | |
+|---|---|
+| Acceptance | `tests/acceptance/test_phase11_membership.py` — **8 passed** in 4.11s (real uvicorn, real socket, real PostgreSQL, the operator's own script) |
+| Integration, gateway | `make test-integration` — the 142 cases of `tests/integration/gateway/` pass, including the fourteen in `test_members.py` |
+| Integration, identity | `tests/integration/state/test_identity.py` — **27 passed**, one more than before this item, and the one that is new is the defect above |
+| Static analysis | `ruff check src tests` and `pyright src tests` — clean, 0 errors, 0 warnings |
+| Matrix | `make phase11-acceptance` — `PASS P11-08 users, projects and membership 8 passed` |
+
+**What the design deliberately does not do.** `ADMIN` outranks `PROJECT_OWNER`
+in the domain's ordering, and the item is explicit that this must not become a
+platform superuser: the ranking exists so that authority cannot be *escalated*,
+and `may_direct_project` is false for `ADMIN`, so an administrator can answer an
+approval and cannot decide the research route. The acceptance case asserts the
+half a route can get wrong — a project an administrator holds no membership in
+is answered 404, in the same words as a project that never existed — and the
+row's own `may_direct_project` is asserted alongside it. And `POST /projects` is
+open to any authenticated caller, which is not an escalation either: a person
+who opens a project owns a project that did not exist a moment ago, and what
+putting somebody into *somebody else's* project requires is an owner of that
+project.
+
+`KNOWN_LIMITATIONS.md` moves with it. L-17 loses its second half — "nothing
+revokes a membership" — and keeps its first, with what is *still* absent named
+rather than implied: an account cannot be deactivated, and no membership expires
+on a clock. `README.md`'s security list said the same thing and now says this
+instead.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

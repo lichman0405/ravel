@@ -39,6 +39,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -156,11 +157,24 @@ class ProjectMembershipRow(Base):
 
     `role` lives here rather than on a token so that a revoked membership takes
     effect on the next request instead of at token expiry.
+
+    **Uniqueness is per live membership, not per row.** The constraint this
+    table used to carry — one row per `(project, user)` — would have made a
+    second grant after a revocation impossible, and the row cannot be deleted
+    to make room for it. The partial index says what the rule always meant: a
+    user holds at most one *live* role in a project, and the revoked rows
+    behind it are history.
     """
 
     __tablename__ = "project_memberships"
     __table_args__ = (
-        UniqueConstraint("project_id", "user_id", name="uq_project_memberships_one_role"),
+        Index(
+            "uq_project_memberships_one_active_role",
+            "project_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
         _enum_constraint("role", UserRole),
         Index("ix_project_memberships_user_id", "user_id"),
     )
@@ -175,6 +189,8 @@ class ProjectMembershipRow(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     granted_by: Mapped[str | None] = mapped_column(REF)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(REF)
 
 
 class AgentIdentityRow(Base):

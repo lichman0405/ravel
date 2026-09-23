@@ -35,12 +35,19 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: The tables where `UPDATE` is a legitimate operation. Everything else in
 #: RAVEL is append-only.
 #:
-#: Seven of these carry a life cycle — a project's status, a node's status, an
+#: Most of these carry a life cycle — a project's status, a node's status, an
 #: agent's last-seen time, an approval's resolution, a contract's freeze, a
-#: backend job's state — and each is moved by a domain method with a state
-#: machine behind it. The eighth is the event counter, which is infrastructure
+#: backend job's state, a handover's — and each is moved by a domain method with
+#: a state machine behind it. One is the event counter, which is infrastructure
 #: rather than a record: it holds one integer and is advanced by
 #: `UPDATE ... RETURNING`.
+#:
+#: `project_memberships` is here for its two revocation columns, and it is the
+#: one entry in the list whose UPDATE is not a transition: a membership does
+#: not move through states, it is live and then it is withdrawn. The identity
+#: trigger below is what keeps that the only thing that may change — in
+#: particular `role`, so that a role change is a new row rather than an edit to
+#: the one that says who granted what.
 #:
 #: The two contract tables are here for one column only. A contract's terms are
 #: fixed the moment it is written; `frozen_at` records *when* they became
@@ -71,6 +78,7 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "backend_jobs",
         "lab_handovers",
         "deviation_records",
+        "project_memberships",
         "project_event_counters",
     }
 )
@@ -179,6 +187,26 @@ DEVIATION_IDENTITY_COLUMNS: tuple[str, ...] = (
     "permitted",
     "raised_by",
     "raised_at",
+)
+
+#: Columns on `project_memberships` that its one permitted UPDATE may not
+#: touch. `membership_id` is first because it is what the trigger names the row
+#: by.
+#:
+#: The mutable columns are `revoked_at` and `revoked_by`, and the absence of
+#: `role` from this list is the design. A role change is a revocation and a
+#: grant rather than an edit: a row rewritten from LAB_USER to PROJECT_OWNER
+#: would let one row stand for two different grants of authority, and the
+#: `MEMBER_ADDED` in the stream would no longer say what was actually given.
+#: `granted_by` is fixed for the same reason in the other direction — who
+#: conferred the authority is part of what happened.
+MEMBERSHIP_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "membership_id",
+    "project_id",
+    "user_id",
+    "role",
+    "granted_at",
+    "granted_by",
 )
 
 _TRANSITION_TABLE_DDL = """
@@ -293,6 +321,7 @@ _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
 _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
 _LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
 _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
+_MEMBERSHIP_IDENTITY_TRIGGER = "ravel_project_memberships_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -308,6 +337,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _BACKEND_JOB_IDENTITY_TRIGGER,
     _LAB_HANDOVER_IDENTITY_TRIGGER,
     _DEVIATION_IDENTITY_TRIGGER,
+    _MEMBERSHIP_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -461,6 +491,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=DEVIATION_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "project_memberships" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_MEMBERSHIP_IDENTITY_TRIGGER,
+                table="project_memberships",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=MEMBERSHIP_IDENTITY_COLUMNS,
             )
         )
 

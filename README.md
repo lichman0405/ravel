@@ -376,7 +376,7 @@ make test
 - 默认所有服务端口只绑 `127.0.0.1`；不要改成 `0.0.0.0`。
 - `.env` 是 git-ignored，永远不要提交。
 - V0 的 compute/lab 是 mock，research 是真实的，绝不允许 mock web evidence。
-- 没有用户级撤销（deactivation/revocation）路径；authority 一旦 grant 就只能等 project 结束。
+- 没有账号级撤销（deactivation）路径；membership 可以被 PROJECT_OWNER 撤销（`POST /projects/{id}/members/{user_id}/revoke`），撤销立即生效，但账号本身仍然存在。
 - V0 没有 scheduler，loop 是进程不是服务。
 
 ---

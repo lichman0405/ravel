@@ -77,12 +77,22 @@ class UserRepository:
 
 
 def memberships_of(session: Session, user_id: str) -> list[ProjectMembership]:
-    """Every project this user belongs to, oldest grant first.
+    """Every project this user belongs to *now*, oldest grant first.
 
     A module-level function rather than a `MembershipRepository` method because
     that repository is scoped to one project and this question is deliberately
     across all of them — it is how a client learns which projects to offer, and
     it is the only read in the system that is not filtered by a project.
+
+    Live rows only, and that filter is the whole reason this docstring is
+    longer than the query. Before memberships could be withdrawn the two reads
+    agreed by accident, because a revoked row could not exist; the row still
+    existing is what makes this the read that has to say what it means. A
+    project whose membership is withdrawn is a project the caller may not see,
+    so it must not be offered by the list that decides what a client may open —
+    and offering it would be worse than a stale label, since every other route
+    refuses the project and the client would be handed a door it cannot go
+    through.
 
     That it takes a user identifier and returns only *that* user's rows is what
     keeps it from being a way around the scoping. There is no variant that
@@ -93,7 +103,10 @@ def memberships_of(session: Session, user_id: str) -> list[ProjectMembership]:
     rows = (
         session.execute(
             select(ProjectMembershipRow)
-            .where(ProjectMembershipRow.user_id == user_id)
+            .where(
+                ProjectMembershipRow.user_id == user_id,
+                ProjectMembershipRow.revoked_at.is_(None),
+            )
             .order_by(ProjectMembershipRow.granted_at)
         )
         .scalars()
@@ -112,8 +125,40 @@ class MembershipRepository(ProjectScopedRepository[ProjectMembership]):
         return ProjectMembershipRow.granted_at
 
     def for_user(self, user_id: str) -> ProjectMembership | None:
-        """This user's membership in this project, if any."""
-        return self._one(user_id=user_id)
+        """This user's *live* membership in this project, if any.
+
+        Live only, and that is the read every authorization decision is made
+        from: a revoked membership is history, and a caller asking what this
+        user may do here is not asking about history. `history_for_user` is the
+        read that answers the other question.
+        """
+        return self._one(user_id=user_id, revoked_at=None)
+
+    def history_for_user(self, user_id: str) -> list[ProjectMembership]:
+        """Every membership this user has held here, oldest first."""
+        return self.all(user_id=user_id)
+
+    def active(self) -> list[ProjectMembership]:
+        """Every live membership in this project, oldest first."""
+        return self.all(revoked_at=None)
+
+    def owners(self, *, lock: bool = False) -> list[ProjectMembership]:
+        """The project's live owners, oldest first.
+
+        `lock` takes a row lock on them, which is what makes the last-owner
+        rule a rule rather than a check: two transactions revoking the two
+        remaining owners would each see two owners and each be allowed, and the
+        project would end up with none. Locked, the second waits, re-reads the
+        rows the first committed, and finds one.
+        """
+        statement = self._scoped(
+            self.row_type.revoked_at.is_(None),
+            self.row_type.role == UserRole.PROJECT_OWNER.value,
+        ).order_by(self._order_by())
+        if lock:
+            statement = statement.with_for_update()
+        rows = self.session.execute(statement).scalars().all()
+        return [from_row(self.record_type, row) for row in rows]
 
     def may_direct(self, user_id: str) -> bool:
         """Whether this user may direct the project's research.
@@ -142,25 +187,53 @@ class MembershipRepository(ProjectScopedRepository[ProjectMembership]):
         promote themselves to owner.
 
         Raises:
-            PermissionError: No granter was named for a project that already
-                has members, or the granter does not hold this much authority.
+            PermissionError: No granter was named for a project that has ever
+                had a membership, the granter does not hold this much
+                authority, or the user already holds a live membership here.
         """
-        existing = self.all()
+        history = self.all()
         if granted_by is None:
-            if existing:
+            if history:
                 raise PermissionError(
-                    f"{self.project_id} already has {len(existing)} membership(s); "
-                    "only the first may be created without naming who granted it"
+                    f"{self.project_id} already has {len(history)} membership(s) "
+                    "on record; only the first may be created without naming who "
+                    "granted it"
                 )
         else:
             granter = self.for_user(granted_by)
-            if granter is None or not granter.satisfies(role):
+            # An owner may confer `ADMIN`, and it is the one place this rule is
+            # wider than the ranking. `ADMIN` outranks `PROJECT_OWNER` in the
+            # domain's ordering, and that ordering is about *answering* — an
+            # approval may name an administrator as its resolver. Conferring it
+            # is a different question: `may_direct_project` excludes an
+            # administrator, so granting it hands over operational authority
+            # the granter never held and cannot use, and the granter gains
+            # nothing. What the ranking exists to stop is escalation — a lab
+            # user promoting themselves to owner — and this is not that.
+            may_confer = granter is not None and (
+                granter.satisfies(role)
+                or (granter.may_direct_project and role is UserRole.ADMIN)
+            )
+            if not may_confer:
                 held = granter.role.value if granter is not None else "no membership"
                 raise PermissionError(
                     f"{granted_by!r} may not grant {role.value} in {self.project_id} "
                     f"({held}); a user cannot confer authority they do not hold"
                 )
-        return self.add(
+        # A live membership is what the partial index refuses, and refusing it
+        # here as well is for the sentence rather than the rule: an
+        # `IntegrityError` reaching the Gateway says a constraint was violated,
+        # and the caller needs to be told which of the two things happened —
+        # this user already holds a role here, or they held one and it was
+        # withdrawn. Both are answered, and they are different sentences.
+        held_now = self.for_user(user_id)
+        if held_now is not None:
+            raise PermissionError(
+                f"this user already holds {held_now.role.value} in "
+                f"{self.project_id}; change a membership by withdrawing it and "
+                f"granting the new one, so both are on the record"
+            )
+        membership = self.add(
             ProjectMembership(
                 project_id=self.project_id,
                 user_id=user_id,
@@ -168,6 +241,88 @@ class MembershipRepository(ProjectScopedRepository[ProjectMembership]):
                 granted_by=granted_by,
             )
         )
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.MEMBER_ADDED,
+            actor_type=ActorType.USER if granted_by is not None else ActorType.SYSTEM,
+            actor_id=granted_by or user_id,
+            payload={
+                "membership_id": membership.membership_id,
+                "user_id": user_id,
+                "role": role.value,
+            },
+        )
+        return membership
+
+    def revoke(self, user_id: str, *, revoked_by: str) -> ProjectMembership:
+        """Withdraw a user's live membership in this project.
+
+        Two rules, and both are checked here rather than at the route, because
+        a script and a future screen write memberships through this repository
+        too:
+
+        - **Only somebody who may direct the project may withdraw a membership
+          in it.** The check is `may_direct_project` — an owner — and not the
+          rank comparison `grant` uses. Rank would let an administrator manage
+          members, since `ADMIN` outranks `PROJECT_OWNER` in the domain's
+          ordering; administering the runtime is a different authority from
+          deciding who may join a project, and the spec puts membership in the
+          owner's hands.
+        - **A project keeps at least one owner.** Otherwise a project could be
+          left with nobody able to direct it, which nothing in RAVEL can
+          repair: memberships are granted by owners, and a project has no
+          operator-side recovery.
+
+        Emits `MEMBER_REVOKED` in the same transaction as the write, so a
+        withdrawal and its record are one fact.
+
+        Raises:
+            NotFound: This user holds no live membership here.
+            PermissionError: The revoker may not direct the project, or this is
+                its last live owner.
+        """
+        revoker = self.for_user(revoked_by)
+        if revoker is None or not revoker.may_direct_project:
+            held = revoker.role.value if revoker is not None else "no membership"
+            raise PermissionError(
+                f"{revoked_by!r} may not change the members of {self.project_id} "
+                f"({held}); managing membership is the project owner's"
+            )
+
+        membership = self.for_user(user_id)
+        if membership is None:
+            raise NotFound(f"no user {user_id!r} is a member of {self.project_id}")
+
+        if membership.role is UserRole.PROJECT_OWNER:
+            # Locked, because the rule is about a count that another
+            # transaction may be changing as this one reads it.
+            owners = self.owners(lock=True)
+            if len(owners) <= 1:
+                raise PermissionError(
+                    f"{user_id!r} is {self.project_id}'s last owner; a project "
+                    "with no owner cannot be directed by anyone, and nothing "
+                    "in RAVEL can restore one"
+                )
+
+        withdrawn = membership.revoked(revoked_by)
+        row = self.session.get(ProjectMembershipRow, membership.membership_id)
+        assert row is not None  # read in this transaction above
+        row.revoked_at = withdrawn.revoked_at
+        row.revoked_by = withdrawn.revoked_by
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.MEMBER_REVOKED,
+            actor_type=ActorType.USER,
+            actor_id=revoked_by,
+            payload={
+                "membership_id": membership.membership_id,
+                "user_id": user_id,
+                "role": membership.role.value,
+            },
+        )
+        return withdrawn
 
 
 class AgentIdentityRepository(ProjectScopedRepository[AgentIdentity]):

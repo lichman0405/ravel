@@ -153,6 +153,10 @@ ABSENT_PLACEHOLDERS: dict[str, str] = {
     # route anyway: what a probe asserts is that the DAG did not move, and a
     # document read that succeeded would have gone through the manifest.
     "document": "a-document-that-does-not-exist",
+    # A user identifier, which the membership routes address. The value is
+    # deliberately one nobody holds: a probe asserts that the DAG did not move,
+    # and a withdrawal that *succeeded* would have moved something else.
+    "user_id": "a-user-who-does-not-exist",
     "version": "1",
 }
 

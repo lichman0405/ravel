@@ -410,3 +410,73 @@ the same refusal one layer down.
 | One failed row is not certified whatever the others say | `test_p11_07_one_failed_row_is_not_certified_whatever_the_others_say` — a failure outranks a gap, because it describes a known defect rather than an unknown one |
 | A skip nobody can attribute is reported as one | `test_p11_07_a_skip_nobody_can_attribute_is_reported_as_one` — both directions: a known credential is recognised and a sentence naming none is not, since a rule that matched everything would pass on the first half alone |
 | Tests do not share a queue with a deployment | `tests/integration/conftest.py`'s refusal, asserted by the suites themselves — every integration case now runs on its own queue, and one configured with the deployment's is refused at fixture time |
+
+## P11-08 users, projects and membership
+
+The three Phase 11 items before this one gave RAVEL a real cluster and a real
+bench; this one is about who may point them at something. It is the item that
+decides what "a member" means, and the answer is deliberately narrow: **every
+authority in the system is a row in `project_memberships`, re-read on every
+request, and the only thing that creates a person is an operator at a terminal.**
+
+**Opening a project is the one membership nobody confers.** A project's first
+membership is granted to nobody by nobody, so the person who opens a project
+owns it; every later membership names the account that conferred it, and a
+granter cannot confer more authority than they hold. The alternative — a
+separate "create the owner" step — would be a second thing that has to happen
+for a project to be directable, and a project whose owner was never granted is
+a state nobody can repair, since owners are the only ones who may grant.
+
+That makes `POST /projects` the one membership route open to any authenticated
+caller, and it is worth being explicit about why that is not an escalation: a
+lab user who opens a project owns a project that did not exist a moment ago and
+holds exactly the standing in it that they had in nobody's project before. What
+the route cannot do is put them into somebody else's work — that needs an owner
+of *that* project — and what it needs first is an account, which the Gateway
+still cannot make.
+
+**Withdrawal is history, never deletion and never an edit.** A withdrawn
+membership keeps its row, with `revoked_at` and `revoked_by`; a role change is
+a withdrawal followed by a grant, so what a row says is what was true while it
+was live. The uniqueness constraint that used to be `(project, user)` is a
+*partial* unique index over live rows, which is what lets the same person be
+granted again later without the two grants being confused for one. And a
+project always keeps an owner: the last one cannot step down, refused in the
+repository so the script, the routes and any future screen obey the same rule.
+
+**The authority is read from the row, not carried in the token.** A token is a
+fact about who is asking. That is what makes a withdrawal take effect on the
+next request rather than when a token expires, and the case below asserts it
+with a token minted *before* the withdrawal — a case that signed in again
+afterwards would pass whether the role came from the row or from a claim frozen
+at login. Two reads decide what a caller may open, and both now mean *live*:
+`for_user`, which every authorization decision goes through, and
+`memberships_of`, which builds the project list and `/auth/me`. The second
+filtered on the user and not on the revocation, which was correct only for as
+long as no membership could be withdrawn — the defect this item's case found.
+
+**An administrator is an operational role in a project, not a superuser.** An
+owner may confer `ADMIN`, and the ranking exists so that authority cannot be
+*escalated* — a lab user promoting itself to owner — rather than to make an
+administrator more powerful than an owner: `may_direct_project` is false for
+`ADMIN`, so an administrator cannot decide the research route, and an
+administrator who is not a member of a project is answered exactly as a
+stranger is. There is no platform-wide role, and no route lists projects a
+caller is not in.
+
+| Requirement | Demonstrated by |
+|---|---|
+| Server Operator → create User | `test_p11_08_a_person_is_made_at_a_terminal_and_not_over_http` — the operator's own script run against the Gateway's database, then that account logging in over a real socket |
+| PROJECT_OWNER → create Project | `test_p11_08_an_owner_opens_a_project_and_the_ownership_is_a_row` — the creator is the first membership, granted to nobody by nobody |
+| PROJECT_OWNER → add an existing LAB_USER / ADMIN | `test_p11_08_an_owner_adds_accounts_that_already_exist` — both roles, with the granter on the record |
+| 不要增加 open registration | `test_p11_08_a_person_is_made_at_a_terminal_and_not_over_http` probes **every** `POST` route with an owner's token and with nobody's, and reads the accounts back out of PostgreSQL; `tests/integration/gateway/test_members.py::test_no_route_creates_an_account` is the same claim through `TestClient` |
+| Adding a member is not making a person | the same case: an unknown username is a 404 and the account count does not move |
+| PROJECT_OWNER 管理 membership | `tests/integration/gateway/test_members.py` — the grant, the withdrawal and the member list, all owner-only |
+| LAB_USER 不能管理成员 | `test_p11_08_a_lab_user_and_an_administrator_cannot_manage_members` — 403 on the list, on the grant and on the withdrawal, while the same token still reads the project |
+| ADMIN 不能管理成员 | the same case, second role |
+| ADMIN 是 runtime/admin role | `test_p11_08_an_administrator_is_not_a_platform_superuser` — a project the administrator holds no membership in answers 404, in the same words as a project that never existed, and the membership row itself reports `may_direct_project` false |
+| 不能删除最后一个 PROJECT_OWNER | `test_p11_08_a_project_never_loses_its_owner` — refused while the owner is the last one, allowed once a second owner is in place, and refused again for that one |
+| membership mutation 必须 audit | `test_p11_08_every_membership_change_is_a_fact_on_the_record` — `MEMBER_ADDED` / `MEMBER_REVOKED` with the actor and the membership identifier, and the withdrawn row still in the table with `revoked_at` and `revoked_by` |
+| role 必须从 DB re-read, 不依赖旧 token 中缓存权限 | `test_p11_08_authority_comes_from_the_row_and_not_the_token` — one token through three states of the same membership: refused after withdrawal, and reading again as `ADMIN` after a re-grant, with no second login |
+| The project list means live memberships | `tests/integration/state/test_identity.py::test_a_withdrawn_membership_is_not_a_project_the_user_belongs_to` — the read the list and `/auth/me` are built from, and the one that did not filter on the revocation |
+| A withdrawal reaches an account that is still active | `tests/integration/gateway/test_projects.py` and `test_members.py` — the membership is the authority; the account is untouched |

@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from tests.integration.gateway.conftest import account, bearer, sign_in
+from tests.integration.gateway.conftest import a_project, account, bearer, sign_in
 from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, probe_path
 
 from ravel.domain.dag import DagNode, JoinPolicy
@@ -31,7 +31,6 @@ from ravel.domain.roles import AgentRole
 from ravel.gateway.auth.tokens import TokenService
 from ravel.state.database import Database
 from ravel.state.repositories.dag import DagRepository
-from ravel.state.repositories.projects import ProjectRegistry
 
 pytestmark = pytest.mark.integration
 
@@ -59,14 +58,6 @@ def a_node(project_id: str, objective: str, **overrides: Any) -> DagNode:
         # strictest reading rather than making every caller say it.
         merged["join_policy"] = JoinPolicy.ALL
     return DagNode(**merged)
-
-
-def _a_project(database: Database, *, title: str) -> Project:
-    """A project with no members, so a test can put somebody in it first."""
-    with database.transaction() as session:
-        return ProjectRegistry(session).create(
-            title=title, objective="Nothing in particular.", created_by="someone"
-        )
 
 
 def plant(database: Database, project: Project, *objectives: str) -> list[str]:
@@ -171,15 +162,15 @@ def test_every_read_of_a_foreign_project_is_refused_the_same_way(
         assert response.status_code == 404, f"{path} answered {response.status_code}"
 
 
-@pytest.mark.parametrize("role", [UserRole.PROJECT_OWNER, UserRole.LAB_USER])
+@pytest.mark.parametrize("role", list(UserRole))
 def test_every_role_may_read_the_project_they_are_in(
     client: TestClient, database: Database, project: Project, role: UserRole
 ) -> None:
     """Reading is what the three roles have in common; doing is what separates them.
 
-    An administrator is not in this list, and not because they may not read:
-    they cannot be *granted* a membership in a project that already has one.
-    That is asserted below rather than worked around here.
+    Every role, because a role is a role in a project: an administrator is not
+    a platform superuser and holds no standing here beyond the membership an
+    owner gave them. What each may *do* is asserted in `test_members.py`.
     """
     account(database, username="ada", role=role, project=project)
     pair = sign_in(client, "ada")
@@ -192,32 +183,54 @@ def test_every_role_may_read_the_project_they_are_in(
     assert response.json()["role"] == role.value
 
 
-def test_an_administrator_may_read_but_must_be_a_projects_first_member(
+def test_an_administrator_may_read_but_must_be_a_member(
     client: TestClient, database: Database, project: Project
 ) -> None:
-    """Administering is bootstrapped, not conferred, and that is the rule working.
+    """Administering the runtime is not standing in a project, and the whole
+    difference between them is a membership row.
 
-    `MembershipRepository.grant` refuses to let a user confer authority they do
-    not hold, and `ADMIN` outranks `PROJECT_OWNER`. So an owner cannot make an
-    administrator: the only way one comes to exist is as some project's first
-    membership, which is the one that needs no granter. The refusal is checked
-    first, because a rule that only held because nobody tried is not a rule.
+    An owner may confer `ADMIN`, and that is the one place the domain's ranking
+    is deliberately wider than the check it drives. The ranking exists so that
+    authority cannot be *escalated* — a lab user promoting itself to owner —
+    and an owner handing over the operational role is not that: `ADMIN` is
+    excluded from `may_direct_project`, so the granter parts with a standing
+    they never had and gains nothing. What the ranking still refuses is the
+    user who holds less conferring more.
+
+    What an administrator does not get is a place in somebody else's project.
+    The second half is the one that matters: root administers a project of its
+    own and is answered about this one exactly as a stranger is, because
+    `ADMIN` is a role in a project like any other rather than a platform
+    superuser.
     """
-    with pytest.raises(PermissionError, match="cannot confer authority"):
-        account(
-            database,
-            username="ada",
-            role=UserRole.ADMIN,
-            project=project,
-        )
+    owner = account(database, username="ada", role=UserRole.ADMIN, project=project)
+    pair = sign_in(client, "ada")
 
-    fresh = _a_project(database, title="Operations")
-    account(database, username="root", role=UserRole.ADMIN, project=fresh)
-    pair = sign_in(client, "root")
-
-    response = client.get(f"/projects/{fresh.project_id}", headers=bearer(pair["access_token"]))
+    response = client.get(
+        f"/projects/{project.project_id}", headers=bearer(pair["access_token"])
+    )
     assert response.status_code == 200
     assert response.json()["role"] == "ADMIN"
+    assert response.json()["project"]["project_id"] == project.project_id
+    assert owner  # the identifier the grant wrote down
+
+    fresh = a_project(database, title="Operations")
+    account(database, username="root", role=UserRole.ADMIN, project=fresh)
+    root = sign_in(client, "root")
+
+    mine = client.get(
+        f"/projects/{fresh.project_id}", headers=bearer(root["access_token"])
+    )
+    assert mine.status_code == 200
+    assert mine.json()["role"] == "ADMIN"
+
+    # Not a member of `project`, so it is not a project root can see — and the
+    # answer is the same one a stranger gets, which is the point: membership is
+    # what opens a project, not the role somebody holds elsewhere.
+    theirs = client.get(
+        f"/projects/{project.project_id}", headers=bearer(root["access_token"])
+    )
+    assert theirs.status_code == 404
 
 
 # ── The projection ──────────────────────────────────────────────────────────
@@ -430,13 +443,18 @@ def test_a_valid_token_is_not_itself_authority(
     cannot see the project, because the authority to see a project is a row in
     PostgreSQL and this caller has none.
 
-    **What this does not demonstrate is revocation**, and the honest reason is
-    that V0 has no way to revoke: `project_memberships` and `users` are both
-    append-only, so neither a membership nor an account can be edited or
-    deleted. Reading the row on every request is therefore what would make a
-    future revocation immediate rather than what makes one immediate today.
-    That gap is recorded in `KNOWN_LIMITATIONS.md` rather than papered over by
-    a test of a path that does not exist.
+    **This case is the absent half of that property, and there is a second one
+    for the withdrawn half.** A membership that was never granted and one that
+    was taken away are the same absence to this read, which is why the read is
+    written as "the live row for this user" rather than as a check on anything
+    the caller presents. The case that holds a token issued *before* a
+    withdrawal is
+    `test_members.py::test_an_owner_withdraws_a_role_and_it_stops_working_at_once`,
+    and `tests/integration/state/test_identity.py` asserts the reads underneath
+    both. Until Phase 11 there was no way to withdraw a membership at all —
+    `KNOWN_LIMITATIONS.md` L-17 — so this docstring used to say that reading the
+    row per request would make a future revocation immediate rather than making
+    one immediate today.
     """
     user_id = account(database, username="ada")
     token, _grant = tokens.issue_access(user_id)

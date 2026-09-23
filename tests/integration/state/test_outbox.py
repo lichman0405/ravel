@@ -13,8 +13,9 @@ from __future__ import annotations
 import pytest
 
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus, NodeType
+from ravel.domain.enums import NodeStatus, NodeType, UserRole
 from ravel.domain.events import ActorType, ProjectEventType
+from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.state.database import Database
 from ravel.state.outbox import emit, events_since, last_event_seq
@@ -28,15 +29,44 @@ class _Deliberate(RuntimeError):
     """A failure raised inside a transaction to force a rollback."""
 
 
-def test_a_project_creation_emits_exactly_one_event(database: Database, project) -> None:
+def creation_head(database: Database, project: Project) -> int:
+    """How far the stream has got once the fixture's project exists.
+
+    Read rather than written down, because the counts in this module are all
+    relative to the project's creation and the creation has grown: opening a
+    project writes `PROJECT_CREATED` and then the `MEMBER_ADDED` that says who
+    owns it. A module that said `1` in eight places said something that was
+    true about the fixture rather than about the system, and the second event
+    made it false in all eight at once.
+    """
+    with database.read_only() as session:
+        return last_event_seq(session, project.project_id)
+
+
+def test_a_project_creation_emits_the_facts_of_its_creation(
+    database: Database, project: Project
+) -> None:
+    """Two events, and neither is incidental.
+
+    A project is opened by somebody, and that somebody is its first owner —
+    which is the only membership that needs no granter. Both facts are on the
+    record from the first instant, so a reader of the stream can tell who
+    opened it without asking a second question.
+    """
     with database.read_only() as session:
         events = events_since(session, project.project_id)
-    assert [event.event_type for event in events] == [ProjectEventType.PROJECT_CREATED]
-    assert events[0].seq == 1
+    assert [event.event_type for event in events] == [
+        ProjectEventType.PROJECT_CREATED,
+        ProjectEventType.MEMBER_ADDED,
+    ]
+    assert [event.seq for event in events] == [1, 2]
+    assert events[1].payload["role"] == UserRole.PROJECT_OWNER.value
+    assert events[1].payload["user_id"] == project.created_by
 
 
-def test_a_rolled_back_write_emits_no_event(database: Database, project) -> None:
+def test_a_rolled_back_write_emits_no_event(database: Database, project: Project) -> None:
     """The gate: state and its event are one atomic fact."""
+    born = creation_head(database, project)
     with pytest.raises(_Deliberate), database.transaction() as session:
         node = DagNode.create(
             project_id=project.project_id,
@@ -51,14 +81,15 @@ def test_a_rolled_back_write_emits_no_event(database: Database, project) -> None
 
     with database.read_only() as session:
         assert DagRepository(session, project.project_id).nodes() == []
-        assert events_since(session, project.project_id, after_seq=1) == []
-        assert last_event_seq(session, project.project_id) == 1
+        assert events_since(session, project.project_id, after_seq=born) == []
+        assert last_event_seq(session, project.project_id) == born
 
 
 def test_a_rolled_back_transaction_does_not_burn_a_sequence_number(
-    database: Database, project
+    database: Database, project: Project
 ) -> None:
     """A gap in the stream would be indistinguishable from a lost event."""
+    born = creation_head(database, project)
     for _ in range(3):
         with pytest.raises(_Deliberate), database.transaction() as session:
             emit(
@@ -79,9 +110,13 @@ def test_a_rolled_back_transaction_does_not_burn_a_sequence_number(
             actor_id="master",
         )
 
-    assert committed.seq == 2, "the three rolled-back writes must not have consumed numbers"
+    assert committed.seq == born + 1, (
+        "the three rolled-back writes must not have consumed numbers"
+    )
     with database.read_only() as session:
-        assert [event.seq for event in events_since(session, project.project_id)] == [1, 2]
+        assert [event.seq for event in events_since(session, project.project_id)] == list(
+            range(1, born + 2)
+        )
 
 
 def test_sequences_are_contiguous_within_a_project(database: Database, project) -> None:
@@ -121,9 +156,10 @@ def test_sequences_are_independent_per_project(database: Database, other_project
 
 
 def test_resuming_from_a_sequence_returns_only_what_follows(
-    database: Database, project
+    database: Database, project: Project
 ) -> None:
     """The TUI reconnects with the last sequence it rendered."""
+    born = creation_head(database, project)
     with database.transaction() as session:
         for _ in range(4):
             emit(
@@ -135,12 +171,12 @@ def test_resuming_from_a_sequence_returns_only_what_follows(
             )
 
     with database.read_only() as session:
-        resumed = events_since(session, project.project_id, after_seq=3)
-    assert [event.seq for event in resumed] == [4, 5]
+        resumed = events_since(session, project.project_id, after_seq=born + 2)
+    assert [event.seq for event in resumed] == [born + 3, born + 4]
 
 
 def test_a_node_transition_writes_its_event_in_the_same_transaction(
-    database: Database, project
+    database: Database, project: Project
 ) -> None:
     """The event cannot exist without the change, or the change without it."""
     with database.transaction() as session:
@@ -168,14 +204,18 @@ def test_a_node_transition_writes_its_event_in_the_same_transaction(
     assert stored.status is NodeStatus.READY
     assert types == [
         ProjectEventType.PROJECT_CREATED,
+        ProjectEventType.MEMBER_ADDED,
         ProjectEventType.DAG_MUTATED,
         ProjectEventType.NODE_CREATED,
         ProjectEventType.NODE_READY,
     ]
 
 
-def test_an_event_carries_the_actor_that_caused_it(database: Database, project) -> None:
+def test_an_event_carries_the_actor_that_caused_it(
+    database: Database, project: Project
+) -> None:
     """Attribution comes from the role the caller proved, not from a claim."""
+    born = creation_head(database, project)
     with database.transaction() as session:
         DagRepository(session, project.project_id).add_node(
             DagNode.create(
@@ -189,7 +229,9 @@ def test_an_event_carries_the_actor_that_caused_it(database: Database, project) 
         )
 
     with database.read_only() as session:
-        written = events_since(session, project.project_id)[1:]
+        # Past the project's creation, which the fixture wrote and this test
+        # is not about.
+        written = events_since(session, project.project_id)[born:]
 
     assert [event.event_type for event in written] == [
         ProjectEventType.DAG_MUTATED,
@@ -203,9 +245,10 @@ def test_an_event_carries_the_actor_that_caused_it(database: Database, project) 
 
 
 def test_a_transaction_that_commits_keeps_everything_it_wrote(
-    database: Database, project
+    database: Database, project: Project
 ) -> None:
     """The complement of the rollback test: nothing is lost on the happy path."""
+    born = creation_head(database, project)
     with database.transaction() as session:
         emit(
             session,
@@ -216,7 +259,7 @@ def test_a_transaction_that_commits_keeps_everything_it_wrote(
         )
 
     with database.read_only() as session:
-        assert last_event_seq(session, project.project_id) == 2
+        assert last_event_seq(session, project.project_id) == born + 1
         assert events_since(session, project.project_id)[-1].event_type is (
             ProjectEventType.MASTER_STARTED
         )

@@ -282,6 +282,44 @@ class GatewayClient:
         """
         return await self._post(f"/projects/{project_id}/envelope", **envelope)
 
+    # ── Membership ──────────────────────────────────────────────────────────
+
+    async def open_project(self, title: str, objective: str) -> dict[str, Any]:
+        """Open a project, owned by whoever opened it.
+
+        Not registration: the account already exists. This is the one
+        membership nobody confers, which is why it is reachable by any
+        authenticated caller — there is nobody to be an owner of yet.
+        """
+        return await self._post("/projects", title=title, objective=objective)
+
+    async def members(self, project_id: str) -> list[dict[str, Any]]:
+        """Who is in this project now. Only an owner may read it."""
+        return await self._request("GET", f"/projects/{project_id}/members")
+
+    async def add_member(
+        self, project_id: str, username: str, role: str
+    ) -> dict[str, Any]:
+        """Give somebody who already has an account a role in this project.
+
+        By username rather than by identifier, because the person adding
+        somebody knows their name and a client that had to look an identifier
+        up first would need a user directory this Gateway deliberately does
+        not have.
+        """
+        return await self._post(
+            f"/projects/{project_id}/members", username=username, role=role
+        )
+
+    async def revoke_member(self, project_id: str, user_id: str) -> dict[str, Any]:
+        """Withdraw somebody's role. The row stays; the authority goes.
+
+        Takes effect on that person's next request rather than when their
+        token expires, which is the property the owner screen's confirmation
+        is written against.
+        """
+        return await self._post(f"/projects/{project_id}/members/{user_id}/revoke")
+
     # ── Lab ─────────────────────────────────────────────────────────────────
 
     async def lab_tasks(self, project_id: str) -> list[dict[str, Any]]:

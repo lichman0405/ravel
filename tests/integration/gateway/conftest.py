@@ -41,6 +41,7 @@ from ravel.gateway.auth.passwords import hash_password
 from ravel.gateway.auth.tokens import TokenService
 from ravel.state.database import Database
 from ravel.state.repositories.identity import MembershipRepository, UserRepository
+from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.tables import UserRow
 
 pytestmark = pytest.mark.integration
@@ -191,7 +192,7 @@ def account(
             # it does. The `project` fixture has already spent its first on the
             # owner, so a second member names that owner — which is the point of
             # the rule, since authority is conferred rather than assumed. A
-            # project built by `_a_project` has no members yet, so its first
+            # project built by `a_project` has no members yet, so its first
             # member is granted by nobody, as it must be.
             repository = MembershipRepository(session, project.project_id)
             repository.grant(
@@ -200,6 +201,19 @@ def account(
                 granted_by=project.created_by if repository.all() else None,
             )
         return user.user_id
+
+
+def a_project(database: Database, *, title: str) -> Project:
+    """A project with no members, so a test can put somebody in it first.
+
+    Not the `project` fixture, which comes with an owner already: a test about
+    who may be in a project needs the moment before the first membership, and
+    one about a project with a single owner needs a project that has one.
+    """
+    with database.transaction() as session:
+        return ProjectRegistry(session).create(
+            title=title, objective="Nothing in particular.", created_by="someone"
+        )
 
 
 def deactivated_account(database: Database, *, user_id: str, username: str) -> None:

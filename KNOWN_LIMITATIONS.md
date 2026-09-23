@@ -159,9 +159,14 @@ that nobody listed.
 `is_active` exists and defaults to true. No code path flips it, and the table's
 immutability guards refuse updates.
 
-**Do not conclude** that deactivation was forgotten. Revocation in V0 is by
-authority envelope, which is Master's and the User's lever; a user-level switch
-is a later concern.
+**Do not conclude** that deactivation was forgotten, or that somebody who
+should lose their access cannot. Two other things do that job: the authority
+envelope, which is Master's and the User's lever, and — since Phase 11 —
+withdrawing the membership, which takes away everything the account could do in
+a project without touching the account. What remains absent is narrower than it
+used to be: `is_active` is still a column nothing flips, so an account that
+should be unable to log in at all has no path, and an account is never deleted
+because a record of who did the work outlives their access. See L-17.
 
 ## L-11 — Dependencies are immutable once added
 
@@ -303,11 +308,27 @@ Checking only the header would make the cap advisory.
 well above anything V0 research produces; what V0 does not have is a streaming
 upload path, and adding one means changing how the store hashes.
 
-## L-17 — Accounts are created at a terminal, and authority cannot be withdrawn
+## L-17 — Accounts are created at a terminal, and authority could not be withdrawn
 
 - **Since:** Phase 8
+- **Resolved (the second half):** 2026-09-23, in Phase 11. A membership can be
+  withdrawn, and the withdrawal is a fact rather than a deletion:
+  `MembershipRepository.revoke` writes `revoked_at` and `revoked_by` onto the
+  row and emits `MEMBER_REVOKED`, the uniqueness constraint that used to be
+  `(project, user)` is a partial unique index over live rows so the same person
+  can be granted again later, and every read that answers "what may this user do
+  here" returns live rows only. The last owner cannot step down — refused in the
+  repository, so the script, the Gateway's routes and any future screen obey the
+  same rule — and a role change is a withdrawal followed by a grant rather than
+  an edit, so what a row says is what was true while it was live.
+  `scripts/create_account.py` remains the only thing that creates a person, and
+  the Gateway now serves the rest: `POST /projects` opens one, `POST
+  /projects/{id}/members` confers, `POST /projects/{id}/members/{user_id}/revoke`
+  withdraws, and all three require the caller to be the project's owner. What is
+  *still* absent is `L-10`: nothing deactivates an account, and nothing expires
+  a membership on a clock.
 - **Where:** `scripts/create_account.py`; `MembershipRepository` in
-  `src/ravel/state/repositories/identity.py`
+  `src/ravel/state/repositories/identity.py`; `src/ravel/gateway/routes/members.py`
 
 The Gateway authenticates a person and cannot create one. Every `/auth` route
 reads an account, and the only writes it performs are on login chains.
@@ -315,19 +336,20 @@ Membership is the one thing in RAVEL that manufactures authority, so it is
 deliberately unreachable over HTTP by whoever happens to be logged in, and
 provisioning is `scripts/create_account.py` on the host.
 
-**Nothing revokes a membership.** `grant` is the only write on that table: there
-is no revoke, no expiry, and no path that lowers a role. A user who should no
-longer direct a project keeps the authority until the project is over. `L-10`
-is the same shape for accounts themselves — `is_active` exists and no code path
-flips it.
+**`grant` used to be the only write on that table** — no revoke, no expiry, and
+no path that lowered a role, so a user who should no longer direct a project
+kept the authority until the project was over. That is the half the **Resolved**
+line above describes, and the sentence is kept here in the past tense because it
+is what the entry was about. Withdrawing is a command an operator now finds: on
+the owner's screen, or at the terminal for a project nobody can log in to.
 
 **Do not conclude** that the grant path is unaudited or unguarded. It is
 checked twice — a granter must hold authority at least equal to what is being
 granted, and only a project's *first* membership may be created without naming a
-granter — and the append-only guards make every grant a record. What is missing
-is the *revocation* half, which is a later concern and is recorded here because
-an operator planning a deployment needs to know that removing somebody is not a
-command they will find.
+granter — and the append-only guards make every grant a record. The same holds
+of the withdrawal: `revoke` refuses a caller who may not direct the project and
+refuses the project's last owner, and both directions write an event naming
+who did it.
 
 ## L-18 — The loop is a process, not a service
 
