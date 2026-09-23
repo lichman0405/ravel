@@ -1003,7 +1003,7 @@ a side effect of an item about reading a source.
 - **Since:** Phase 11 (P11-06)
 - **Where:** `src/ravel/backends/lab/` (`HumanLabBackend`); `src/ravel/domain/lab.py`;
   `src/ravel/state/repositories/lab.py`; `src/ravel/gateway/routes/lab.py`;
-  `docs/06_EXECUTION_AND_REVIEW.md` §5
+  `docs/06_EXECUTION_AND_REVIEW.md` §5; `tests/acceptance/test_phase11_humanlab.py`
 
 `HumanLabBackend` is a real channel in the sense that a person at a bench is on
 the other end of it, and the three things that follow from that are limitations

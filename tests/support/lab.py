@@ -234,7 +234,7 @@ def upload(
 
 
 def raise_a_deviation(
-    database: Database, handed: Handed, *, node_id: str | None = None
+    database: Database, prepared: Prepared, *, node_id: str | None = None
 ) -> DeviationRecord:
     """A lab user's report, recorded the way the route records one.
 
@@ -242,17 +242,23 @@ def raise_a_deviation(
     node's frozen contract, so a suite that needs a report to exist before it
     drives the delivery that carries it does not have to go through HTTP to get
     one — the route's own tests are where the route is exercised.
+
+    `prepared` rather than the `Handed` a backend suite usually has, because the
+    deviation is raised before there is anything to hand over: the sentence is
+    what the bench says instead of doing the work. `node_id` defaults to the
+    node the contract is for, and is set only to test a report about *another*
+    node.
     """
     deviation = DeviationRecord(
-        project_id=handed.prepared.project_id,
-        node_id=node_id or handed.node_id,
-        execution_contract_ref=handed.prepared.contract.contract_id,
+        project_id=prepared.project_id,
+        node_id=node_id or prepared.node_id,
+        execution_contract_ref=prepared.contract.contract_id,
         requested_action="run_at_pressure",
         description="The furnace would not hold 900C, so the run was done at 850C.",
         raised_by=UPLOADER,
     )
     with database.transaction() as session:
-        return RecordRepositories(session, handed.prepared.project_id).deviations.raise_(
+        return RecordRepositories(session, prepared.project_id).deviations.raise_(
             deviation
         )
 

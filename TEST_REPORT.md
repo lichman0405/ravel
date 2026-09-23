@@ -937,6 +937,73 @@ is what closes it, and until somebody does, the honest statement is that the
 adapter is exercised against a scripted cluster and has never been run against a
 real one.
 
+### 7.7 P11-06: the human laboratory channel
+
+The directive names the chain in full — `Master → Experiment Contract →
+LabPreparation → Experimental Worker → HumanLabBackend → LAB_USER → result /
+deviation → Review → Master` — and the backend, the handover record and the
+person's upload door were already committed. What was missing is the thing only
+a *run* can show: a real durable wait, a real signal, and a seat that reads the
+ending afterwards. A backend can hold every one of its promises and a workflow
+can still lose the answer, because between them sit Temporal's durability and
+PostgreSQL's authority, and nothing but a run exercises both.
+
+Writing the acceptance module is what found the two defects, which is the reason
+the item is reported here rather than in the commit that built the channel.
+
+**A bench's wait was mirrored as a run.** `HumanLabBackend.submit` answers
+`WAITING_EXTERNAL` — a person at a bench has the work the moment it is handed
+over and RAVEL can see nothing about them afterwards — and `start_job` recorded
+the job without moving the node, so a contract handed to a bench read `RUNNING`
+for as long as the bench took. It was not self-correcting either: `_watch`
+enters the durable wait precisely *because* the state is `WAITING_EXTERNAL`, so
+`check_job` is not called again until the answer arrives, and the disguise would
+have held for a week. Both halves of `start_job` now mirror the node — the
+fresh submission and the recovered handover, the second because that is the call
+that would otherwise leave a recovered wait reading as a run.
+
+**A deviation could not end the run it stopped.** `_stop_for_deviation` stopped
+the job without moving the node, on the rule that `finish_node_run` decides
+where a node ends up. That rule is right and the omission was still wrong, and
+the state machine said so in as many words: `finish_node_run` refuses a node
+that is still waiting (`node EXP-C8C1695F is WAITING_EXTERNAL but the run that
+started it has only just ended; something else has moved it`). A wait ends by
+*resuming*; the stop leaves the job `CANCELLED`, so resuming is what
+`_follow_node_status` computes, and it is now called in the same transaction as
+the stop. A deviation is the one report that ends a run without the job ever
+resuming, and `abandon_job` is the other path with that shape.
+
+| | |
+|---|---|
+| Integration | `tests/integration/backends/test_lab_backend.py` — **13 passed** in 2.41s; `tests/integration/gateway/test_lab_handover.py` — **17 passed** in 4.33s |
+| Acceptance | `tests/acceptance/test_phase11_humanlab.py` — **3 passed** in 1.66s |
+| Gate row | `humanlab-integration` — **33 passed** in 7.94s |
+| Matrix | `make phase11-acceptance` — `PASS P11-06 the human laboratory channel 3 passed` |
+
+The three cases are the three claims the item makes. `test_p11_06_masters_
+contract_reaches_a_bench_and_comes_back_as_a_record` walks the whole chain: the
+node is prepared by the real materializer through the real activities, the
+package the person is handed is the one RAVEL wrote, the upload goes through the
+same function the Gateway's route calls, and the delivery is a real signal to a
+real workflow. `test_p11_06_a_delivery_that_does_not_cover_what_is_owed_does_not
+_finish_it` is the directive's own sentence — 不能上传一个任意文件就自动完成，
+必须根据 `required_outputs` 检查 — asserted where it belongs, because "the run is
+still waiting" is a fact about a workflow rather than about a backend. And
+`test_p11_06_a_bench_that_reports_a_deviation_stops_the_run_for_master` is the
+second defect above, as a case.
+
+One assertion in the first case is worth recording because it is the shape the
+projection has rather than the shape a reader expects. The case asserts
+`at_a_glance["REVIEWING"] == 1` and then
+`at_a_glance.get("WAITING_EXTERNAL", 0) == 0` — `.get`, because a status nobody
+is in is left out of the tally rather than reported as zero. The second form is
+the stronger statement of the two: the bench's wait is over, and the projection
+has stopped counting it at all.
+
+What is scripted is the *seats*. No model is asked anything here, because what
+the item is about is the channel rather than what a Master would decide with it;
+the live five-agent run is where a real Master is on the other end.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

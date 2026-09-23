@@ -455,7 +455,7 @@ async def test_a_delivery_can_carry_a_report_and_this_backend_decides_nothing(
     still waiting, still owing everything.
     """
     handed = await handed_over()
-    deviation = raise_a_deviation(database, handed)
+    deviation = raise_a_deviation(database, handed.prepared)
 
     status = bench.deliver(
         handed.ref,
@@ -508,7 +508,7 @@ async def test_a_report_nothing_is_waiting_on_is_not_delivered(
     """
     handed = await handed_over()
 
-    answered = raise_a_deviation(database, handed)
+    answered = raise_a_deviation(database, handed.prepared)
     with database.transaction() as session:
         RecordRepositories(session, handed.prepared.project_id).deviations.resolve(
             answered.deviation_id, decision_ref="dec-answered"
@@ -522,7 +522,7 @@ async def test_a_report_nothing_is_waiting_on_is_not_delivered(
         resource_limits=LIMITS,
         execution_requirements=REQUIREMENTS,
     )
-    elsewhere = raise_a_deviation(database, handed, node_id=elsewhere_node.node_id)
+    elsewhere = raise_a_deviation(database, handed.prepared, node_id=elsewhere_node.node_id)
 
     for deviation_id in (answered.deviation_id, "no-such-deviation", elsewhere.deviation_id):
         status = bench.deliver(

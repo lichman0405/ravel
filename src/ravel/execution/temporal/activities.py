@@ -523,6 +523,18 @@ class NodeRunActivities:
         arrived. Both are recovered the same way, by calling `submit` again,
         and that is safe only because the port requires `submit` to be
         idempotent in `(project_id, node_id, attempt)`. See `WorkBackend`.
+
+        **The node follows the job from the handover, not only from a poll.**
+        A backend may answer `WAITING_EXTERNAL` at submission — the laboratory
+        one always does, because a person at a bench has the work the moment
+        it is handed over and RAVEL can see nothing about them afterwards — and
+        a run that waits on a person for a week must not spend that week
+        reading `RUNNING`. It would be a claim about an observation nobody made,
+        and it is the specific disguise the wait must not wear. The poll loop
+        never corrects it either: `_watch` enters the durable wait precisely
+        *because* the state is `WAITING_EXTERNAL`, so `check_job` is not called
+        again until the answer arrives. So the mirroring `check_job` does is
+        done here as well, and for the same reason.
         """
         backend = self.registry.named(plan.backend)
         with self.database.transaction() as session:
@@ -539,7 +551,11 @@ class NodeRunActivities:
             # A previous call got as far as the backend and recorded what it
             # got back. Asking is the only safe move: a second `submit` would
             # be relying on the backend's idempotency when a plain status read
-            # answers the question outright.
+            # answers the question outright. The node is moved to match the
+            # state that *was* recorded, because this is the call that would
+            # otherwise leave a recovered handover reading as a run.
+            with self.database.transaction() as session:
+                _follow_node_status(session, job)
             return _snapshot(job, backend.status(job.backend_job_ref))
 
         handle = backend.submit(_request(plan, attempt, prepared))
@@ -551,6 +567,7 @@ class NodeRunActivities:
                 backend_job_ref=handle.backend_job_ref,
                 detail=f"submitted to {backend.name}",
             )
+            _follow_node_status(session, stored)
             return _snapshot(stored)
 
     @activity.defn
@@ -636,9 +653,19 @@ class NodeRunActivities:
         it goes where the Worker's reading always goes: the message and the job
         detail.
 
-        The node is deliberately not moved here. Where it ends up is decided
-        once, by `finish_node_run`, after the workflow has settled how the run
-        ended — the same rule the rest of the node's status path follows.
+        **The node is brought back, and where it ends up is still not decided
+        here.** Two different statements, and the difference is the state
+        machine's: a wait ends by *resuming*, and the node that resumes is what
+        `finish_node_run` takes to `WAITING_DECISION` once the workflow has
+        settled how the run ended. The stop above leaves the job `CANCELLED`,
+        so resuming is what `_follow_node_status` computes — the same call the
+        ordinary poll makes, for the same reason. Skipping it is not an
+        option: a bench's node is `WAITING_EXTERNAL` from the handover, so a
+        deviation from one would otherwise reach `finish_node_run` as a node
+        that is still waiting, which the DAG refuses — correctly, since a wait
+        that has not ended is not a run that has. A deviation is the one report
+        that ends a run without the job ever resuming, and `abandon_job` is the
+        other path with that shape; both move the node themselves.
         """
         report = status.deviation
         assert report is not None  # the caller checked
@@ -682,6 +709,9 @@ class NodeRunActivities:
                     "the work has stopped pending Master's decision"
                 ),
             )
+            # The job is CANCELLED now, so a node that was waiting resumes.
+            # `finish_node_run` is what takes it from there.
+            _follow_node_status(session, stored)
             return _snapshot(stored, deviation_id=deviation_id)
 
     def _deviation_row(

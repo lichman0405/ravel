@@ -126,7 +126,7 @@ PHASE11 = Phase(
     doc=ACCEPTANCE_DIR / "PHASE11_ACCEPTANCE.md",
     marker="phase11",
     heading="## P11-",
-    items_claimed=5,
+    items_claimed=6,
     second_title="",
 )
 

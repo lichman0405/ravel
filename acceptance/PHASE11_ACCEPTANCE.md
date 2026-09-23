@@ -314,3 +314,56 @@ reports the row as skipped rather than as certified, which is the reason its two
 verdicts are different words. Supplying an endpoint and running
 `RAVEL_REQUIRE_SLURM=1 make phase11-acceptance` is what closes it.
 
+## P11-06 the human laboratory channel
+
+A bench reached through a person, and the three things that follow from RAVEL
+not being able to see one.
+
+**Nothing here ever reports `RUNNING`.** A state meaning "somebody is probably
+working on it" would be an observation RAVEL never made, and `WAITING_EXTERNAL`
+is the state that says what is actually true — with its own clock, so an
+unanswered wait ends in `TIMED_OUT` rather than in a run that looks busy
+forever.
+
+**The handover is a row, not a file.** The Slurm backend finds a job again by
+reading a file it uploaded beside it; a bench has nowhere to upload a file to,
+so the durable record is `lab_handovers`, keyed by `(project_id, node_id,
+execution_contract_version, attempt)`. A revised contract is different work and
+gets its own handover, so files sent under the old terms cannot count towards
+the new run.
+
+**What arrived is a fact and what a delivery claims is not.** A delivery
+completes a run when the *recorded* names cover every name in the handover's
+frozen `required_outputs` — never when the delivery says it brought everything,
+and never on a file a mock produced. The upload door refuses a name the contract
+never required *before a byte is stored*, and the backend's comparison is what
+finishes a run, so an arbitrary file cannot complete one at either end. That is
+the directive's sentence, and it is asserted here at both places it could be
+false: the door's own refusals in `tests/integration/gateway/test_lab_handover.py`,
+and the run's in the case below.
+
+The person's own steps are the Gateway's. Any project member may upload — the
+person who ran the experiment is the one holding the file, and requiring the
+owner to relay it would mean recording that somebody uploaded a file they never
+saw — and the version carries `created_by`, so the record says who it was. A lab
+user's deviation is *recorded*, not adjudicated: it is written against the
+node's frozen contract with `permitted` false, and it travels to the run on the
+same signal a delivery does, because a run waiting on a bench is blocked in a
+durable wait and is never polled.
+
+| Requirement | Demonstrated by |
+|---|---|
+| The chain from Master's contract to the record Master reads | `test_p11_06_masters_contract_reaches_a_bench_and_comes_back_as_a_record` — a real workflow, a real materialized package, a real durable wait, the person's upload through the route's own function, the real signal, and the Execution Record afterwards |
+| A bench is never reported as running | the same case: the node and its job are both `WAITING_EXTERNAL` while the bench has the work, and no Execution Record exists |
+| Uploading does not complete a run | `tests/integration/gateway/test_lab_handover.py::test_every_owed_output_recorded_still_leaves_the_run_waiting` |
+| A delivery that does not cover what is owed does not finish the run | `test_p11_06_a_delivery_that_does_not_cover_what_is_owed_does_not_finish_it` — one output uploaded, both claimed, the run still waiting with the missing name in the record; the second upload is what ends it. `tests/integration/backends/test_lab_backend.py::test_a_delivery_that_claims_what_it_never_uploaded_cannot_finish_the_run` is the same claim at the backend's port |
+| A name the contract never required is refused before a byte is stored | `tests/integration/gateway/test_lab_handover.py::test_an_upload_that_answers_nothing_is_refused_before_a_byte_is_stored` — the owed list in the message, and nothing written |
+| A bench's deviation stops the run for Master | `test_p11_06_a_bench_that_reports_a_deviation_stops_the_run_for_master` — `WAITING_DECISION`, the deviation named on the Execution Record, and no retry |
+| The package a bench is handed is one RAVEL built | `tests/integration/backends/test_lab_backend.py` and `tests/unit/preparation/test_lab.py` |
+| **Live certification against a real bench** | **`BLOCKED_EXTERNAL`: missing human input.** No person has been handed one of these packages and done the experiment, and there is no case to skip for it — a live bench certification is somebody doing work, not code that runs. L-29 states what that leaves unexercised |
+
+The channel's own claim is complete: every step above is asserted against the
+real stack, with the test playing the lab user through the same function the
+Gateway's route calls. What is missing is not a test but a bench, and L-29
+enumerates what a real one would exercise that no test can.
+
