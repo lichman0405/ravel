@@ -1004,6 +1004,73 @@ What is scripted is the *seats*. No model is asked anything here, because what
 the item is about is the channel rather than what a Master would decide with it;
 the live five-agent run is where a real Master is on the other end.
 
+### 7.8 P11-07: the release gate
+
+The matrix above answers "does every item have a case, and did the cases pass".
+A release asks a different question — is the *system* certifiable — and the
+difference is where this item's risk lives, because a matrix can be all green
+while lint is red, while a suite nobody runs is broken, or while a live
+certification was never attempted. `scripts/release_gate.py` runs seventeen rows
+and prints one of three words. `CERTIFIED` is every row ran and passed;
+`PARTIALLY_CERTIFIED` is every row that could run passed and at least one could
+not, for a reason outside this repository, printed with the dependency it named;
+`NOT_CERTIFIED` is a row that ran and failed. The exit code is the verdict, and
+a skip that matches no dependency this repository knows is reported as
+**unattributed** rather than filed under "external" — an unexamined skip is
+exactly what a certification must not absorb.
+
+**The first full run returned `NOT_CERTIFIED`, and that is the item working.**
+Twelve rows passed, including all four that need something RAVEL does not own —
+the live research row, the live five-agent end-to-end run (10m35s), and the two
+live acceptance rows — and two failed:
+
+- `e2e` — `cannot address '/projects/{project_id}/lab/tasks/{task_id}/handover/
+  documents/{document}'; teach this probe its placeholders`. The route added
+  with the laboratory package door was taught to the integration probe in
+  `tests/integration/gateway/test_projects.py` and not to the e2e twin in
+  `tests/e2e/test_tui.py`; both enumerate the same application, and the second
+  one crashed on a placeholder it had never seen. The fix is the class rather
+  than the instance: `tests/support/routes.py` now holds one
+  `ABSENT_PLACEHOLDERS` table and one `probe_path()` that raises on a leftover
+  `{name}` instead of sending a literal one, and both probes call it — which is
+  also what stops the next route from being taught in one place and not the
+  other.
+- `dsh` — `the database this suite is pointed at is older than the models, so
+  these tables are missing: execution_preparations, lab_handovers`. The
+  deployment database was three revisions behind the models; `make migrate`
+  applied `d4e7a1b90c26 -> c8f2a5d10e47 -> e1b7c3f4a920 -> a7c3e5b1f284` and
+  the row went green on re-run.
+
+| | |
+|---|---|
+| Gate, first full run | **NOT_CERTIFIED** — 12 rows PASS, 2 FAIL (`e2e`, `dsh`), 3 SKIP (`v0-acceptance`, `phase11-acceptance`, `slurm-integration`, all attributed to `RAVEL_SLURM_HOST`) |
+| Re-run after the fix | `tests/e2e` — **20 passed** in 25.57s; the `dsh` row (`RAVEL_REQUIRE_DSH=1 … tests/dsh -m dsh`) — **11 passed** in 40.48s |
+| Acceptance | `tests/acceptance/test_phase11_release_gate.py` — **5 passed** in 0.70s |
+| Matrix | `make phase11-acceptance` — `PASS P11-07 the release gate 5 passed` |
+
+The one wording defect that run exposed is fixed too: rows that *ran* with a
+skip inside them were printed under "Rows that did not run", which is false
+about `phase11-acceptance` — a row that ran all seven of its items and skipped
+one case. The heading now says what those rows are. It is a small thing to
+report in a test report and it is the same defect the whole item is about: a
+summary sentence standing in for a check, in the direction of stating less than
+happened.
+
+**The second half of the item is not the script.** Every integration suite ran
+on the deployment's Temporal task queue until now, so a test could put work in
+front of a deployment's Execution Worker and have it answered against a database
+the test does not own. Both halves are refused rather than trusted:
+`integration_settings` builds the queue as `ravel-v0-test-<uuid4>` per process —
+so two suites never take each other's workflows either — and it *checks* the
+override against what `Settings()` reads from `.env`, raising if they match, so
+deleting the line fails rather than passing quietly. The `_test` suffix rule on
+the database sits one layer below it, and L-26 — the entry that recorded a role
+session on the deployment's queue — now carries its resolution.
+
+`make release-gate` is the runner and `make release-gate-rows` prints the rows
+without running them. The full run takes about fifty minutes, most of it the
+live rows; the certification run for the phase is recorded in §2.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

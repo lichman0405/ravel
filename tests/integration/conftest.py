@@ -8,8 +8,14 @@ rejecting.
 
 **The database is a dedicated one, and that is enforced.** Teardown truncates
 every table, so pointing these tests at a developer's working database would
-destroy real projects. `_test_settings` refuses to run if the configured
+destroy real projects. `integration_settings` refuses to run if the configured
 database name does not end in `_test`.
+
+**And so is the queue.** The database interlock stops a test writing where a
+deployment reads; the queue interlock stops it putting work in front of a
+deployment's Execution Worker. Both are the same failure — a test's coordinates
+quietly being a deployment's — and both are refused rather than trusted to the
+configuration.
 
 **And it is checked for staleness.** `create_all` creates missing tables and
 leaves existing ones exactly as they are, so a rule added to a model after its
@@ -26,6 +32,7 @@ import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import CheckConstraint, inspect, text
@@ -89,8 +96,19 @@ def integration_settings() -> Settings:
     that two runs can proceed at once; the suffix check below still applies to
     whatever it says, so the interlock is not weakened by being configurable.
 
+    **And pointed at a queue no deployment polls**, for the same reason the DSN
+    override is nulled out: `Settings()` reads this repository's `.env`, which
+    names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+    deployment. Anything built straight from these settings without an override
+    would be configured to put work in front of that worker. The name is per
+    process, so two suites running at once do not take each other's workflows
+    either. Everything that actually starts a run goes through
+    `execution_settings`, which narrows this further to one queue per test; this
+    is the floor under it, for the settings that never reach that fixture.
+
     Raises:
-        RuntimeError: The configured database is not a test database.
+        RuntimeError: The configured database is not a test database, or the
+            configured queue is the one a deployment polls.
     """
     # The DSN override is addressed by its alias, which is the name pydantic
     # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
@@ -98,12 +116,27 @@ def integration_settings() -> Settings:
     settings = Settings(
         env="test",
         postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+        temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
         RAVEL_POSTGRES_DSN=None,
     )
     if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
         raise RuntimeError(
             f"integration tests truncate every table and refuse to run against "
             f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+        )
+    # Belt and braces, and it is worth being honest that it is: the line above
+    # makes this unreachable while it stands. It is here so that deleting the
+    # override is refused rather than passing quietly. A deployment's queue is
+    # whatever `Settings()` says, and the comparison is against that settings
+    # object rather than against the literal `"ravel-v0"`, because a deployment
+    # that renamed its queue is still the deployment.
+    deployment_queue = Settings().temporal_task_queue
+    if settings.temporal_task_queue == deployment_queue:
+        raise RuntimeError(
+            f"integration tests refuse to be configured with {deployment_queue!r}, "
+            f"the task queue a deployment's Execution Worker polls; work started "
+            f"by a test would be handed to it and answered against a database the "
+            f"test does not own"
         )
     return settings
 

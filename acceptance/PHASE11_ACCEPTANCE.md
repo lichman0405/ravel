@@ -367,3 +367,46 @@ real stack, with the test playing the lab user through the same function the
 Gateway's route calls. What is missing is not a test but a bench, and L-29
 enumerates what a real one would exercise that no test can.
 
+## P11-07 the release gate
+
+The matrix above answers "does every item have a case, and did the cases pass".
+A release asks a different question — is the *system* certifiable — and the
+difference is where this item's risk lives. A matrix can be all green while lint
+is red, while a suite nobody runs is broken, or while a live certification was
+never attempted, and none of those is visible in a table that was never asked
+about them. `scripts/release_gate.py` is the answer: seventeen rows, each one an
+area Phase 11 promises, run in the order a reader would fix them — static
+analysis first, then the suites cheapest to most expensive, then the four that
+need something RAVEL does not own.
+
+**A row that did not run is not a row that passed.** The verdict is one word
+from three, and the middle one is not a polite `CERTIFIED`:
+`CERTIFIED` is every row ran and passed; `PARTIALLY_CERTIFIED` is every row that
+*could* run passed and at least one could not, for a reason outside this
+repository, printed with the dependency it named; `NOT_CERTIFIED` is a row that
+ran and failed. A skip is matched against a table of dependencies this repository
+knows — a model credential, a research contact address, a Slurm host — and a skip
+that matches nothing is reported as **unattributed** rather than filed under
+"external", because a skip nobody can explain is a row where nothing is known and
+nobody has said why. The exit code is the verdict, so a release cannot be
+declared green by a run that skipped what it could not do.
+
+**The test/deployment queue split is part of the item.** Every integration suite
+ran on the deployment's Temporal task queue until this item, which meant a test
+could put work in front of a deployment's Execution Worker and have it answered
+against a database the test does not own. Both halves are now refused rather than
+trusted to configuration: `integration_settings` overrides the queue to
+`ravel-v0-test-<uuid>`, per process, so two suites never take each other's
+workflows either; and it *checks* the override against what `Settings()` reads
+from `.env` and raises if they match, so deleting the line fails rather than
+passing quietly. The database interlock above it — the `_test` suffix rule — is
+the same refusal one layer down.
+
+| Requirement | Demonstrated by |
+|---|---|
+| Every area Phase 11 promises is a row | `test_p11_07_every_area_phase_11_promises_is_a_row` — the seventeen named rather than counted, because a count passes if a row is swapped for a different one |
+| Every path a row names exists | `test_p11_07_a_row_that_names_a_file_that_does_not_exist_is_caught` — `compute-preparation` named a module that did not exist, and pytest exits 4 on that, so the row would have failed for a reason with nothing to do with what it was evidence for |
+| A row that did not run is not a row that passed | `test_p11_07_a_row_that_did_not_run_is_not_a_row_that_passed` — a skip and a row that never ran are both `PARTIALLY_CERTIFIED`, and the exit code is asserted with the word |
+| One failed row is not certified whatever the others say | `test_p11_07_one_failed_row_is_not_certified_whatever_the_others_say` — a failure outranks a gap, because it describes a known defect rather than an unknown one |
+| A skip nobody can attribute is reported as one | `test_p11_07_a_skip_nobody_can_attribute_is_reported_as_one` — both directions: a known credential is recognised and a sentence naming none is not, since a rule that matched everything would pass on the first half alone |
+| Tests do not share a queue with a deployment | `tests/integration/conftest.py`'s refusal, asserted by the suites themselves — every integration case now runs on its own queue, and one configured with the deployment's is refused at fixture time |

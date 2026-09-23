@@ -22,6 +22,7 @@ WITH_ENV := set -a; . ./.env 2>/dev/null || true; set +a;
         typecheck gateway tui acceptance-matrix acceptance-raw clean \
         phase10-acceptance phase10-acceptance-raw \
         phase11-acceptance phase11-acceptance-raw \
+        release-gate release-gate-rows \
         up worker project account
 
 help: ## Show this help
@@ -99,6 +100,20 @@ phase11-acceptance: ## Run the Phase 11 items and print the matrix
 
 phase11-acceptance-raw: ## Run the Phase 11 acceptance suite, no matrix
 	$(WITH_ENV) $(VENV)/bin/pytest tests/acceptance -m phase11
+
+# The release gate. Phase 11's acceptance matrix answers "which items have
+# cases, and did they pass"; this answers the question a release actually asks,
+# which is about the whole system: lint and types over the tree, every suite,
+# every acceptance phase, and the four gates that need a live model, the
+# Internet, a cluster or a person. It prints CERTIFIED, PARTIALLY_CERTIFIED or
+# NOT_CERTIFIED, and it exits non-zero for anything short of CERTIFIED — so a
+# release cannot be declared green by a run that skipped what it could not do.
+# `make release-gate-rows` is the dry run: the rows and their commands only.
+release-gate: ## Run every Phase 11 gate and print the certification verdict
+	$(WITH_ENV) $(PY) scripts/release_gate.py
+
+release-gate-rows: ## Print the release gate's rows without running them
+	$(PY) scripts/release_gate.py --dry-run
 
 # The checks that decide whether the tree is acceptable: the linter for style
 # and likely mistakes, and the type checker for the interfaces between modules.

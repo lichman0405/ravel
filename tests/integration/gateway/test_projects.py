@@ -22,7 +22,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from tests.integration.gateway.conftest import account, bearer, sign_in
-from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, fill
+from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, probe_path
 
 from ravel.domain.dag import DagNode, JoinPolicy
 from ravel.domain.enums import NodeType, UserRole
@@ -372,27 +372,17 @@ def test_no_route_lets_a_user_change_the_dag(
             # writes nothing, and the one write in the whole Gateway that is not
             # a route — Master's tools — is not reachable from a socket.
             continue
-        path = fill(
+        # The stand-ins come from `ABSENT_PLACEHOLDERS` and the check that none
+        # was left behind is inside `probe_path`, because this test's twin in
+        # `tests/e2e/test_tui.py` enumerates the same application: a placeholder
+        # taught here and not there is a route one probe stops covering, which
+        # is how the e2e probe came to fail on the laboratory package route.
+        path = probe_path(
             route.path,
             project_id=project.project_id,
             node_id=node_id,
             task_id=node_id,
-            artifact_id="an-artifact-that-does-not-exist",
-            approval_id="an-approval-that-does-not-exist",
-            version="1",
-            # The laboratory package's document name. A name the package does
-            # not hold, which is the interesting probe for that route anyway:
-            # what is asserted below is that the DAG did not move, and a
-            # document read that succeeded would have to have gone through the
-            # manifest — which is a read of a record, not a write to the DAG.
-            document="a-document-that-does-not-exist",
         )
-        # A placeholder this probe does not know about would leave a literal
-        # `{name}` in the URL, and every method below would then be sent to a
-        # path that no route serves — a 404 that reads exactly like a refusal.
-        # The route would be silently unprobed, which is the failure this test
-        # was already guilty of once.
-        assert "{" not in path, f"cannot address {route.path!r}; teach this probe its placeholders"
 
         for method in route.methods - {"HEAD", "OPTIONS"}:
             client.request(method, path, headers=headers, json={})

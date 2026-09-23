@@ -784,41 +784,52 @@ Internet; what it may do with what it finds is Phase 11's.
 
 - **Since:** Phase 10, when role tool servers began carrying the supervisor's
   coordinates
+- **Resolved:** 2026-09-23, in Phase 11, by making the test queue something
+  `integration_settings` chooses rather than something it inherits.
+  `integration_settings` now builds the queue as `ravel-v0-test-<uuid4>`, beside
+  the `_test` database interlock it already applied, so the coordinates a role
+  environment is handed are a test's own and there is no configuration left in
+  the tree that puts a session on a queue a deployment polls. The interlock is
+  written as a pair: the database check refuses a name that is not a test
+  database, and the queue check refuses a name that *is* the deployment's, which
+  `Settings()` — the same source the deployment reads — is asked for rather than
+  compared against a literal. Both are belt-and-braces over a line that already
+  makes them unreachable, and the entry says so, because an interlock nobody can
+  trip is one that has stopped being a test.
 - **Where:** `tests/integration/conftest.py` (`integration_settings`);
+  `tests/integration/temporal/conftest.py` (`execution_settings`, which layers a
+  second per-test queue on top for the suites that start runs);
   `tests/integration/roles/conftest.py`; `tests/acceptance/test_project.py`;
-  `src/ravel/config.py` (`tool_server_env`); `tests/integration/temporal/conftest.py`
-  (`execution_settings`)
+  `src/ravel/config.py` (`tool_server_env`)
 
 This entry exists because a report said the opposite, and the check that refuted
 it is worth more than the claim was. The claim was that tests and the deployment
 share the Temporal task queue `ravel-v0`, which would let a workflow started by a
-test be delivered to the deployment's Execution Worker. **It does not hold for
-any suite that starts a run.** `execution_settings` — which `tests/e2e`'s
-`headless` is built on, and through it the Phase 10 and Phase 11 acceptance runs
-— overrides the queue with a private per-test name, and the run's own tool-server
-environment says so: the live five-agent certification launched its seats with
+test be delivered to the deployment's Execution Worker. **It never held for any
+suite that starts a run.** `execution_settings` — which `tests/e2e`'s `headless`
+is built on, and through it the Phase 10 and Phase 11 acceptance runs — overrode
+the queue with a private per-test name, and the run's own tool-server environment
+said so: the live five-agent certification launched its seats with
 `RAVEL_TEMPORAL_TASK_QUEUE=ravel-v0-test-731180fc92f04be59e5846c9895b2bab` and
 `RAVEL_POSTGRES_DB=ravel_test` (`dsh_cwd/<project>/*/ravel-role.cordis.patch.yml`
-under the run's `runtime_dir`). The database is separated the same way, by the
-`_test` suffix interlock in `tests/integration/conftest.py`.
+under the run's `runtime_dir`).
 
-What is true is narrower. A role environment built straight from
-`integration_settings` — `tests/integration/roles/conftest.py`, and the one case
-in `tests/acceptance/test_project.py` that uses it — keeps the default
-`ravel-v0`, the queue `scripts/run_temporal_worker.py` polls in a deployment,
-because `tool_server_env()` carries every non-launcher coordinate to the session
-that acts on it. Those sessions read and write `ravel_test` while being
-configured with a queue the deployment is listening on.
+What was true was narrower, and it is what the fix closes: a role environment
+built straight from `integration_settings` — `tests/integration/roles/conftest.py`,
+and the one case in `tests/acceptance/test_project.py` that uses it — kept the
+default `ravel-v0`, because `tool_server_env()` carries every non-launcher
+coordinate to the session that acts on it. Those sessions read and wrote
+`ravel_test` while being configured with a queue the deployment is listening on.
 
-**Do not conclude** that this is inert because it is inert today. It is: no tool
-in `ravel.mcp` starts a durable run — `start_execution` is the supervisor's loop
+**It was inert, and that was never the reason to leave it.** Nothing in
+`ravel.mcp` starts a durable run — `start_execution` is the supervisor's loop
 reaching the DAG, and no MCP tool so much as imports `NodeRunClient` — so a role
-session has no way to put work on that queue. The reason to record it rather
-than dismiss it is what would happen if one did: the run would be answered by a
-worker whose activities open the deployment's database, where the test's project
-does not exist, and the failure would arrive as a run that never reports rather
-than as a queue that was wrong. The next tool that starts work from a session is
-the one to check this against.
+session had no way to put work on that queue. What would have happened if one
+did is the whole argument: the run would be answered by a worker whose
+activities open the deployment's database, where the test's project does not
+exist, and the failure would arrive as a run that never reports rather than as a
+queue that was wrong. That is a two-hour diagnosis to reach a one-line cause, and
+the next tool that starts work from a session is not the place to discover it.
 
 ## L-27 — A REVIEW-typed node is planned, promoted, and never handed to anybody
 

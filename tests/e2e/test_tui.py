@@ -49,7 +49,7 @@ import pytest
 from tests.e2e.conftest import LiveGateway
 from tests.integration.conftest import DEFAULT_OUTPUTS, build_prepared
 from tests.integration.gateway.conftest import PASSWORD
-from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, fill
+from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, probe_path
 from textual.pilot import Pilot
 from textual.widgets import Input
 
@@ -778,17 +778,11 @@ def test_no_route_lets_a_user_change_the_dag(live_gateway: LiveGateway, world: W
                 # A WebSocket is connected to, not requested, and this one
                 # reads. It is covered by the stream test above.
                 continue
-            path = fill(
+            path = probe_path(
                 route.path,
                 project_id=project_id,
                 node_id=world.experiment,
                 task_id=world.experiment,
-                artifact_id="an-artifact-that-does-not-exist",
-                approval_id="an-approval-that-does-not-exist",
-                version="1",
-            )
-            assert "{" not in path, (
-                f"cannot address {route.path!r}; teach this probe its placeholders"
             )
             for method in route.methods - {"HEAD", "OPTIONS"}:
                 client.request(method, path, headers=headers, json={})
