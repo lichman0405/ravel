@@ -57,7 +57,6 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from ravel.config import Settings
 from ravel.domain.clock import utcnow
@@ -69,9 +68,9 @@ from ravel.dsh.agents import HarnessAgent, ResearchAgent, WorkerAgent
 from ravel.dsh.pool import DshRuntimePool, create_pool
 from ravel.execution.loop import ProjectLoop
 from ravel.execution.reconcile import ExecutionReconciler
+from ravel.service import Heartbeat
 from ravel.state.database import Database
 from ravel.state.repositories.projects import ProjectRegistry
-from ravel.state.repositories.services import ServiceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +87,13 @@ class ProjectSupervisor:
     _tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict, init=False, repr=False)
     _pool: DshRuntimePool | None = field(default=None, init=False, repr=False)
     _stop_event: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
-    #: When `run` began. `None` until then, so a supervisor that was never
-    #: started reports nothing rather than reporting a start it did not have.
-    _started_at: datetime | None = field(default=None, init=False, repr=False)
+    #: How this process says it is here. `None` until `run` builds it, so a
+    #: supervisor that was constructed and never run reports nothing rather
+    #: than reporting a start it did not have.
+    #:
+    #: It beats from inside the tick rather than on a timer of its own — see
+    #: `_beat` — which is why it is a `Heartbeat` and not a pulse.
+    heartbeat: Heartbeat | None = field(default=None, init=False, repr=False)
     #: Built from `database` and `settings` in `__post_init__` rather than
     #: declared as a field, because a default would have to be built from the
     #: other two and a caller that replaced one of them would get a reconciler
@@ -129,7 +132,17 @@ class ProjectSupervisor:
         to do, so the row this loop writes is the only thing that does.
         """
         self._pool = create_pool(self.settings)
-        self._started_at = utcnow()
+        self.heartbeat = Heartbeat(
+            database=self.database,
+            service=SUPERVISOR,
+            started_at=utcnow(),
+            detail=self._held,
+            # The tick's own cadence is the promise a reader measures the
+            # silence against, and it is the tick that beats: a supervisor
+            # configured to poll every five minutes is not dead because it has
+            # been quiet for one.
+            pulse_seconds=self.poll_seconds,
+        )
         try:
             while not self._stop_event.is_set():
                 await self._tick()
@@ -180,50 +193,47 @@ class ProjectSupervisor:
                     exc_info=exc,
                 )
 
-    def _beat(self) -> None:
-        """Say that this process is still here, and what it is holding.
+    def _held(self) -> dict[str, object]:
+        """What this supervisor is holding, for its report.
 
-        Once per tick, and the only write in this class that is not about a
-        project. It is here rather than in a thread of its own because a tick
-        that has stopped happening is exactly the failure the row exists to
-        make visible: a beat from a timer would keep reporting a supervisor
-        whose loop was stuck.
+        `projects` is the whole reason this is on the row: "the supervisor is
+        up" and "the supervisor is up and has never heard of my project" are
+        different answers to the question an operator is asking, and only the
+        second is worth restarting anything over. The Gateway filters this to
+        the project being asked about — see `routes/admin.py`.
 
-        **A failure to report does not stop the supervisor.** A database that
-        went away mid-beat is the same class of problem as one that went away
-        mid-scan, and the loop already answers it by trying again next tick.
-        The alternative — dying because a liveness report failed — would make
-        the report the least reliable thing in the process.
-
-        `detail` names the projects this supervisor is holding, which is the
-        whole reason the pool is on the row: "the supervisor is up" and "the
-        supervisor is up and has never heard of my project" are different
-        answers to the question an operator is asking, and only the second is
-        worth restarting anything over. The Gateway filters this to the project
-        being asked about — see `routes/admin.py`.
+        Read at each beat rather than captured once, so a report describes the
+        tick it was written from. The pool's numbers are absent before the pool
+        exists, which is the state of a supervisor that has been constructed
+        and not started — and `_beat` does not run then either.
         """
-        if self._started_at is None:  # pragma: no cover - `_tick` runs after `run`
-            return
-        # `poll_seconds` is the promise the reader measures the silence
-        # against: a supervisor configured to poll every five minutes is not
-        # dead because it has been quiet for one, and only the process itself
-        # knows which it is.
-        detail: dict[str, object] = {
-            "projects": sorted(self._tasks),
-            "poll_seconds": self.poll_seconds,
-        }
+        detail: dict[str, object] = {"projects": sorted(self._tasks)}
         pool = self._pool
         if pool is not None:
             stats = pool.stats()
             detail["live_runtimes"] = stats.live_runtimes
             detail["live_sessions"] = stats.live_sessions
-        try:
-            with self.database.transaction() as session:
-                ServiceRepository(session).report(
-                    SUPERVISOR, started_at=self._started_at, detail=detail
-                )
-        except Exception:
-            logger.exception("could not record this supervisor's heartbeat; continuing")
+        return detail
+
+    def _beat(self) -> None:
+        """Say that this process is still here, and what it is holding.
+
+        Once per tick, and the only write in this class that is not about a
+        project. It is called from the tick rather than run on a timer because
+        a tick that has stopped happening is exactly the failure the row exists
+        to make visible: a beat from a timer would keep reporting a supervisor
+        whose loop was stuck. That is the difference between this class's
+        `Heartbeat` and the pulsing one the Gateway and the worker hold.
+
+        **A failure to report does not stop the supervisor.** A database that
+        went away mid-beat is the same class of problem as one that went away
+        mid-scan, and the loop already answers it by trying again next tick.
+        `Heartbeat.beat` logs and returns rather than raising, so the tick goes
+        on; dying because a liveness report failed would make the report the
+        least reliable thing in the process.
+        """
+        if self.heartbeat is not None:
+            self.heartbeat.beat()
 
     async def _reconcile(self, active: set[str]) -> None:
         """Find runs that are gone, and put their nodes back in play.
@@ -323,7 +333,24 @@ class ProjectSupervisor:
             research.close()
 
     async def _shutdown(self) -> None:
-        """Cancel running project loops and close shared resources."""
+        """Cancel running project loops, close shared resources, and sign off.
+
+        **The order is the point.** The loops are cancelled first, then the
+        pool is closed, then the row says this process is going — because a
+        record that a supervisor stopped is a claim about a supervisor that has
+        stopped, and one written before the work was wound down would be a
+        statement about a process still holding runtimes. The database is
+        disposed last, since the sign-off is itself a write.
+
+        Cancelling a loop does not end a run. A node whose workflow is in
+        Temporal is still in Temporal, and the next supervisor to tick
+        reconciles it: the loop is the thing being stopped, not the work. See
+        `_drive_project`'s cancellation path and `execution/reconcile.py`.
+
+        A supervisor that is *killed* never reaches here, which is the whole
+        difference this row records — its last beat recedes and `stopped_at`
+        stays null, and a reader can tell that from a deploy.
+        """
         for task in self._tasks.values():
             task.cancel()
         if self._tasks:
@@ -332,4 +359,6 @@ class ProjectSupervisor:
         if self._pool is not None:
             self._pool.close()
         await self.reconciler.close()
+        if self.heartbeat is not None:
+            self.heartbeat.retire()
         self.database.dispose()

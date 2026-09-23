@@ -1426,6 +1426,14 @@ class RuntimeServiceRow(Base):
     instance: Mapped[str] = mapped_column(String(255), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: When the process itself recorded that it was stopping. Null while it is
+    #: running — including after a restart, because a process that came back
+    #: overwrites the whole row. A row that is silent *and* null is a process
+    #: that died; a row with a time is one that was shut down, and the two want
+    #: different things from whoever is reading.
+    stopped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 

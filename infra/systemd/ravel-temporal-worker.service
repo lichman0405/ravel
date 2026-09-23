@@ -1,0 +1,52 @@
+# RAVEL's Temporal execution worker, as a service.
+#
+# Not an agent. This is the process that hosts Temporal's activities and calls
+# whichever backend is registered for a node's type — the mock compute
+# backend, the real Slurm cluster, a mock bench, or a person. It decides
+# nothing and it holds nothing that a restart would lose: the workflow is in
+# Temporal's history and the job is in PostgreSQL, so a replacement worker
+# picks up the same run.
+#
+# ── The command line is the deployment's backend choice ───────────────────
+#
+# `ExecStart` names `scripts/run_temporal_worker.py` with no backend flags,
+# which is the pair of mocks — a project runs end to end on one machine and
+# every artifact either mock produces is marked simulated and refused by the
+# Evidence Ledger as real evidence. A deployment running real work adds the
+# flags here:
+#
+#     ExecStart=... run_temporal_worker.py --compute-backend slurm
+#     ExecStart=... run_temporal_worker.py --lab-backend human-lab
+#
+# **The credential is not here.** `RAVEL_SLURM_PASSWORD` arrives through the
+# `EnvironmentFile`, is read by this process alone, and is kept out of every
+# tool server's environment by `Settings._LAUNCHER_ONLY`. It is not in
+# `ExecStart`, where `systemctl show` would print it to anyone who asked.
+#
+# A worker that asks for Slurm without a host refuses to start and exits 2
+# rather than running and stalling at the first computation node. Restart
+# policy and shutdown: see `infra/systemd/ravel-gateway.service`.
+
+[Unit]
+Description=RAVEL Temporal execution worker
+Documentation=file:///opt/ravel/DEPLOYMENT.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ravel
+Group=ravel
+WorkingDirectory=/opt/ravel
+EnvironmentFile=/opt/ravel/.env
+ExecStart=/opt/ravel/.venv/bin/python /opt/ravel/scripts/run_temporal_worker.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ravel-temporal-worker
+
+[Install]
+WantedBy=multi-user.target

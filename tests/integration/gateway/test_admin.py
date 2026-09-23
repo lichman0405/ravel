@@ -41,7 +41,7 @@ from ravel.domain.reconciliation import (
     WorkflowLiveness,
 )
 from ravel.domain.roles import AgentRole
-from ravel.domain.services import SERVICE_NAMES, SUPERVISOR
+from ravel.domain.services import GATEWAY, SERVICE_NAMES, SUPERVISOR, TEMPORAL_WORKER
 from ravel.gateway.app import create_app
 from ravel.gateway.auth.passwords import hash_password
 from ravel.gateway.routes.admin import MINIMUM_SILENCE_SECONDS, MISSED_BEATS, UNFINISHED
@@ -399,6 +399,13 @@ def test_a_service_that_never_reported_is_not_a_service_that_died(
     one. `reporting: false` and `stale: false` together say exactly that; a
     screen that rendered both absences as a failure would send an operator
     looking for a crash that never happened.
+
+    **The Gateway is the one service this request proves is up**, since Phase
+    11: the application under test beats from its own lifespan, so serving this
+    answer is itself the evidence that the `gateway` row is fresh. That is not
+    a hole in the test — it is the test asserting the thing it can know. The
+    other two are asserted absent, and the Gateway is asserted present, from
+    the same read.
     """
     project, _ = administered
     headers = bearer(sign_in(client, "root")["access_token"])
@@ -406,7 +413,9 @@ def test_a_service_that_never_reported_is_not_a_service_that_died(
     body = client.get(f"/projects/{project.project_id}/runtime/services", headers=headers).json()
 
     assert [entry["service"] for entry in body["services"]] == list(SERVICE_NAMES)
-    for entry in body["services"]:
+    absent = [entry for entry in body["services"] if entry["service"] != GATEWAY]
+    assert {entry["service"] for entry in absent} == {SUPERVISOR, TEMPORAL_WORKER}
+    for entry in absent:
         assert entry["reporting"] is False
         assert entry["stale"] is False
         assert entry["instance"] is None
@@ -415,6 +424,13 @@ def test_a_service_that_never_reported_is_not_a_service_that_died(
         assert entry["holds_this_project"] is False
         assert entry["projects_held"] == 0
         assert entry["silence_budget_seconds"] == MINIMUM_SILENCE_SECONDS
+
+    serving = {entry["service"]: entry for entry in body["services"]}[GATEWAY]
+    assert serving["reporting"] is True
+    assert serving["stale"] is False
+    assert serving["stopped"] is False
+    assert serving["stopped_at"] is None
+    assert serving["instance"].startswith(socket.gethostname())
 
 
 def test_a_reporting_service_says_how_long_it_has_been_quiet(

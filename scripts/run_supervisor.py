@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import signal
 import sys
 
 from ravel.config import Settings
+from ravel.domain.services import SUPERVISOR
 from ravel.execution.supervisor import ProjectSupervisor
+from ravel.service import configure_logging
 from ravel.state.database import Database
 
 
@@ -74,9 +75,8 @@ async def main_async(args: argparse.Namespace, settings: Settings) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     settings = Settings()
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    configure_logging(
+        SUPERVISOR, level=settings.log_level, log_format=settings.log_format
     )
     if settings.deepseek_api_key is None:
         print(

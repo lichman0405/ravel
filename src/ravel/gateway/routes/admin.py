@@ -323,6 +323,18 @@ def service_health(standing: PrincipalDep, state: GatewayStateDep) -> dict[str, 
                 "started_at": None if report is None else report.started_at.isoformat(),
                 "heartbeat_at": None if report is None else report.heartbeat_at.isoformat(),
                 "silent_for_seconds": None if report is None else round(report.age_seconds(), 3),
+                # Whether the silence was the process's own doing. A service
+                # that recorded a shutdown is not a service anybody has to go
+                # and restart, and `stale` above is false for it — see
+                # `heartbeat_is_stale`. Both are on the answer because a screen
+                # says different things about them and neither is derivable
+                # from the other.
+                "stopped": report is not None and report.stopped_at is not None,
+                "stopped_at": (
+                    None
+                    if report is None or report.stopped_at is None
+                    else report.stopped_at.isoformat()
+                ),
                 "holds_this_project": standing.project_id in held,
                 "projects_held": len(held),
             }

@@ -1,0 +1,50 @@
+# RAVEL's project supervisor, as a service.
+#
+# This is the process P11-10's acceptance kills. It is the control plane —
+# it discovers every project that is not ended and not paused, gives each one
+# a loop, and keeps doing that until it is stopped — and it holds no state a
+# restart would lose: everything a loop needs is in PostgreSQL, and a node
+# whose run is in Temporal is still in Temporal. What a restart costs is the
+# seconds between the kill and the first tick of the replacement.
+#
+# ── Why `Restart=always` matters most here ────────────────────────────────
+#
+# Every other thing on the administrator's screen is answerable from a record.
+# This one is not: a supervisor that died leaves projects that have stopped
+# moving, and a project with nothing left to do looks exactly the same. So the
+# supervisor writes a row saying it is alive once per tick, and the absence of
+# that row moving is the only thing that distinguishes the two. Restarting it
+# is the fix; the row is how anybody knows the fix was needed.
+#
+# `TimeoutStopSec` is longer than the Gateway's, and for a reason worth
+# stating: this process cancels its project loops, closes every harness runtime
+# it holds, stops the reconciler's Temporal client, and records its own
+# shutdown. Cutting that short with a `SIGKILL` does not lose a decision or a
+# run — nothing is held only in memory — but it does lose the record that the
+# stop was deliberate, which is the one thing the row exists to say.
+#
+# See `infra/systemd/ravel-gateway.service` for what an installer changes.
+
+[Unit]
+Description=RAVEL project supervisor
+Documentation=file:///opt/ravel/DEPLOYMENT.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ravel
+Group=ravel
+WorkingDirectory=/opt/ravel
+EnvironmentFile=/opt/ravel/.env
+ExecStart=/opt/ravel/.venv/bin/python /opt/ravel/scripts/run_supervisor.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ravel-supervisor
+
+[Install]
+WantedBy=multi-user.target

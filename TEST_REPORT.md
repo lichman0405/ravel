@@ -1212,6 +1212,82 @@ recorded, closes the handover and moves the node to the seat that judges it.
 Nothing is asserted from the screen alone: the artifacts are read back out of
 MinIO through the repository, attributed to the account that sent them.
 
+### 7.11 P11-10: managed services
+
+The three long-running processes existed since Phase 9 and nothing started them
+again. This item is the difference between a process that can be run and a
+process a machine keeps running, and most of it is not Python: it is three unit
+files, an installer that writes them, and one column that says a stop was
+deliberate.
+
+**The restart policy is a file, and it is read as one.** `Restart=always` rather
+than `on-failure`, because this system's failures are not all crashes: a
+supervisor whose loop raised and exited cleanly is a project that has stopped
+moving, and `on-failure` would leave it there. `KillSignal=SIGTERM` is written
+out though it is systemd's default, because it is load bearing — the
+application's lifespan and the supervisor's shutdown path run on that signal.
+`tests/unit/test_service_units.py` reads the three files rather than restating
+them, and `tests/unit/test_service_logs.py` holds the other half: one JSON
+object per line, `extra` fields flat beside the reserved five, and an unknown
+format refused at start-up rather than read as text.
+
+**A stopped service and a killed one are told apart by a column.** Both endings
+are silence; what separates them is that one of them said so on the way out. The
+row is never deleted — `runtime_services` is on the append-only guard, so a
+`DELETE` is refused by a statement-level trigger, which matters because a
+process able to erase its own row could erase one belonging to a service that
+never said anything — and a beating process clears `stopped_at`, because a
+process that came back is running.
+
+**The acceptance chain is proved in two halves, because it is two claims.** The
+restart is systemd's, and it is demonstrated with a real transient user unit
+running the real `scripts/run_supervisor.py`: the policy is read out of the
+checked-in unit rather than restated in the test, the process is `SIGKILL`ed,
+and the row's own `instance` is compared against `systemctl show -p MainPID`. The
+recovery is RAVEL's, and it is demonstrated in process, where a scripted Master
+is affordable. Neither stands in for the other.
+
+**What "no duplicate submission" is asserted on.** Not on artifacts — an
+artifact produced once and a computation submitted twice look identical
+afterwards, and the second is what a lab invoices for. The second supervisor's
+case wraps the real mock backend in a ledger and asserts that every
+`(project, node, attempt)` was answered with **one** `backend_job_ref` — which is
+the contract `WorkBackend.submit` is written to, so a repeated *call* answered
+with the same reference is the idempotency working rather than a defect.
+
+**The first defect this case found was in the case.** Its first version used the
+suite's own four-second run deadline, so the run it needed still in flight was
+over before the first supervisor had stopped, and the node reached Master as
+"nothing passed". The deadline is a deployment's number rather than a policy
+under test; the case lengthens it for its duration and waits for the job to
+reach `RUNNING` — not `SUBMITTED` — before stopping the supervisor, because
+stopping on the first sight of a submission sometimes stops it mid-`start_execution`,
+which is a stranded run with a different answer and a coin toss rather than a
+test.
+
+**The second, and the one that cost the afternoon, was also in the case.** The
+wait compared the port's answer to a state — `counting.status(ref) is
+JobState.RUNNING` — but `WorkBackend.status` returns a `JobStatus`, the record
+*about* a job, and a record is never the state it reports: the comparison is
+false for every state a job can be in, so the case failed on a job that had run
+to completion, and it failed the same way in each of five runs. What made it
+look like a product fault is that the database was right — the run reached
+`RUNNING` at +10s and the project `COMPLETED` at +21s — because the *workflow*
+reads `.state` and the test did not. It was isolated by watching the same
+expression from a second coroutine in the same event loop: the observer, which
+printed `.state`, saw `SUBMITTED → RUNNING → COMPLETED` while the wait beside it
+saw nothing for its full two minutes. A wait that cannot be satisfied by any
+observation is not a slow system, and the first thing to suspect is the
+predicate rather than the stack under it.
+
+| | |
+|---|---|
+| Acceptance | `tests/acceptance/test_phase11_services.py` — **3 passed** (the systemd restart, the recovery, the four-state endpoint) |
+| Unit | `tests/unit/test_service_units.py`, `tests/unit/test_service_logs.py` — **18 passed** |
+| Integration | `tests/integration/state/test_services.py` — **14 passed** |
+| Static analysis | `ruff check src tests scripts` and `pyright src tests` — clean |
+| Matrix | `make phase11-acceptance` — `PASS P11-10 managed services`, **10/10 demonstrated** |
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was

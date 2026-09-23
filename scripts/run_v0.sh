@@ -97,7 +97,12 @@ if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
     warn "project will not plan or review. Everything else below still starts."
 fi
 
-start gateway "$REPO_ROOT/.venv/bin/uvicorn" ravel.gateway.app:create_app --factory \
+# Through `run_gateway.py` rather than `uvicorn` directly, so that this
+# launcher and `infra/systemd/ravel-gateway.service` start the Gateway the same
+# way: the entry point configures logging for the service — uvicorn's own
+# `log_config` replaces the root handler, which would drop the `service` field
+# from every line — and it beats the heartbeat the administrator's screen reads.
+start gateway "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_gateway.py" \
     --host "${RAVEL_GATEWAY_HOST:-127.0.0.1}" --port "${RAVEL_GATEWAY_PORT:-8000}"
 start worker "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/scripts/run_temporal_worker.py"
 

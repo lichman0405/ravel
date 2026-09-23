@@ -56,6 +56,14 @@ class ServiceReport(Record):
     a caller as it stands: the routes that read this filter it down to the
     project being asked about, because a supervisor's report names every
     project it holds.
+
+    `stopped_at` is the one field a process writes *after* it has stopped
+    speaking, and it is what makes a shutdown distinguishable from a death. A
+    service that was told to stop says so and stays quiet; a service that was
+    killed says nothing and its last beat recedes. Both end in silence, and an
+    operator reading a screen during a deploy needs to know which one they are
+    looking at. A beating process clears it, because a process that came back
+    is running.
     """
 
     service: str = Field(min_length=1, max_length=64)
@@ -63,6 +71,9 @@ class ServiceReport(Record):
     instance: str = Field(min_length=1, max_length=255)
     started_at: datetime
     heartbeat_at: datetime
+    #: When this process recorded its own shutdown, or `None` while it is
+    #: running — including after a restart, which clears it.
+    stopped_at: datetime | None = None
     detail: dict[str, Any] = Field(default_factory=dict)
 
     def age_seconds(self, *, now: datetime | None = None) -> float:
@@ -87,12 +98,17 @@ def heartbeat_is_stale(
     A screen that rendered them the same would report a service as crashed on a
     deployment that never started it.
 
+    A service that recorded its own shutdown is not stale either, and for the
+    same reason: it is not a process that went quiet, it is a process that
+    said it was going. Its silence *is* the fact, and it has a time, so the
+    question the budget answers does not arise.
+
     The budget is the caller's because it is a fact about a particular
     service's cadence rather than about heartbeats: what counts as silence for
     a loop that ticks every five seconds is not what counts for one that may
     wait minutes on a queue.
     """
-    if report is None:
+    if report is None or report.stopped_at is not None:
         return False
     return report.age_seconds(now=now) > budget_seconds
 

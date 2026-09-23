@@ -763,10 +763,11 @@ def live_gateway(
         host=HOST,
         port=0,
         log_level="warning",
-        # The application installs no lifespan handler, and asking uvicorn to
-        # run one anyway is how a startup log grows a warning about a protocol
-        # this application never agreed to speak.
-        lifespan="off",
+        # The application's lifespan runs, since Phase 11: it starts the
+        # Gateway's own heartbeat and records its shutdown, and a test
+        # harness that skipped it would be serving an application that is not
+        # the one a deployment runs.
+        lifespan="on",
     )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="ravel-test-gateway", daemon=True)

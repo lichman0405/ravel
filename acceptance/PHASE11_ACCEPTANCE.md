@@ -545,3 +545,66 @@ different places.
 | Admin 不得 modify DAG | the same case: six write routes refused with the administrator's token, and the DAG read back and compared whole — so a node that was cancelled or re-bound counts as a mutation too |
 | Admin 不得 modify experimental scientific conditions | the same case: the pause, the envelope and the message routes are all refused, so there is no path from the operator's screen to the terms a bench works under |
 | 三类 surface 必须真正不同 | `test_p11_09_no_two_roles_are_drawn_by_the_same_screen` — three roles, three distinct classes, each with its own bindings; and the owner/admin prohibitions above, which are what "different" means past the class list |
+
+## P11-10 managed services
+
+Three long-running processes, and the item is about what a deployment does when
+one of them is not there. `infra/systemd/ravel-{gateway,supervisor,temporal-worker}.service`
+are the three, `scripts/install_services.sh` installs them, and
+`scripts/run_{gateway,supervisor,temporal_worker}.py` are what they start.
+
+**The restart policy is a file, so it is read as a file.** `Restart=always`
+rather than `on-failure`, because this system's failures are not all crashes: a
+supervisor whose loop raises and exits cleanly is a project that has stopped
+moving, and `on-failure` would leave it there. `KillSignal=SIGTERM` is written
+out though it is the default, because it is load bearing — the application's
+lifespan and the supervisor's shutdown path run on that signal and write the row
+that says the stop was deliberate.
+
+**A stopped service and a killed one are told apart in the record.** A process
+that receives `SIGTERM` records `stopped_at` and stays quiet; a process that is
+killed says nothing and its last beat recedes. Both end in silence, and for two
+poll intervals they are indistinguishable from the screen — so the field is what
+makes a deploy legible as a deploy. A beating process clears it, because a
+process that came back is running. The row is never deleted: the table is in
+`UPDATABLE_TABLES`, so a `DELETE` is refused by a statement-level trigger, and a
+service able to erase its own row could erase one belonging to a service that
+never said anything.
+
+**The acceptance chain is proved in two halves, because it is two claims.** The
+restart is systemd's and is demonstrated with a real transient user unit running
+the real `scripts/run_supervisor.py`, killed with `SIGKILL`, with the restart
+policy taken from the checked-in unit rather than restated in the test. The
+recovery is RAVEL's and is demonstrated in process, where a scripted Master is
+affordable. Neither stands in for the other, and both name the same entry point.
+The systemd case skips on a host with no user-level systemd, which is a
+statement about the host rather than about the code.
+
+**The credential is not on a command line.** The units take their environment
+from `EnvironmentFile`, which systemd reads and does not report back;
+`RAVEL_SLURM_PASSWORD` is stripped from every tool server's environment by
+`Settings._LAUNCHER_ONLY`, and `systemctl show` would print anything in
+`ExecStart` to anyone who asked.
+
+| Requirement | Demonstrated by |
+|---|---|
+| systemd 自动重启 | `test_p11_10_systemd_restarts_a_killed_supervisor_and_a_stopped_one_says_so` — a real transient unit, `SIGKILL`, then a different `MainPID` in the row and `NRestarts ≥ 1` |
+| 该行描述的是 systemd 正在运行的那个进程 | the same case: the pid in `runtime_services.instance` is compared against `systemctl show -p MainPID` |
+| graceful shutdown 被记录，且与崩溃可区分 | the same case, both halves — the killed process leaves `stopped_at` null, and `systemctl stop` (which sends the unit's own `KillSignal`) leaves it set |
+| structured logs | the same case: the unit runs with `RAVEL_LOG_FORMAT=json` and the journal lines parse as one object each carrying `ts`, `level`, `service`, `logger`, `message` |
+| 心跳/健康指示 | `test_p11_10_the_services_endpoint_separates_the_four_states` — never-reported, running, and deliberately stopped, read from `/projects/{id}/runtime/services`; and `test_a_service_that_never_reported_is_not_a_service_that_died` one layer down |
+| active project recovery | `test_p11_10_a_project_survives_the_supervisor_that_was_driving_it` — a node `RUNNING` in PostgreSQL on both sides of the handover, and a second, independently constructed supervisor carries the project to `COMPLETED` |
+| 不重复 backend submission | the same case, counted at the port: every `(project, node, attempt)` was answered with exactly one `backend_job_ref`, which is the contract `WorkBackend.submit` is written to |
+| Restart 策略、账号、目录、EnvironmentFile | `tests/unit/test_service_units.py` — read out of the three files, including the mapping from unit to entry point and that the entry point exists |
+| systemd 真的接受这三个 unit | the same module: `systemd-analyze verify` on the checked-in files, and again on what a default install would write with a prefix that exists, where the exit status is asserted too |
+| 安装器只替换前缀和账号 | the same module: the dry run's output is compared for equality against the two substitutions computed in Python |
+| 结构化日志的字段与拒绝未知格式 | `tests/unit/test_service_logs.py` — one object per line, `extra` fields flat beside the reserved ones, a traceback inside its own record, and an unknown format refused at start-up rather than read as text |
+
+Two limits are stated rather than hidden. The systemd case creates a project so
+that the restarted supervisor has something to log about, and it blanks the API
+key so that no live model turn is spent on a liveness question — the *planning*
+half of recovery is therefore the scripted case's, not a live one's. And
+`tests/unit/test_service_units.py` reads the unit files rather than starting
+them: a deployment that edits its installed copy has units this repository has
+not verified, which is why `install_services.sh` rewrites only the two
+coordinates it is given.

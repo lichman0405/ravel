@@ -69,6 +69,7 @@ class ServiceRepository:
             instance=instance or instance_name(),
             started_at=started_at,
             heartbeat_at=beat,
+            stopped_at=None,
             detail=detail or {},
         )
         written = self.session.execute(
@@ -78,11 +79,46 @@ class ServiceRepository:
                     "instance": statement.excluded.instance,
                     "started_at": statement.excluded.started_at,
                     "heartbeat_at": statement.excluded.heartbeat_at,
+                    # Cleared, not left alone. A process that is beating is a
+                    # process that is running, and a row that kept the last
+                    # shutdown's time through a restart would report the
+                    # service as stopped while it was answering requests.
+                    "stopped_at": None,
                     "detail": statement.excluded.detail,
                 },
             ).returning(*RuntimeServiceRow.__table__.columns)
         ).one()
         return ServiceReport.model_validate(written._mapping)
+
+    def retire(self, service: str) -> ServiceReport | None:
+        """Record that this process is stopping, and return the row it left.
+
+        An update and not a delete, for two reasons that happen to agree. The
+        table refuses deletes — it is in `UPDATABLE_TABLES`, whose trigger
+        rejects every `DELETE` — and a service that could erase its own row
+        could erase one belonging to a service that never said anything. What a
+        reader wants from this row afterwards is not an absence but a fact with
+        a time on it: *this* supervisor was shut down at 14:02, which is how a
+        deploy is told apart from an incident.
+
+        The heartbeat is left where it is. This is not a beat — nothing is
+        claiming to be alive — and moving `heartbeat_at` forward would make the
+        last moment the process was working unreadable.
+
+        `None` when nothing has ever reported under this name: a process that
+        retires without having beaten has nothing to retire, and inventing a
+        row for it would report a shutdown of something that never ran.
+        """
+        row = self.session.get(RuntimeServiceRow, service)
+        if row is None:
+            return None
+        # The time is taken here rather than passed in: the caller is the
+        # process that is stopping, and the moment it stopped is the moment it
+        # says so. A parameter would let one be recorded for a shutdown that
+        # had not happened yet.
+        row.stopped_at = utcnow()
+        self.session.flush()
+        return from_row(ServiceReport, row)
 
     def get(self, service: str) -> ServiceReport | None:
         """What this service last said, or `None` if it never has."""

@@ -557,11 +557,14 @@ def temporal_lines(health: dict[str, Any]) -> list[str]:
 def service_lines(health: dict[str, Any]) -> list[str]:
     """Which long-running processes are reporting, and how long they have been quiet.
 
-    Three states, and the screen keeps them apart because an operator does
+    Four states, and the screen keeps them apart because an operator does
     different things about each. A service that is reporting and fresh is fine.
     A service that reported and has gone quiet is a process that died, and the
-    row names the `host:pid` that is no longer answering. A service that has
-    *never* reported is not a fault on this screen — a deployment that has not
+    row names the `host:pid` that is no longer answering. A service that
+    recorded its own shutdown is one somebody stopped on purpose — a deploy, a
+    `systemctl stop` — and it is the only one of the four that is expected, so
+    it is drawn as a fact and not as a fault. A service that has *never*
+    reported is not a fault on this screen either — a deployment that has not
     started a worker has not lost one — and rendering it as a failure would
     send somebody looking for a crash that never happened.
 
@@ -578,6 +581,14 @@ def service_lines(health: dict[str, Any]) -> list[str]:
         name = str(service.get("service", "?"))
         if not service.get("reporting"):
             lines.append(f"{symbol_for('PLANNED')} {name} — has never reported here")
+            continue
+        if service.get("stopped"):
+            # `PAUSED`'s glyph and colour, because that is what this is: a
+            # process that was stopped deliberately and can be started again.
+            lines.append(
+                f"{symbol_for('PAUSED')} {name} — stopped "
+                f"{moment(service.get('stopped_at'))}, and not by a fault"
+            )
             continue
         if service.get("stale"):
             mark, note = symbol_for("FAILED"), "STALE"

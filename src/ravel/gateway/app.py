@@ -24,9 +24,14 @@ arguments at all.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI
 
 from ravel.config import Settings, get_settings
+from ravel.domain.services import GATEWAY
 from ravel.execution.node_runs import ExecutionService, ExternalResultPort
 from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
 from ravel.gateway.conversation import MasterFactory
@@ -45,12 +50,18 @@ from ravel.gateway.routes import (
 )
 from ravel.gateway.runtime import HarnessRuntime
 from ravel.gateway.stream import Cadence
+from ravel.service import Heartbeat
 from ravel.state.database import Database
 
 #: What the Gateway calls itself. Versioned because a TUI written against V0
 #: has to be able to notice that it is talking to something else.
 TITLE = "RAVEL Research Gateway"
 API_VERSION = "0.1.0"
+
+#: How often this process says it is here. A Gateway waits on sockets rather
+#: than polling anything, so it has no natural beat to hang a report on and
+#: pulses on this interval instead.
+GATEWAY_PULSE_SECONDS = 60.0
 
 
 def create_app(
@@ -61,6 +72,7 @@ def create_app(
     master_of: MasterFactory | None = None,
     deliver_external: ExternalResultPort | None = None,
     cadence: Cadence | None = None,
+    heartbeat_seconds: float | None = GATEWAY_PULSE_SECONDS,
 ) -> FastAPI:
     """Build the Gateway.
 
@@ -81,6 +93,12 @@ def create_app(
         cadence: How often the event stream looks for new events and how often
             it speaks when there are none. Defaults to the production rates;
             a test lowers them rather than sleeping through them.
+        heartbeat_seconds: How often this process reports itself alive, or
+            `None` to have it report nothing. On by default, because a Gateway
+            that did not report would be a service the administrator's screen
+            could not tell from a dead one — and off only for a caller that has
+            no liveness row to write to, which is a test holding a stub in place
+            of a database rather than a deployment.
 
     Raises:
         RuntimeError: In production, the configured token secret is the
@@ -106,6 +124,7 @@ def create_app(
         # nothing an owner may not already do.
         docs_url="/docs",
         openapi_url="/openapi.json",
+        lifespan=_lifespan(resolved_database, resolved, heartbeat_seconds),
     )
     # One runtime, built here and handed to both halves of the application: the
     # factory every route reaches Master through, and the state the
@@ -151,4 +170,54 @@ def create_app(
     return app
 
 
-__all__ = ["API_VERSION", "TITLE", "create_app"]
+def _lifespan(
+    database: Database, settings: Settings, heartbeat_seconds: float | None
+) -> Any:
+    """What the Gateway does between accepting its first request and its last.
+
+    Three things, and the order is the point on both ends.
+
+    **Up.** Nothing: a beat is written on the first pulse, which `Heartbeat
+    .start` does immediately rather than after one interval, so the row appears
+    as the server becomes ready rather than a minute later. What is *not* done
+    here is touching the harness, the queue or the object store — a Gateway
+    that connected to everything it might need would make a service that is
+    only serving reads depend on all of them being up.
+
+    **Down.** The pulse stops and the row records that this process stopped,
+    before the database is disposed. A `SIGTERM` from a service manager reaches
+    this path, which is what makes a deploy legible as a deploy: the row says
+    the Gateway was shut down rather than leaving a last beat that recedes.
+
+    A `heartbeat_seconds` of `None` yields a lifespan that does nothing at all,
+    which is what a caller with no database to report to asks for. The
+    function still exists, because an application that installed no lifespan
+    handler and one whose handler does nothing are the same to uvicorn and
+    different to anybody reading this file.
+    """
+    heartbeat: Heartbeat | None = None
+    if heartbeat_seconds is not None:
+        heartbeat = Heartbeat(
+            database=database,
+            service=GATEWAY,
+            detail=lambda: {
+                "api_version": API_VERSION,
+                "address": f"{settings.gateway_host}:{settings.gateway_port}",
+            },
+            pulse_seconds=heartbeat_seconds,
+        )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+        if heartbeat is not None:
+            heartbeat.start()
+        try:
+            yield
+        finally:
+            if heartbeat is not None:
+                await heartbeat.stop()
+
+    return lifespan
+
+
+__all__ = ["API_VERSION", "GATEWAY_PULSE_SECONDS", "TITLE", "create_app"]

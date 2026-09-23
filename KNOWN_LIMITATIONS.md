@@ -357,15 +357,20 @@ who did it.
 - **Updated in Phase 10:** a loop now has something that starts it again —
   `ProjectSupervisor` (`src/ravel/execution/supervisor.py`), started by
   `scripts/run_v0.sh` or `make supervisor`.
+- **Updated in Phase 11 (P11-10):** the supervisor is installed as a service —
+  `infra/systemd/ravel-supervisor.service`, `Restart=always` — so "until
+  somebody does" is now systemd rather than a person. There is still no lease
+  and no queue of projects; `L-31` says what that leaves.
 - **Where:** `src/ravel/execution/loop.py`; `src/ravel/execution/supervisor.py`;
   `scripts/run_project.py`
 
 `make project PROJECT=<id>` drives one project until it ends or stops moving,
 and `ProjectSupervisor` does the same for every active project without being
-told which. What has not changed is that both are *processes*: there is no
-service manager, no lease, and no queue of projects. A supervisor that exits —
-a crashed host, an operator's `Ctrl-C` — leaves its projects exactly where
-PostgreSQL says they are, and nothing starts it again until somebody does.
+told which. What has not changed is that both are *processes*: what starts one
+again is a service manager rather than a scheduler inside RAVEL — there is no
+lease of a project and no queue of them. A supervisor that exits — a crashed
+host, an operator's `Ctrl-C` — leaves its projects exactly where PostgreSQL says
+they are.
 
 `ProjectLoop` is deterministic RAVEL software — it reads state, starts runs,
 notices endings — and the seats that require judgement are filled by agents on
@@ -1126,3 +1131,49 @@ different sentence from having gone quiet, and the two send an operator to
 different places. What they cannot do is tell an operator that the machine is
 well.
 
+
+## L-31 — One host, one supervisor, and nothing enforces the second
+
+- **Since:** Phase 11 (P11-10)
+- **Where:** `src/ravel/execution/supervisor.py`; `infra/systemd/`
+  `ravel-supervisor.service`; `scripts/install_services.sh`
+
+The supervisor is now a service: `Restart=always`, a `SIGTERM` it acts on, and a
+row that says whether it is alive. What that buys is a process that comes back
+by itself. What it does not buy is *exactly one* of them.
+
+**There is no lease.** A supervisor's guarantee that two loops are not driving
+one project is `self._tasks`, a dictionary in its own memory. Two supervisors
+against one database — a second unit on another host, a `systemctl start` beside
+a `run_v0.sh` already running, an operator who started one by hand — each
+discover the same active projects and each give them a loop. Nothing in
+PostgreSQL refuses the second. What holds the damage down is the layer below:
+`submit` is idempotent in `(project, node, attempt)`, so a duplicated drive
+resolves to the same backend job rather than to a second experiment, and the DAG
+services are guarded. Two control planes therefore cost wasted model turns and a
+contended row, not two of somebody's experiment — and "not two experiments" is
+the property P11-10's acceptance case pins at the port. It is still a
+duplication of authority that no single row arbitrates, and a deployment that
+wants a real one needs a lease or a leader election that V0 does not have.
+
+**systemd will stop restarting a supervisor that cannot start.** The units set
+no `StartLimitIntervalSec` or `StartLimitBurst`, so systemd's defaults apply:
+five restarts inside ten seconds and the unit goes to `failed` and stays there.
+That is the right default — a process that dies before its first tick will not
+be fixed by being started a sixth time, and `failed` is a state an operator can
+see — but it means the guarantee is "restarts unless it is hopeless", and a
+deployment watching only for `active` should also watch for `failed`.
+
+**A restart is not a resume of everything.** What a replacement recovers is what
+was written down: the DAG, the contracts, the handovers, the node statuses, the
+Temporal histories. A role *turn* in flight is not written down until it
+finishes, so a supervisor killed mid-turn loses that turn and the replacement
+asks the question again — the same cost L-23 describes for a retry. Nothing
+scientific is lost (a turn that had not returned had decided nothing), but the
+tokens are spent twice, and a Master several minutes into a long reasoning turn
+is the expensive case.
+
+**And the units are per host.** `runtime_services.instance` is `host:pid`, which
+is one machine's vocabulary. Nothing in this item addresses a deployment spread
+over several, and the container runtime the units want (`After=docker.service`)
+is the one §1 of `DEPLOYMENT.md` describes rather than a cluster scheduler.

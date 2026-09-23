@@ -27,6 +27,7 @@ from ravel.domain.services import (
     GATEWAY,
     SERVICE_NAMES,
     SUPERVISOR,
+    TEMPORAL_WORKER,
     ServiceReport,
     heartbeat_is_stale,
 )
@@ -36,6 +37,25 @@ from ravel.state.repositories.services import ServiceRepository, instance_name
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture(autouse=True)
+def an_empty_table(clean: None) -> None:
+    """Start from nothing, because several cases here read the whole table.
+
+    `all()` is one of the things this module is about — "a second beat replaces
+    the first" is a claim about every row there is — and a row another suite
+    left behind would fail it for a reason that has nothing to do with the
+    code. `clean` is the suite's own fixture rather than a `TRUNCATE` written
+    here: it is the one place that knows about the lock timeout that keeps a
+    leaked reader from hanging every test after it.
+
+    The row that made this necessary is real and worth naming. Since Phase 11
+    the Gateway beats from its own lifespan, so any suite that serves the
+    application through a `TestClient` leaves a `gateway` row behind when it
+    finishes — which is the behaviour a deployment wants and a reason for the
+    next suite to clean up after itself.
+    """
+
+
 def _beat(database: Database, service: str, **detail: object) -> ServiceReport:
     """One report, in its own committed transaction."""
     started = utcnow() - timedelta(minutes=5)
@@ -43,6 +63,12 @@ def _beat(database: Database, service: str, **detail: object) -> ServiceReport:
         return ServiceRepository(session).report(
             service, started_at=started, detail=dict(detail)
         )
+
+
+def _retire(database: Database, service: str) -> ServiceReport | None:
+    """One shutdown, in its own committed transaction."""
+    with database.transaction() as session:
+        return ServiceRepository(session).retire(service)
 
 
 def _read(database: Database, service: str) -> ServiceReport | None:
@@ -145,6 +171,75 @@ def test_every_service_is_read_back_in_name_order(database: Database) -> None:
     assert [report.service for report in reported] == ["gateway", "supervisor", "temporal-worker"]
 
 
+# ── Saying it is going ──────────────────────────────────────────────────────
+
+
+def test_a_service_that_said_it_was_going_is_not_a_service_that_went_quiet(
+    database: Database,
+) -> None:
+    """The distinction a deploy turns on, and the only thing that makes it.
+
+    Both endings are silence: a supervisor stopped for an upgrade and a
+    supervisor that was killed both stop beating, and from the beats alone the
+    screen cannot tell them apart. What separates them is that one of them said
+    so on the way out. With that written down, the question the staleness
+    budget answers does not arise — which is asserted here at a full hour past
+    the last beat, a silence that would otherwise be a dead process many times
+    over.
+    """
+    started = _beat(database, SUPERVISOR, poll_seconds=5)
+    stopped = _retire(database, SUPERVISOR)
+
+    assert stopped is not None
+    assert stopped.stopped_at is not None
+    assert stopped.heartbeat_at == started.heartbeat_at, (
+        "retiring moved the last beat, so the moment the process was last "
+        "working is no longer readable"
+    )
+    assert heartbeat_is_stale(
+        stopped, budget_seconds=1.0, now=stopped.heartbeat_at + timedelta(hours=1)
+    ) is False
+
+
+def test_a_replacement_clears_the_shutdown_it_is_replacing(database: Database) -> None:
+    """Because a row that kept it reports a service as down while it answers.
+
+    A beat and a retirement write the same row, and this is the case where the
+    two must not agree: a process that came back is running, so the restart is
+    the fact and the shutdown before it is not. Without the clear, restarting a
+    service leaves an operator watching it serve requests while the screen says
+    it is stopped — the failure the field was added to prevent, produced by the
+    field itself.
+    """
+    _beat(database, SUPERVISOR)
+    _retire(database, SUPERVISOR)
+    again = _beat(database, SUPERVISOR, poll_seconds=5)
+
+    assert again.stopped_at is None
+    assert heartbeat_is_stale(
+        again, budget_seconds=1.0, now=again.heartbeat_at + timedelta(hours=1)
+    ) is True, "a restarted service is running, and an hour of silence is a fault again"
+
+
+def test_retiring_something_that_never_reported_does_not_invent_a_row(
+    database: Database,
+) -> None:
+    """Because a process on its way out cannot know whether its beats landed.
+
+    The supervisor retires unconditionally as it shuts down, and the database
+    may have been unreachable for the beats before that — so "I am stopping"
+    routinely arrives for a service with nothing on record. `None` is the
+    answer to that. A row written here would put a service on the
+    administrator's screen that this deployment has never run, reporting a
+    shutdown that is the only thing ever heard from it.
+    """
+    assert _retire(database, TEMPORAL_WORKER) is None
+    assert _read(database, TEMPORAL_WORKER) is None
+
+    with database.read_only() as session:
+        assert ServiceRepository(session).all() == []
+
+
 # ── What the guard protects ─────────────────────────────────────────────────
 
 
@@ -167,6 +262,30 @@ def test_a_process_may_not_be_renamed_into_another_services_row(database: Databa
         )
 
     assert _read(database, SUPERVISOR) is not None
+
+
+def test_a_service_that_has_stopped_may_not_be_deleted_out_of_the_table(
+    database: Database,
+) -> None:
+    """Why a shutdown is an update, and not the row simply going away.
+
+    A process able to erase its own row could erase one belonging to a service
+    that never said anything — and it cannot, because the guard is
+    statement-level and refuses every `DELETE` rather than the ones it can
+    attribute to a caller. That is the schema's answer to the question, and
+    this is where the repository's choice to update is held to it: after a
+    shutdown the row is still there, carrying a time, which is the fact a
+    reader wanted. An absence would have said only that something used to be.
+    """
+    _beat(database, SUPERVISOR)
+    _retire(database, SUPERVISOR)
+
+    with pytest.raises(DBAPIError, match="never deleted"), database.transaction() as session:
+        session.execute(text("DELETE FROM runtime_services WHERE service = 'supervisor'"))
+
+    left = _read(database, SUPERVISOR)
+    assert left is not None
+    assert left.stopped_at is not None
 
 
 def test_a_report_may_be_updated_in_place_without_being_a_log(database: Database) -> None:

@@ -81,6 +81,11 @@ class Settings(BaseSettings):
 
     env: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
+    #: `text` for a person at a terminal, `json` for whatever collects a
+    #: service's output and wants fields rather than a format string. The
+    #: default is the readable one: a developer running `make up` is the common
+    #: case, and a collector is a deployment decision.
+    log_format: Literal["text", "json"] = "text"
 
     # Runtime state owned by RAVEL: DSH homes, workspaces, research snapshots.
     # Never placed inside a workspace an agent can influence.

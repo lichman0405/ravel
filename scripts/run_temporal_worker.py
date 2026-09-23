@@ -61,7 +61,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import sys
 
 from ravel.backends.lab import HumanLabBackend
@@ -74,8 +73,10 @@ from ravel.backends.slurm import (
 )
 from ravel.config import Settings
 from ravel.domain.enums import NodeType
+from ravel.domain.services import TEMPORAL_WORKER
 from ravel.execution.backends import BackendRegistry
 from ravel.execution.temporal.worker import run_worker_until_signalled
+from ravel.service import configure_logging
 from ravel.state.database import Database
 from ravel.state.store import S3ArtifactStore
 
@@ -299,9 +300,8 @@ def _describe_compute(settings: Settings, args: argparse.Namespace) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     settings = Settings()
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    configure_logging(
+        TEMPORAL_WORKER, level=settings.log_level, log_format=settings.log_format
     )
 
     # Built here so the mocks and the worker's activities share one engine: a

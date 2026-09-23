@@ -27,6 +27,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
 from ravel.config import Settings
+from ravel.domain.services import TEMPORAL_WORKER
 from ravel.execution.backends import BackendRegistry
 from ravel.execution.temporal.activities import NodeRunActivities
 from ravel.execution.temporal.workflows import NodeRunWorkflow
@@ -35,6 +36,7 @@ from ravel.preparation import (
     MaterializerRegistry,
     RaspaMaterializer,
 )
+from ravel.service import Heartbeat
 from ravel.state.database import Database
 from ravel.state.store import ArtifactStore, S3ArtifactStore
 
@@ -171,11 +173,35 @@ async def run_worker_until_signalled(
 
     The entry point a deployment uses; the tests build their own runtime so
     they can register mock backends and stop it on purpose.
+
+    **This is where the worker says it is alive.** A worker has no loop of its
+    own to beat from — it waits on a queue and is woken when there is work — so
+    its `Heartbeat` pulses on a timer, which is the other of the two shapes
+    `ravel.service` provides. What it reports beyond being alive is which
+    backends it registered, because that is the one thing about a worker a
+    reader cannot get from the record: a node's own artifacts say which backend
+    produced them, but a deployment whose compute worker is running the *mock*
+    and whose laboratory worker is running a person looks identical from the
+    jobs table until something has run.
+
+    The shutdown order matters and is the reverse of the start: the pulse stops
+    and the row records the shutdown, and only then is the database disposed —
+    the sign-off is itself a write.
     """
     runtime = ExecutionRuntime.from_settings(settings, registry=registry)
+    heartbeat = Heartbeat(
+        database=runtime.database,
+        service=TEMPORAL_WORKER,
+        detail=lambda: {
+            "task_queue": runtime.settings.temporal_task_queue,
+            "backends": sorted(runtime.registry.by_name),
+        },
+    )
+    heartbeat.start()
     try:
         await runtime.run_worker()
     finally:
+        await heartbeat.stop()
         runtime.database.dispose()
 
 
