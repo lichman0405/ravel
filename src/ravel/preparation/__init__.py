@@ -30,6 +30,8 @@ The pieces:
 - `MaterializerRegistry` — which environments this deployment can build, and
   the one entry point a contract reaches them through.
 - `RaspaMaterializer` — the one real compute stack V0 prepares for.
+- `LabMaterializer` — the bench package, which is what an EXPERIMENT run is
+  handed: files a person reads, fills in, and works from.
 
 The record of all this — `PreparationRecord`, and the row it is stored in —
 lives in `ravel.domain.preparation` and `ravel.state.repositories.preparations`,
@@ -37,6 +39,7 @@ because what RAVEL built for a run is Project State and this package is only
 the code that builds it.
 """
 
+from ravel.preparation.lab import LabMaterializer
 from ravel.preparation.raspa import REQUIRED_TERMS, RaspaMaterializer
 from ravel.preparation.registry import Materializer, MaterializerRegistry
 from ravel.preparation.workspace import (
@@ -55,6 +58,7 @@ __all__ = [
     "REQUIRED_TERMS",
     "AcceptanceTerms",
     "FileRole",
+    "LabMaterializer",
     "MaterializationRefused",
     "Materializer",
     "MaterializerRegistry",
