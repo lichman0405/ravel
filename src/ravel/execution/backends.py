@@ -48,6 +48,17 @@ class JobRequest:
     objective: str
     task_spec: dict[str, object] = field(default_factory=dict)
     required_outputs: tuple[str, ...] = ()
+    #: Where the work happens: the directory preparation built for this
+    #: contract version, and the file in it that starts the work. Empty for a
+    #: run whose contract named no environment, which is every run that needs
+    #: nothing built — a backend that requires one and finds it empty must say
+    #: so rather than inventing a directory to work in.
+    #:
+    #: A backend is told the path rather than handed the files because the
+    #: workspace is on the machine that will run the work, and the backend is
+    #: the thing that can put it there.
+    workspace_path: str = ""
+    entrypoint: str = ""
     #: True when this attempt exists only because the previous one failed
     #: retryably. A backend that treats a retry as a first attempt would, for
     #: example, re-charge a lab for the same run.

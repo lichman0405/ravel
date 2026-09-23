@@ -38,11 +38,13 @@ from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from ravel.domain.enums import JobState, TerminationStatus
+    from ravel.domain.preparation import PreparationOutcome
     from ravel.execution.policies import RetryVerdict, decide_retry
     from ravel.execution.temporal.contracts import (
         AttemptSummary,
         ExternalResult,
         JobSnapshot,
+        PreparationReport,
         RunInput,
         RunOutcome,
         RunPlan,
@@ -82,6 +84,16 @@ _ACTIVITY_RETRY = RetryPolicy(
     maximum_attempts=5,
 )
 
+#: How long preparation may take before Temporal calls it lost. Longer than a
+#: planning step and shorter than a run: it reads artifact bytes out of object
+#: storage and writes a directory, which is filesystem and network work rather
+#: than computation, and a structure file can be large.
+#:
+#: A refusal is *not* what this bounds. A contract that cannot be materialized
+#: comes back as a value rather than an exception, so Temporal does not retry
+#: it and no number here can turn one into a second attempt.
+_PREPARATION_TIMEOUT = timedelta(minutes=5)
+
 
 @workflow.defn
 class NodeRunWorkflow:
@@ -120,6 +132,29 @@ class NodeRunWorkflow:
             start_to_close_timeout=_PLANNING_TIMEOUT,
             retry_policy=_ACTIVITY_RETRY,
         )
+
+        if plan.requires_preparation:
+            report = await workflow.execute_activity(
+                "prepare_execution",
+                plan,
+                result_type=PreparationReport,
+                start_to_close_timeout=_PREPARATION_TIMEOUT,
+                retry_policy=_ACTIVITY_RETRY,
+            )
+            if report.outcome is PreparationOutcome.REFUSED:
+                # The contract could not be turned into a workspace, so there is
+                # nothing to run and nothing to measure. The activity has
+                # already recorded the refusal and parked the node where Master
+                # is asked; ending the run here is the workflow agreeing with
+                # what was written rather than re-deciding it, and it deliberately
+                # writes no Execution Record — an execution that never happened is
+                # not a record with an empty field in it.
+                return RunOutcome(
+                    node_id=plan.node_id,
+                    retry_reason=report.reason,
+                    preparation_id=report.preparation_id,
+                    refusal=report.refusal,
+                )
 
         attempts: list[AttemptSummary] = []
         attempt = order.attempt

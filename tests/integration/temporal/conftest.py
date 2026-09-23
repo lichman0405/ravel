@@ -13,6 +13,19 @@ is `submit`, `status`, `deliver`, `collect`, and `cancel`, and the double is
 written to answer those from a script so a test can put a run into the state it
 needs. The V0 mocks arrive in Phase 6 with the scenario gate that checks them
 against `acceptance/MOCK_SCENARIOS.yaml`.
+
+`InMemoryStore` is the one thing beside them that is a double, and it follows
+the same rule the backend does: **the thing under test is real, the thing
+beside it is a double.** What preparation does with a contract's inputs is
+resolve a named file to its bytes; where those bytes live is not what these
+tests are about, and a MinIO this suite would have to be running would make the
+durable layer's gate depend on a second service being up.
+
+The materializer in these tests is the real one. `tests/unit/preparation/`
+exercises what it writes in detail against an installation layout; what the
+tests here add is that a *run* is what reaches it, that what it builds is what
+a job is handed, and that a refusal parks the node — none of which a stand-in
+materializer could show, because the point is that the real one is on the path.
 """
 
 from __future__ import annotations
@@ -21,8 +34,10 @@ from __future__ import annotations
 # a redefinition. That is the pytest idiom.
 # ruff: noqa: F811
 import asyncio
-from collections.abc import Callable, Iterator
+import io
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
+from typing import BinaryIO
 from uuid import uuid4
 
 import pytest
@@ -61,6 +76,7 @@ from ravel.execution.backends import (
     JobStatus,
 )
 from ravel.execution.temporal.worker import ExecutionRuntime
+from ravel.preparation import MaterializerRegistry
 from ravel.review import ReviewService
 from ravel.state.database import Database
 from ravel.state.repositories.contracts import (
@@ -68,6 +84,13 @@ from ravel.state.repositories.contracts import (
     ExecutionContractRepository,
 )
 from ravel.state.repositories.dag import DagRepository
+from ravel.state.store import (
+    ArtifactImmutableError,
+    ArtifactStore,
+    ArtifactStoreError,
+    StoredObject,
+    hash_chunks,
+)
 
 #: What the node under test is asked to produce. One required output, so that a
 #: run that delivers nothing is visibly incomplete rather than ambiguously so.
@@ -144,9 +167,7 @@ class ScriptedBackend:
     def status(self, backend_job_ref: str) -> JobStatus:
         if self.on_status is not None:
             self.on_status(backend_job_ref)
-        script = self.scripts.get(
-            self.jobs[backend_job_ref].attempt, self.states
-        )
+        script = self.scripts.get(self.jobs[backend_job_ref].attempt, self.states)
         index = self.at[backend_job_ref]
         state = script[min(index, len(script) - 1)]
         self.at[backend_job_ref] = index + 1
@@ -177,10 +198,73 @@ class ScriptedBackend:
         return True
 
 
+@dataclass
+class InMemoryStore:
+    """Object storage that keeps its bytes in a dictionary.
+
+    A double for the S3 client and nothing else: the keys, the hashes and the
+    immutability rule are the real ones, because a preparation manifest records
+    the hash of what it read and a store that hashed differently would make the
+    manifest wrong rather than the test cheap.
+    """
+
+    objects: dict[str, bytes] = field(default_factory=dict)
+    media_types: dict[str, str] = field(default_factory=dict)
+
+    def put(self, key: str, chunks: Iterable[bytes], *, media_type: str = "") -> StoredObject:
+        """Store bytes under a key, refusing to overwrite.
+
+        Raises:
+            ArtifactImmutableError: The key is taken. An artifact's bytes never
+                change under one key — a new version is a new key — so a
+                second write is a fault rather than an update.
+        """
+        if key in self.objects:
+            raise ArtifactImmutableError(f"{key} is already stored")
+        body = b"".join(chunks)
+        content_hash, size = hash_chunks([body])
+        self.objects[key] = body
+        self.media_types[key] = media_type
+        return StoredObject(key=key, content_hash=content_hash, size_bytes=size)
+
+    def get(self, key: str) -> bytes:
+        """Read an object's bytes.
+
+        Raises:
+            ArtifactStoreError: Nothing is stored under that key.
+        """
+        if key not in self.objects:
+            raise ArtifactStoreError(f"no object is stored under {key}")
+        return self.objects[key]
+
+    def open(self, key: str) -> BinaryIO:
+        """Open an object for streaming reads."""
+        return io.BytesIO(self.get(key))
+
+    def exists(self, key: str) -> bool:
+        """Whether an object is present."""
+        return key in self.objects
+
+    def verify(self, key: str, expected_hash: str) -> bool:
+        """Whether the bytes at a key still hash to what a record claims."""
+        return key in self.objects and hash_chunks([self.objects[key]])[0] == expected_hash
+
+    def delete(self, key: str) -> None:
+        """Remove an object."""
+        self.objects.pop(key, None)
+        self.media_types.pop(key, None)
+
+
 @pytest.fixture
 def backend() -> ScriptedBackend:
     """The backend one test's runs are handed to."""
     return ScriptedBackend()
+
+
+@pytest.fixture
+def store() -> InMemoryStore:
+    """The object store a project's artifacts are written to and read from."""
+    return InMemoryStore()
 
 
 @pytest.fixture
@@ -198,9 +282,7 @@ def registry(backend: ScriptedBackend) -> BackendRegistry:
 
 
 @pytest.fixture
-def runnable_node(
-    database: Database, project: Project
-) -> Callable[..., DagNode]:
+def runnable_node(database: Database, project: Project) -> Callable[..., DagNode]:
     """Build a node that is READY, with its criteria and contract frozen.
 
     Assembled the way production assembles one, because the preconditions that
@@ -213,6 +295,11 @@ def runnable_node(
         node_type: NodeType = NodeType.COMPUTATION,
         required_outputs: tuple[str, ...] = (REQUIRED_OUTPUT,),
         allowed_retries: int = 0,
+        inputs: tuple[str, ...] = (),
+        execution_requirements: dict[str, str] | None = None,
+        parameter_targets: dict[str, str] | None = None,
+        resource_limits: dict[str, str] | None = None,
+        procedure: str = "",
     ) -> DagNode:
         with database.transaction() as session:
             dag = DagRepository(session, project.project_id)
@@ -236,9 +323,7 @@ def runnable_node(
                     ),
                 ),
             )
-            acceptance_repository = AcceptanceContractRepository(
-                session, project.project_id
-            )
+            acceptance_repository = AcceptanceContractRepository(session, project.project_id)
             acceptance_repository.add(acceptance)
             acceptance_repository.freeze(acceptance.contract_id)
 
@@ -246,9 +331,14 @@ def runnable_node(
                 project_id=project.project_id,
                 node_id=node.node_id,
                 objective="Measure the conductivity of each sample.",
+                procedure=procedure,
                 allowed_actions=("run_measurement",),
                 required_outputs=required_outputs,
                 allowed_retries=allowed_retries,
+                inputs=inputs,
+                execution_requirements=dict(execution_requirements or {}),
+                parameter_targets=dict(parameter_targets or {}),
+                resource_limits=dict(resource_limits or {}),
             )
             execution_repository = ExecutionContractRepository(session, project.project_id)
             execution_repository.add(execution)
@@ -347,14 +437,30 @@ class RunningWorker:
 
     @classmethod
     async def start(
-        cls, settings: Settings, registry: BackendRegistry, database: Database
+        cls,
+        settings: Settings,
+        registry: BackendRegistry,
+        database: Database,
+        *,
+        materializers: MaterializerRegistry | None = None,
+        store: ArtifactStore | None = None,
     ) -> RunningWorker:
+        """Start a worker over this test's database.
+
+        `materializers` and `store` default to what a worker started without
+        them would have: an empty registry and no store. That is not a gap in
+        the fixture — it is the deployment a contract naming no environment
+        runs in, and the tests that need preparation say so by passing these
+        rather than by the fixture guessing.
+        """
         runtime = ExecutionRuntime(
             settings=settings,
             # The test's own engine, so the worker and the test are looking at
             # the same database through one pool rather than two.
             database=Database(database.engine),
             registry=registry,
+            materializers=(materializers if materializers is not None else MaterializerRegistry()),
+            store=store,
         )
         stop = asyncio.Event()
         task = asyncio.create_task(runtime.run_worker(stop=stop))
@@ -390,6 +496,4 @@ async def await_state(predicate: Callable[[], bool], *, timeout: float = 30.0) -
     try:
         await asyncio.wait_for(poll(), timeout=timeout)
     except TimeoutError:
-        raise AssertionError(
-            "the expected state did not appear before the timeout"
-        ) from None
+        raise AssertionError("the expected state did not appear before the timeout") from None

@@ -21,6 +21,7 @@ which reads as an unguarded column rather than as an old table.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -80,13 +81,25 @@ TEST_DATABASE_SUFFIX = "_test"
 def integration_settings() -> Settings:
     """Settings pointed at the dedicated test database.
 
+    **The name comes from the environment when it is set**, because every test
+    in this suite truncates on the way in and two suites therefore cannot share
+    one database: a second run — a live acceptance suite, say — would empty the
+    tables under the first, and the symptom is a `NotFound` for a row the other
+    run had just written. `RAVEL_TEST_DB` is how a second database is named so
+    that two runs can proceed at once; the suffix check below still applies to
+    whatever it says, so the interlock is not weakened by being configurable.
+
     Raises:
         RuntimeError: The configured database is not a test database.
     """
     # The DSN override is addressed by its alias, which is the name pydantic
     # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
     # suite that truncates every table.
-    settings = Settings(env="test", postgres_db="ravel_test", RAVEL_POSTGRES_DSN=None)
+    settings = Settings(
+        env="test",
+        postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+        RAVEL_POSTGRES_DSN=None,
+    )
     if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
         raise RuntimeError(
             f"integration tests truncate every table and refuse to run against "
@@ -352,6 +365,10 @@ def build_prepared(
     with_acceptance: bool = True,
     freeze_acceptance: bool = True,
     cleared: bool = True,
+    parameter_targets: dict[str, str] | None = None,
+    resource_limits: dict[str, str] | None = None,
+    inputs: tuple[str, ...] = (),
+    execution_requirements: dict[str, str] | None = None,
 ) -> Prepared:
     """Build a READY node with frozen contracts, the way production does.
 
@@ -422,6 +439,10 @@ def build_prepared(
         allowed_substitutions=allowed_substitutions,
         required_outputs=required_outputs,
         allowed_retries=allowed_retries,
+        parameter_targets=dict(parameter_targets or {}),
+        resource_limits=dict(resource_limits or {}),
+        inputs=inputs,
+        execution_requirements=dict(execution_requirements or {}),
     )
     contracts = ExecutionContractRepository(session, project_id)
     contracts.add(contract)
