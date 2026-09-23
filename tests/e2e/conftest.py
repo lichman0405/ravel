@@ -69,6 +69,7 @@ from tests.integration.temporal.conftest import RunningWorker
 from ravel.backends import MockComputeBackend, MockLabBackend
 from ravel.config import Settings
 from ravel.domain.contracts import (
+    AcceptanceContract,
     AcceptanceCriterion,
     CriterionProvenance,
     ExecutionContract,
@@ -104,10 +105,7 @@ from ravel.mcp.scope import ToolScope
 from ravel.mcp.tools import IMPLEMENTATIONS
 from ravel.review import ReviewService
 from ravel.state.database import Database
-from ravel.state.repositories.contracts import (
-    AcceptanceContractRepository,
-    ExecutionContractRepository,
-)
+from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import RoadmapRepository
 from ravel.state.repositories.records import DeviationRepository, RecordRepositories
@@ -140,6 +138,28 @@ class Task:
     allowed_actions: tuple[str, ...] = ("run_measurement",)
     required_outputs: tuple[str, ...] = OUTPUTS
     allowed_retries: int = 0
+    #: The environment RAVEL must build before this node runs, keyed by kind —
+    #: `{"software": "raspa"}` or `{"lab": "bench-chemistry"}`. Empty, which is
+    #: the default, means nothing is prepared. A task that names one is a task
+    #: whose node cannot start until a materializer has made it a workspace,
+    #: which is a thing only some work needs and therefore a thing the caller
+    #: says rather than a thing this class assumes.
+    execution_requirements: dict[str, str] = field(default_factory=dict)
+    #: The terms a materializer builds the workspace from. None of them is
+    #: inferred: `LabMaterializer` refuses a contract that states no procedure,
+    #: no samples, no conditions and no outputs, and filling any of those in
+    #: here would be this harness making a scientific decision.
+    procedure: str = ""
+    inputs: tuple[str, ...] = ()
+    parameter_targets: dict[str, str] = field(default_factory=dict)
+    resource_limits: dict[str, str] = field(default_factory=dict)
+    #: Where the criteria came from, and what they came from. A script whose
+    #: criteria are its own writes `USER_REQUIREMENT` with nothing to cite; one
+    #: deriving them from evidence it read writes `LITERATURE_DERIVED` and the
+    #: reference that makes the derivation checkable — which the contract's own
+    #: validator requires, so a citation cannot be left off by omission.
+    criterion_provenance: CriterionProvenance = CriterionProvenance.USER_REQUIREMENT
+    criterion_ref: str | None = None
 
     def node(self) -> DagNode:
         """A fresh node for this task. Fresh, because a node is written once."""
@@ -152,6 +172,11 @@ class Task:
         on top of the same act production performs, rather than a second copy of
         it. What freezes and binds a node is one function, so a scripted run and
         a planned one cannot end up holding differently-shaped terms.
+
+        Every term this class carries is a term `commit_terms` accepts, and the
+        empty ones are the terms this task's node does not have. That is the
+        same rule the writer itself follows, one level up: a term a script
+        cannot state is a term no scripted run can be a test of.
         """
         commit_terms(
             session,
@@ -159,13 +184,20 @@ class Task:
             node,
             criteria=tuple(
                 AcceptanceCriterion(
-                    statement=statement, provenance=CriterionProvenance.USER_REQUIREMENT
+                    statement=statement,
+                    provenance=self.criterion_provenance,
+                    provenance_ref=self.criterion_ref,
                 )
                 for statement in self.criteria
             ),
             allowed_actions=self.allowed_actions,
             required_outputs=self.required_outputs,
             allowed_retries=self.allowed_retries,
+            execution_requirements=self.execution_requirements,
+            procedure=self.procedure,
+            inputs=self.inputs,
+            parameter_targets=self.parameter_targets,
+            resource_limits=self.resource_limits,
         )
 
 
@@ -403,22 +435,30 @@ class ScriptedReview:
         self, node: DagNode, checkpoint: ReviewCheckpoint, outcome: ReviewOutcome
     ) -> None:
         with self.database.transaction() as session:
-            criteria = AcceptanceContractRepository(
-                session, self.project_id
-            ).frozen_for_node(node.node_id)
-            assert criteria is not None, f"{node.display_id} has no frozen criteria"
-            ReviewService(session, self.project_id).submit(
+            service = ReviewService(session, self.project_id)
+            # The node's definition of done, resolved the way the tool that
+            # records a verdict resolves it: an Acceptance Contract for a node
+            # that froze criteria, and the Execution Contract for one that had
+            # none to freeze — a RESEARCH node, whose result is a Research
+            # Record. Reading only the acceptance table made this script unable
+            # to judge a node type the product judges, which is a harness
+            # answering for RAVEL rather than testing it.
+            contract = service.definition_of_done(node)
+            service.submit(
                 ReviewRecord(
                     project_id=self.project_id,
                     node_id=node.node_id,
                     checkpoint=checkpoint,
-                    frozen_criteria_ref=criteria.contract_id,
-                    frozen_criteria_version=criteria.version,
+                    frozen_criteria_ref=contract.contract_id,
+                    frozen_criteria_version=contract.version,
                     outcome=outcome,
                     # A final verdict answers every criterion the node was
                     # frozen against, one by one — the service refuses a PASS
                     # that leaves one unreported, because a criterion nobody
-                    # answered is a criterion nobody checked.
+                    # answered is a criterion nobody checked. Only an Acceptance
+                    # Contract has criteria to answer; a verdict over an
+                    # Execution Contract reports the outcome and nothing else,
+                    # which is what that contract's reader expects.
                     criterion_results=(
                         tuple(
                             CriterionResult(
@@ -427,9 +467,10 @@ class ScriptedReview:
                                 satisfied=outcome is ReviewOutcome.PASS,
                                 observed="measured against the run's outputs",
                             )
-                            for criterion in criteria.criteria
+                            for criterion in contract.criteria
                         )
                         if checkpoint is ReviewCheckpoint.FINAL
+                        and isinstance(contract, AcceptanceContract)
                         else ()
                     ),
                     diagnosis=f"{checkpoint.value} review: {outcome.value}.",

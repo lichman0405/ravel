@@ -608,3 +608,133 @@ half of recovery is therefore the scripted case's, not a live one's. And
 them: a deployment that edits its installed copy has units this repository has
 not verified, which is why `install_services.sh` rewrites only the two
 coordinates it is given.
+
+## P11-11 the whole chain, certified end to end
+
+The ten items above each certify a part. This one is the claim that they join:
+that on one project, in one run, what each leg produces is what the next leg was
+planned from, and that the project's ending rests on the row the first leg
+wrote. A chain of parts that each pass their own suite can still fail to join,
+and until this item nothing said that this one does not.
+
+**The join is stated four ways, and all four are recorded rather than
+remembered.** The order the work is planned in is the first: the measuring stage
+cannot exist before the reading has ended and left a claim, because its criteria
+are written *from* that claim. The second is the DAG's own record —
+`dependencies` on both measuring nodes naming the reading node, with
+`JoinPolicy.ALL` — which is immutable once written and is the only statement
+about where work came from that survives the session that planned it. The third
+is the criteria: each frozen `AcceptanceCriterion` is `LITERATURE_DERIVED` with
+the evidence row's identifier in `provenance_ref`, a pairing the contract's own
+validator requires, so a citation cannot be left off by omission. The fourth is
+provenance at the decision level: the `DecisionDraft` that creates the measuring
+stage carries the claim in `evidence_refs`, and so does the ending.
+
+**What a dependency is, and is not, here.** It is the DAG's record of where work
+came from. It is not a readiness gate: V0 records dependencies and does not wait
+on them, and only `replan_after_failure` reads them. The case is written to
+assert what the system does and not what it would be convenient for it to do.
+
+**The two legs software cannot supply, and how the case supplies them.** No
+Slurm host is configured on this machine, so the computation leg runs
+`MockComputeBackend` — and the case asserts, on a whole joined run, the thing
+the marking exists for: every artifact that mock produced carries
+`kind="simulated"` with its scenario in `provenance`, and the set of simulated
+artifact identifiers is disjoint from every claim's `source_refs`. A person at a
+bench is likewise not something a test can schedule, so in both cases the person
+*is* the test: it files one body against each name the handover's frozen
+`required_outputs` holds — read off the handover at run time, because a live
+Master writes its own output names and a person who filed a fixed pair at a
+package that asked for others would be answering nothing — through the same
+function the Gateway's upload route calls, and delivers through the real
+`deliver_external_result` signal. Each of those bodies says in its first line
+that it is a harness stub and not a measurement, so the one leg a person would
+have to supply is legible as not supplied.
+
+**What the deployment can prepare decides what a live computation can be.** The
+live case asserts the shape of a run, and one part of that shape belongs to the
+deployment rather than to the model. This host registers two materializers, the
+RASPA one and the bench one; the bench one will refuse a contract that states no
+procedure, and the RASPA one will refuse a contract that names no temperature,
+pressure, cycles or framework rather than choosing them itself. A live Master
+asked to compute something that is not a molecular simulation therefore has
+three correct ways forward — name an environment nothing here can prepare and be
+refused `UNSUPPORTED_ENVIRONMENT`, name RASPA and be refused
+`MISSING_SCIENTIFIC_PARAMETER`, or re-commit the deliverable in a form that can
+run — and the item's first live run took all three in order, each with its
+rationale on the record, ending with the computation re-committed as a RESEARCH
+node. So the live case does not require a computation to have run: it requires
+that the plan holds all three kinds of work, and that nothing simulated is cited
+as evidence, and the marking of a mock's output is asserted on the scripted
+case, where the mock really did the work — as well as on every computation a
+live plan did run, which the run that certified the item supplied.
+
+**The run that passed then did contain computations, and Review threw them out.**
+Its plan reached the mock, and every computation that ran was reviewed at FINAL
+and failed on the marking — `Mock/simulated/inadmissible flag present on both
+artifacts — explicit failure condition met` — under a criterion the Master had
+itself written into the contract: that the delivered files carry nothing
+formatted or labelled as simulated. The bench leg was refused in the same terms,
+on the first line of the file the person filed (`certification harness stub —
+not a measurement`), and the reading leg was accepted in the same run on ten
+sources with retrievable DOIs and fourteen attributed claims. So both halves of
+the mock guarantee have been exercised by seats that were not told about it —
+the marking where a computation ran, the disjointness always — and the ending
+was `CONCLUDE_INCONCLUSIVE`, with the two blocked lines reported as blocked and
+the one shortcut that would have produced numbers refused in writing.
+
+**The case had a defect of its own, and the matrix is what found it.** The
+scripted case read the project's records inside one `read_only()` block and then
+asked two of those repositories a question after the block closed; a repository
+used past its session opens a second transaction on a connection nothing
+returns, which sits `idle in transaction` holding a read lock. The next test's
+`TRUNCATE` then times out — the failure landing on the test *after* the one that
+caused it, which is what the harness's message says. Two green runs had ended
+before the next one began, so nothing else had seen it; the matrix runs the
+module in the same process as the rest and surfaced it as five failing rows and
+seventeen failed set-ups that were not about the product at all. Both leaks are
+closed and the case leaves no connection checked out — measured with a pool
+probe, not assumed — and the note in `tests/acceptance/test_review.py` on the
+same hazard is the precedent the case now follows.
+
+**Two cases, because there are two questions.** The first is scripted and
+complete — Master, Review and the three seats are scripts, everything under them
+is the deployment — so that the join is asserted on a known plan: a stage that
+reads, and a stage that measures, with the second planned from the first. The
+second is live: five real agents drive one project from its work order to an
+ending, with the Internet real and the person played by the test. What it
+asserts is the *shape* of the run — one of A20's four endings with Master's
+Decision Record behind it, five seats that each took a live turn, all three
+kinds of work in the plan, a ledger whose sources were hashed and snapshotted,
+and nothing simulated admitted as evidence — because which ending a live Master
+reaches is a scientific result and not this file's to fix. Its work order also
+says outright that none of the three pieces depends on another and none may be
+gated on what another turns up, so a plan with a derived stage in it would be
+this case failing rather than passing: the *derived* join is the scripted case's
+claim, and the live case's is that a project of real agents and real evidence
+runs every leg and ends.
+
+| Requirement | Demonstrated by |
+|---|---|
+| Master 是唯一修改 DAG 的角色 | the same case: every node's `created_by` names Master, every Decision Record's `authority_check` names Master and records `permitted`, and every node in the plan is named by the `CREATE_NODE` decision that created it — so no work exists that nothing authorized |
+| 用户 objective → Master 的 ResearchContract、success contract 与第一段 roadmap | `test_p11_11_one_project_runs_the_whole_chain_to_a_conclusion` — the two contracts are frozen and the reading stage expanded before any node has run |
+| Research 真实搜索/深读 → Evidence 与 ResearchRecord | the same case: a source registered with real bytes, the seat's own `record_evidence` and `submit_research_record` handlers, one claim in the ledger citing it, one Research Record on the node; and in the live case, every readable source carrying a `content_hash` and a `snapshot_ref` after a real fetch |
+| Master 读回研究结果并以它规划下一段 | the same case: Master reads the reading leg back through its own `read_research_result` tool — the record it is handed is the one the seat filed, and the claim it cites is the row the ledger holds — and only then creates the measuring nodes, whose `DecisionDraft` carries that claim and which record it as a dependency |
+| **Review** 对每一段做出裁决，且裁决不进入 DAG | the same case: the reading node is judged against its Execution Contract — a RESEARCH node freezes no criteria, so its definition of done is the record it filed — and the measured nodes against the criteria frozen before they ran; each node has a verdict, and no verdict in the run changed the plan |
+| Evidence/ResearchRecord 进入 criteria provenance | the same case: every frozen criterion on the measuring nodes is `LITERATURE_DERIVED` with `provenance_ref` equal to the claim's identifier |
+| COMPUTATION 节点 → 运行 → Execution Record | the scripted case: a real `NodeRunWorkflow` through Temporal to an Execution Record whose artifacts are all marked simulated. In the live case a computation runs only if its contract passes preparation, which this deployment's materializers decide (see above) — on the item's first live run none did, and the Master re-committed the deliverable; on the run that certified it they did, and the executions came back `COMPLETED` with a `COMPLETE` delivery verdict. The materialized package that is real in both cases is the bench's, built by the real `LabMaterializer` from the contract; the solver workspace's own preparation is P11-04's item |
+| EXPERIMENT 节点 → HumanLabBackend → 人交付 → Execution Record → Review | the same case: the handover's `required_outputs` are the contract's, the person's upload is recorded `created_by` them, the delivery is the real signal, and the execution comes back with `backend == HumanLabBackend.name` |
+| 最终 SUCCESS/FAILED/INCONCLUSIVE | both cases: the project reaches a terminal status and the Decision Record that status means (`ACCEPT_RESULT`, `REJECT_RESULT`, `CONCLUDE_INCONCLUSIVE`, `TERMINATE_PROJECT`) exists, with the claim cited on the scripted ending |
+| Mock 的 artifact 不能被当作科学证据 | the scripted case, positively: every mock artifact is simulated and the simulated set is disjoint from every claim's `source_refs`. The live case asserts the disjointness unconditionally and the marking over every computation it actually ran — which is the honest pairing, because a run that computed nothing has nothing to mark — and on the run that certified the item the marking was tested end to end: the mock's output reached a Review seat, and the seat failed it for being marked |
+| 全链在真实 agent 下跑通一次 | `test_p11_11_live_agents_drive_the_whole_chain_to_a_conclusion` — five seats, real model turns, real Internet, a person at the bench, one ending |
+| **Live Slurm 上的 compute leg** | **`BLOCKED_EXTERNAL`: missing cluster.** No Slurm endpoint or credentials have been supplied (`RAVEL_SLURM_HOST`, `RAVEL_SLURM_USERNAME`, `RAVEL_SLURM_PASSWORD` are all unset), so no node of either case ran on a cluster; `test_p11_05_a_real_cluster_runs_the_workspace_preparation_built` skips for the same reason, and L-22 states what that leaves uncertified |
+| **Live 真实实验台上的 experiment leg** | **`BLOCKED_EXTERNAL`: missing human input.** No person has been handed a package and run the experiment; in both cases the person is this process. L-29 states what a real bench would exercise that no test can |
+
+The item is therefore **PARTIALLY_CERTIFIED** rather than done, and the two
+blockers are the two above: software cannot supply a cluster or a person, and
+neither run had both at once. L-32 states what that leaves uncertified, in the
+terms of the join rather than of the legs — the parts are each certified, and
+what has not happened is the pair of them inside one project. Supplying a Slurm
+endpoint and standing somebody at a bench is what closes it; the software half
+is asserted now, and the two legs that are not real are marked as not real
+everywhere they appear in the record.

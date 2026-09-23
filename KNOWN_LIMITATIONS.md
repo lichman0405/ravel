@@ -1177,3 +1177,121 @@ is the expensive case.
 is one machine's vocabulary. Nothing in this item addresses a deployment spread
 over several, and the container runtime the units want (`After=docker.service`)
 is the one §1 of `DEPLOYMENT.md` describes rather than a cluster scheduler.
+
+## L-32 — The whole chain has been run twice, and neither run had both external halves real
+
+- **Since:** Phase 11 (P11-11)
+- **Where:** `tests/acceptance/test_phase11_certification.py`; `acceptance/PHASE11_ACCEPTANCE.md` §P11-11
+
+P11-11 is the item that certifies the join rather than the parts: one project, one
+run, every leg planned from what the leg before it produced, and an ending that
+rests on the row the first leg wrote. Two runs demonstrate it, and they are
+strong in opposite directions.
+
+**The scripted run is complete and not real.** Every leg of it is the deployment's
+— real PostgreSQL, a real Temporal worker, the real materializers, the real
+`HumanLabBackend`, the real tool handlers reached through a seat's own context —
+and the two legs software cannot supply are supplied by the case: the
+computation runs `MockComputeBackend`, and the person at the bench is the test
+process. What it proves is the join. What it cannot prove is anything about
+hardware, because nothing in it touched any.
+
+**The live run is real and not complete.** Five real agents, real model turns,
+the real Internet, and a person played by the test. What it asserts is the shape
+of the run — a terminal ending with Master's Decision Record behind it, every
+seat non-silent, all three kinds of work in the plan, a ledger whose sources were
+hashed and snapshotted, nothing simulated admitted as evidence — and it does not
+assert an ending, because which of A20's four a live Master reaches is a
+scientific result. And its computation leg, where a plan has one that runs, is
+the mock, because no Slurm host is configured.
+
+**The person is a stub, and the files say so.** In both cases the bench leg is
+answered by this process, which now files one body per name the handover's own
+`required_outputs` holds — read off the handover, because a live Master writes
+its own names and a person filing a fixed pair of them would answer nothing —
+and every one of those bodies carries a line saying it is a certification
+harness stub and not a measurement. So a reader who opens what the bench leg
+produced cannot mistake it for science, and an ending that rests on it rests on
+what the record says it rests on.
+
+**And a live plan need not contain a computation at all.** This host registers
+two materializers, RASPA's and the bench's, and RASPA's refuses a contract that
+names no temperature, pressure, cycles or framework rather than choosing them
+itself. A live Master asked for a calculation it cannot express as a RASPA run
+therefore re-commits the work in another form — the item's first live run did
+exactly that, after refusals it recorded the reasons for — which leaves the live
+run with nothing for the mock to have marked. The marking is therefore certified
+on the scripted run, where the mock really did the work, and the live run
+certifies the other half of the same guarantee: that nothing simulated is ever
+cited.
+
+**The run that passed then certified the marking too, from the other side.** Its
+plan did contain computations, they reached `MockComputeBackend`, and every one
+of them was reviewed at FINAL and failed *on the marking* — "Mock/simulated/
+inadmissible flag present on both artifacts — explicit failure condition met"
+— under a criterion the Master itself had written into the contract. The bench
+leg was refused in the same terms, on the stub note the person's files carry.
+So on that run both halves of the guarantee were exercised by seats that had not
+been told about it: the marking where the mock ran, and no simulated row in any
+claim's `source_refs`. What the marking does *not* have is a run where a real
+cluster and a real bench were both present (above), and no simulated artifact
+has ever been offered to a reviewer that accepted it.
+
+**So neither run has a real cluster and a real bench at the same time.** Each of
+the two is certified on its own — P11-05's backend against a scripted cluster and
+its live case awaiting a host, P11-06's channel against a test playing the lab
+user and its live case awaiting a bench — and what is *not* certified is the pair
+inside one project: that a criterion derived from a real paper's claim is the one
+a real cluster computes and a real person measures against. The specific external
+requirements are named on the Phase 11 acceptance rows: `RAVEL_SLURM_HOST`,
+`RAVEL_SLURM_USERNAME` and a credential for the first, and a human being for the
+second.
+
+**Live runs vary, and the case is written for that.** A live Master builds a
+different plan each time it is asked, so a case that fixed the ending would be
+grading the model's science rather than RAVEL's chain, and one that fixed the
+plan would fail on a correct decision. What the case fixes is what the
+architecture promises: the shape, the record, and the refusals.
+
+**Do not conclude** that the item is done, and do not read its live half as a
+scientific result. It is `PARTIALLY_CERTIFIED`: both blockers are stated, the
+software chain is covered, the two legs that are not real are marked as not real
+everywhere they appear in the record, and the live run's bench answer is a file
+whose first line says it is a harness stub. What the live half certifies is the
+shape — that five real seats plan, read, hand over, are delivered to, review and
+end — and not that anything measured was measured.
+
+## L-33 — Master's ending report is prose, and the ledger is the record
+
+- **Since:** Phase 11 (P11-11)
+- **Where:** the ending `DecisionRecord` of a live run; `acceptance/PHASE11_ACCEPTANCE.md` §P11-11
+
+A live project ends with a long report from the Master: what each line
+delivered, what stopped the ones that did not, what it considered and refused,
+and what would finish the job. It is the document a person reads, and on the
+run P11-11 certified it was careful in the ways this file cares about — it
+quoted the record for every stop, distinguished a blocked line from a failed
+one, and refused the shortcut that would have produced numbers ("supplying
+RASPA's adsorption parameters would have run a gas-uptake simulation and named
+it conductivity").
+
+It is also generated text about a run, and it can disagree with the run. That
+same report says the computation line "never produced output", and the database
+holds computations that executed on `MockComputeBackend` to completion, with
+artifacts written and Review verdicts on them. Read at the level of
+admissibility the Master's sentence is true — nothing admissible was produced —
+and it is the reading a scientist would want; but a reader who had only the
+report would not know a mock ran at all, and could not tell a line that was
+never attempted from one whose every attempt was thrown out.
+
+- **What is authoritative:** PostgreSQL. The DAG, the Execution Records, the
+  Review verdicts and the claims are rows, and both cases of P11-11 assert on
+  those rather than on the prose.
+- **What this costs:** the ending report is the one artifact a person is likely
+  to read first, and its precision about the run's own history is the model's,
+  not RAVEL's. Nothing in V0 renders the ledger's account of a run into that
+  report, and nothing checks the report against the ledger.
+- **Where it does not bite:** every material decision the report rests on is
+  also a row — the ending decision's type, the refusals, the evidence — so a
+  reader who checks any of its claims against the database can settle them. The
+  failure is one of accounting, not of record.

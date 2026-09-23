@@ -133,8 +133,10 @@ def rows() -> list[Row]:
     Static analysis first, because a failure there makes every later row's
     result uninteresting; then the suites from the cheapest to the most
     expensive, so a broken unit test costs seconds rather than an hour; then
-    the acceptance matrices; then the four gates that need something RAVEL does
-    not own — a live model, the Internet, a cluster, a person.
+    the acceptance matrices; then the gates that need something RAVEL does not
+    own — a live model, the Internet, a cluster, a person — which are last
+    because they are the ones that can also be the slowest and the ones whose
+    skips a reader has to see named.
     """
     return [
         Row(
@@ -245,6 +247,16 @@ def rows() -> list[Row]:
             ),
             env={"RAVEL_REQUIRE_DSH": "1"},
             covers="five real agents driving one project to an ending",
+        ),
+        Row(
+            name="full-chain-e2e",
+            command=a_pytest(
+                "tests/acceptance/test_phase11_certification.py -k whole_chain"
+            ),
+            env={"RAVEL_REQUIRE_DSH": "1"},
+            covers="one project through every leg of the chain, twice over: once "
+            "scripted and once live, with the reading's claim the row the "
+            "measuring stage was planned from",
         ),
     ]
 

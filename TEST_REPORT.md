@@ -1288,6 +1288,176 @@ predicate rather than the stack under it.
 | Static analysis | `ruff check src tests scripts` and `pyright src tests` — clean |
 | Matrix | `make phase11-acceptance` — `PASS P11-10 managed services`, **10/10 demonstrated** |
 
+### 7.12 P11-11: the whole chain, certified end to end
+
+Ten items certified ten parts, and none of them said the parts join. This one is
+the join: one project, one run, every leg planned from what the leg before it
+produced, and an ending that rests on the row the first leg wrote.
+
+**The join is stated four ways, and all four are recorded.** The order is the
+first — the measuring stage cannot exist before the reading has ended and left a
+claim, because its criteria are written from that claim — and it is the weakest
+of the four, because a script could take that order and write nothing down. The
+other three survive the session: `dependencies` on both measuring nodes naming
+the reading node with `JoinPolicy.ALL`; `LITERATURE_DERIVED` on every frozen
+criterion with the evidence row's identifier in `provenance_ref`, a pairing the
+contract's own validator requires, so it cannot be omitted; and the claim in
+`evidence_refs` on the `DecisionDraft` that creates the measuring stage and on
+the one that ends the project. **A dependency is the DAG's record of where work
+came from, and the case does not claim more than that for it**: V0 records
+dependencies and does not gate readiness on them, and only
+`replan_after_failure` reads them.
+
+**The claim crosses through Master's own readback, not around it.** The scripted
+Master reads the reading leg with `read_research_result` — the tool the seat
+calls over MCP — and the case asserts that what it was handed is what the ledger
+holds: the same `evidence_id`, a Research Record present, and a PASSED node. A
+case that queried the ledger directly would have certified a path nothing in
+production takes, and the difference is exactly what P11-03 exists for.
+
+**The derived join is the scripted case's claim, and deliberately not the live
+one's.** The live case runs `LIVE_OBJECTIVE`, the Phase 10 work order, and that
+objective says in as many words that none of the three pieces depends on another
+and none may be gated on what another turns up. A live plan with a derived second
+stage in it would be a Master ignoring its work order, so the live case asserts
+the run's shape and leaves the derived planning to the case that can fix the
+plan. Two cases, two claims, and neither one covers for the other.
+
+**What the case does with the two legs software cannot supply.** No Slurm host is
+configured, so the computation runs `MockComputeBackend`, and the *scripted* case
+asserts on a joined run the property the marking exists for: every artifact the
+mock produced is `simulated` with its scenario in `provenance`, and the set of
+simulated artifact identifiers is disjoint from every claim's `source_refs`. The
+live case asserts the second half of that pair unconditionally and the first half
+over the computations it actually ran, because whether a live run *contains* a
+computation is the deployment's answer rather than the model's: this host
+registers RASPA's materializer and the bench's, and RASPA's refuses to choose a
+simulation's parameters rather than inventing them. The item's first live run
+tried `software/python`, was refused for having no materializer here, tried
+`software/raspa`, was refused for naming no temperature or pressure or cycles,
+and re-committed the deliverable as a research node — three correct moves, each
+with its reason on the record. A case that demanded a marked mock artifact from
+that run would have been demanding that the model plan what the machine cannot
+prepare. A person at a bench cannot be scheduled either, so the person is the
+test: it files one stub against each name the handover requires and delivers
+through the real `deliver_external_result` signal. Both legs are marked as not
+real everywhere they appear, which is what makes the certification honest rather
+than complete.
+
+**What it found was in the harness.** `ScriptedReview` resolved a node's
+definition of done through the acceptance-contract table and asserted criteria
+existed — but `FROZEN_CRITERIA_NODE_TYPES` is `{COMPUTATION, EXPERIMENT}`, and a
+RESEARCH node has none to freeze: it is judged against its Execution Contract, on
+the Research Record it submitted. The script could therefore not judge a node
+type the product judges, and the failure it produced —
+`AssertionError: RES-AC298FE5 has no frozen criteria` — was the fixture
+answering for RAVEL instead of testing it. It now resolves the contract through
+`ReviewService.definition_of_done`, the call `submit_review` makes. The second
+finding was in the case: the master recorded one node identifier per stage where
+a stage held two, so the measuring stage looked like a single node — the
+assertion that reads *what Master planned* is what caught it, which is the
+argument for asserting on the plan rather than on the run's artifacts.
+
+**The other two findings came from the live half, and both were the case's as
+well.** The person filed a fixed pair of output names — the ones the *scripted*
+contract owed — at whatever package the live Master had written, and the first
+live run's Master had written `undoped_tio2_conductivity_300K.csv` and
+`undoped_tio2_measurement_report.md`. Nothing answered the handover, so the run
+waited out its full external deadline and recorded the execution `TIMED_OUT`
+with `INCOMPLETE_DELIVERY`, Review failed all six criteria on absence, and Master
+rejected the result: every step after the upload was the product being right, and
+the upload was the case being wrong. The helper's own docstring had said all
+along that it files what the contract required; the code did not, and it now
+reads the names off the handover.
+
+**And the fourth is that same shape one level up.** The live case required a
+simulated artifact to exist, which requires a computation to have run, which
+requires the deployment to have been able to prepare one — and on the item's
+first live run none could be, for reasons the Master itself recorded in its own
+decisions. The
+assertion is now the pair described above: the marking where a computation ran,
+the disjointness always. Neither change touches a claim about the product; what
+changed is that the case no longer supplies the outcome it then asserts on.
+
+**On the run that certified it, the mock did the work and Review threw it out.**
+The first live run never got a computation as far as execution. The run that
+passed did, and what it left is stronger evidence than the assertion alone:
+computations reached `MockComputeBackend`, each produced its pair of artifacts
+marked `simulated` with its scenario in `provenance`, and every one of them was
+reviewed at FINAL and failed *on the marking*. One review's own words under a
+criterion the Master itself had committed — "the delivered files contain no
+laboratory data, nothing is formatted or labelled as simulated/mock" — are
+`Mock/simulated/inadmissible flag present on both artifacts — explicit failure
+condition met` and `Mock CSV, 239 B, hash identical to prior failures;
+inadmissible`. The bench leg came back the same way: the person delivered both
+names the handover owed, the execution was recorded `COMPLETED` with
+`CompletenessVerdict.COMPLETE`, and Review failed it on the bytes it was handed
+— `Execution note: 'certification harness stub — not a measurement'; CSV only 84
+B`. So the sharpest thing this item certifies is a pair of refusals: nothing
+simulated and nothing stubbed was accepted as evidence, by a Review seat that
+had not been told the difference. The reading leg, by contrast, passed on ten
+sources with retrievable DOIs, fourteen attributed claims and one conflict left
+unresolved — which is what makes the refusals mean something, because the same
+seat accepted a result on the same run.
+
+**The Master ended it honestly, and its ending report is prose rather than the
+record.** The ending is `CONCLUDE_INCONCLUSIVE`, decided against the frozen
+success contract: "ONE IS DELIVERED AND ACCEPTED and TWO PRODUCED NOTHING — not
+because the questions were answered the other way, but because this deployment
+could not execute the work". It names each stop with the record that explains it
+— two runs lost to `INFRASTRUCTURE`, refusals of `UNSUPPORTED_ENVIRONMENT` and
+`MISSING_SCIENTIFIC_PARAMETER`, a Review that withheld clearance at PRE_RUN —
+and it refuses the shortcut that would have produced numbers: supplying RASPA's
+adsorption parameters "would have run a gas-uptake simulation and named it
+conductivity". Where it is imprecise is that it also says the computation line
+never produced output, and the ledger holds the executions and the rejected
+artifacts described above. Both readings survive at the level of admissibility —
+nothing admissible was produced — but a reader of the ending report alone would
+not learn that a mock ran. The database is the authoritative record and the case
+asserts on it; `KNOWN_LIMITATIONS.md` L-33 records what the prose costs a
+reader.
+
+**The fifth finding was the case's as well, and the matrix is what found it: the
+scripted case locked the database behind itself.** It read the project's
+research records, executions and criteria inside one `read_only()` block, and
+then asked two of those repositories a question *after* the block had closed. A
+repository used past its session begins a second transaction on a connection
+that was already returned, and nothing ever returns that one: it sits `idle in
+transaction` holding a read lock on the table it read. The next test's
+`TRUNCATE` waits out its ten-second `lock_timeout` and fails — and the failure
+lands on the *next* test rather than on the one that caused it, which is what
+the fixture's message says in as many words. Here it landed on the live case,
+whose setup errored, and then on the sixteen tests behind it. It is a defect the
+case could not see about itself: nothing follows it in a `-k one_project` run,
+and `tests/e2e` is a different process, so both of the runs that had exercised
+it had ended before the next one began. The matrix runs the module next to the
+others, in one process, which is the run that surfaced it — and
+`tests/acceptance/test_review.py` documents the hazard in the same words, a
+precedent this case had not followed. Nothing guards the class mechanically —
+what the harness has is detection *after* the fact: a ten-second `lock_timeout`
+that turns the leak into a failure on the next test. Both leaks were closed (the
+second was the same mistake, with the executions), and the case now leaves no
+connection checked out at all; that was measured with a probe over the engine's
+pool that prints the stack of every connection checked out and never returned,
+which went from one to zero. So the five failing rows and seventeen failed set-ups of the
+matrix run *before* that fix were the leak and not a product regression: they
+are the tests downstream of a locked `TRUNCATE`, and each one passes in a
+process that starts after it.
+
+| | |
+|---|---|
+| Acceptance, scripted case | `test_phase11_certification.py -k one_project` — **1 passed** in 2.72s |
+| Acceptance, live case | `test_phase11_certification.py -k live` — **1 passed** in 1461.78s (0:24:21), five real agents, real Internet, one ending |
+| Acceptance, whole matrix | `make phase11-acceptance` — **11/11 demonstrated, 0 failed, 0 skipped** (49 passed, 1 skipped) in 21m36s, with both certification cases among them: `PASS P11-11 the whole chain, certified end to end`, 2 passed |
+| E2E | `tests/e2e` — **27 passed** |
+| Unit | **1106 passed** |
+| Static analysis | `ruff check src tests scripts` and `pyright src tests` — clean |
+
+Both certification cases ran on the fixed file, and the live one's evidence above
+comes from the run before the leak fix — the fix is entirely inside the scripted
+case (two reads moved inside their block), so the live case's own code is
+byte-for-byte what produced that record.
+
 ## 8. What these numbers do not say
 
 - A green suite is not a proof of correctness. It is a record of what was
