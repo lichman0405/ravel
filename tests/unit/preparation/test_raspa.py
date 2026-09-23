@@ -424,6 +424,30 @@ def test_a_molecule_the_installation_does_not_define_is_refused(tmp_path: Path) 
     assert "molecules/Xe.def" in str(refused.value)
 
 
+def test_a_molecule_named_as_a_path_is_refused(tmp_path: Path) -> None:
+    """A contract decides what is simulated, never where the files come from.
+
+    The molecule is the one value in this materializer that a model chose. Left
+    unread, `../../../../etc/hostname` would be joined onto the installation's
+    molecules directory, found to be a file, and copied into the workspace — an
+    arbitrary read driven by a string in a contract, and the workspace is
+    handed to a Compute Worker.
+    """
+    data = an_installation(tmp_path)
+    outside = tmp_path / "outside.def"
+    outside.write_text("# not a molecule\n")
+    with pytest.raises(MaterializationRefused) as refused:
+        RaspaMaterializer(data_dir=data).materialize(
+            a_context(
+                tmp_path / "ws",
+                parameter_targets=dict(TERMS, molecule="../outside"),
+            )
+        )
+    assert refused.value.refusal is PreparationRefusal.INCONSISTENT_CONTRACT
+    assert "../outside" in str(refused.value)
+    assert not (tmp_path / "ws" / "outside.def").exists()
+
+
 def test_an_installation_missing_its_force_field_is_refused(tmp_path: Path) -> None:
     data = an_installation(tmp_path)
     (data / "forcefield" / "force_field_mixing_rules.def").unlink()

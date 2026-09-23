@@ -407,11 +407,29 @@ def _framework(context: PreparationContext, terms: dict[str, str]) -> PreparedIn
 def _from_installation(data_dir: Path, subdirectory: str, filename: str) -> Path:
     """One file out of the RASPA installation.
 
+    Two of the three callers pass a constant. The third passes the molecule the
+    contract named, which is the one value here that a model chose — so the name
+    is checked before it is joined onto a directory. `molecule: ../../etc/passwd`
+    is not a molecule; it is a path, and a workspace that copied it in would be
+    handing the Compute Worker a file the contract had no business reaching.
+    RAVEL's rule about model-supplied identifiers is the same one everywhere:
+    a value a model chose decides *what* happens inside its scope, never where
+    the scope's boundary is.
+
     Raises:
-        MaterializationRefused: It is not there. The installation is incomplete
-            or configured wrong, which is a host fact rather than anything
-            about the contract.
+        MaterializationRefused: The name is a path rather than a name, or the
+            file is not there. The first is the contract's fault and the second
+            is the host's, and they are refused with different classes because
+            Master is told to do something different about each.
     """
+    if not _is_bare_name(filename):
+        raise MaterializationRefused(
+            PreparationRefusal.INCONSISTENT_CONTRACT,
+            f"the contract names {filename!r}, which is not a file name: a "
+            f"molecule has to be the name of a definition in "
+            f"{data_dir / subdirectory}, and a name that reaches outside it "
+            "would read a file the contract never mentioned",
+        )
     path = data_dir / subdirectory / filename
     if not path.is_file():
         raise MaterializationRefused(
@@ -421,6 +439,20 @@ def _from_installation(data_dir: Path, subdirectory: str, filename: str) -> Path
             "RAVEL does not carry a copy of it",
         )
     return path
+
+
+def _is_bare_name(value: str) -> bool:
+    """Whether a string is a single path component and not a way out of a directory.
+
+    Written out rather than left to `Path(value).name == value`, which is true
+    of a name that still means something else once it is joined: `Path("..").name`
+    is `".."`. The three names a filesystem gives a meaning to are refused by
+    name, and so is anything carrying a separator in either direction — a
+    backslash is a separator on a filesystem RAVEL may be reading an
+    installation from, and a check that only knew about `/` would pass a
+    Windows path through.
+    """
+    return bool(value) and value not in (".", "..") and not set(value) & {"/", "\\"}
 
 
 # ── What is written ────────────────────────────────────────────────────────
