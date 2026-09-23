@@ -1318,7 +1318,9 @@ entry point's docstring names the application in prose too and a search over the
 file would pass on the sentence that explains the import rather than on the line
 that runs it. What this does not change is the finding's shape: an item's own
 suites cannot see a case in a phase behind it, and a script every phase shares is
-exactly where that costs something.
+exactly where that costs something. `KNOWN_LIMITATIONS.md` L-34 is that shape
+written as a limit rather than as a story, with what it does and does not mean
+for a green item.
 
 ### 7.12 P11-11: the whole chain, certified end to end
 

@@ -1295,3 +1295,44 @@ never attempted from one whose every attempt was thrown out.
   also a row — the ending decision's type, the refusals, the evidence — so a
   reader who checks any of its claims against the database can settle them. The
   failure is one of accounting, not of record.
+
+## L-34 — An item's own suites cannot see a case in a phase behind it
+
+- **Since:** Phase 11, found when the first full release gate ran after P11-10
+  (`443fb37`) and recorded when P11-11's sweep ran it again
+- **Where:** `scripts/run_v0.sh`, `tests/acceptance/test_phase10_ops.py`,
+  `scripts/release_gate.py`
+
+P11-10 moved the Gateway's start out of `run_v0.sh` and into
+`scripts/run_gateway.py`, the entry point the systemd unit starts, so that a
+launcher and a unit cannot disagree about how the Gateway comes up. P10-20's
+acceptance case asserts that the one command starts the Gateway, and it asserted
+it as the string `ravel.gateway.app:create_app` *in the shell script*. The case
+is marked `phase10`: it is in neither `make phase11-acceptance` nor any suite
+P11-10 ran, so every number that item reported was green while a Phase 10
+acceptance case had been failing since the commit.
+
+**What that costs is a phase that looks finished while the evidence behind it is
+red.** An item's verification is its own suites — that is what "one item at a
+time" means — and an item that changes something every phase shares is exactly
+where the boundary bites. Nothing in the repository runs the older phases' cases
+when a shared script changes.
+
+- **What found it:** the release gate's row per phase. `make release-gate` runs
+  `tests/acceptance -m phase10` (and `-m acceptance`, and `-m phase11`) and is
+  the only thing in this repository that reads across phases; it is what turned
+  the item green into a phase red, one item later. The case was fixed to assert
+  the claim rather than the spelling — the script starts the entry point, the
+  entry point's own `uvicorn.run(...)` serves `ravel.gateway.app:create_app` as a
+  factory, and the unit starts the same entry point — and the finding is recorded
+  in `TEST_REPORT.md` §7.11 and `acceptance/PHASE11_ACCEPTANCE.md` §P11-10.
+- **Where it does not bite:** the phases' own runners are unchanged. A01–A20 are
+  still run by `make acceptance` and the P10 items by `make phase10-acceptance`;
+  what is limited is *when* they run, not whether they exist.
+- **Do not conclude** that the fix is that every item should run the gate. The
+  gate is every phase's suites in one command, it takes about two hours, and its
+  live rows spend real model turns; running it per item is running it constantly
+  and reading it never. The honest statement is that an item's green means its
+  own suites, and that a change to a shared script, a shared model, or a shared
+  route is the case where somebody should run the gate before calling the item
+  done — a judgement, not a mechanism.
