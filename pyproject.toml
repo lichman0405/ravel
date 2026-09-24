@@ -112,3 +112,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 # there. The hand-written helpers at the top of the file are still covered by
 # every other rule.
 "src/ravel/state/migrations/versions/*.py" = ["E501"]
+
+# `RUF001` asks whether a character that looks like another character was meant
+# to be that other character, which is the right question everywhere except in
+# a translation: Chinese punctuates with `：`, `，`, `（` and `；`, and those are
+# the correct characters, not lookalikes for the ASCII ones. The catalogue is
+# the one file whose whole purpose is to hold text in another script.
+"src/ravel/tui/i18n.py" = ["RUF001"]
