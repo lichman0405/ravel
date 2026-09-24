@@ -51,7 +51,7 @@ from tests.integration.conftest import DEFAULT_OUTPUTS, build_prepared
 from tests.integration.gateway.conftest import PASSWORD
 from tests.support.routes import EXPECTED_ROUTE_FLOOR, effective_routes, probe_path
 from textual.pilot import Pilot
-from textual.widgets import Input, Select, TabbedContent
+from textual.widgets import Input, Select, Static, TabbedContent
 
 from ravel.domain.contracts import ProjectSuccessContract
 from ravel.domain.enums import NodeType, ProjectStatus, UserRole
@@ -67,11 +67,12 @@ from ravel.state.repositories.projects import ProjectRegistry
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.repositories.research import ArtifactRepository
 from ravel.state.store import S3ArtifactStore
-from ravel.tui.app import ROLE_SCREENS, RavelTUI, screen_for_role
+from ravel.tui import i18n
+from ravel.tui.app import ROLE_SCREENS, RavelTUI, SignIn, screen_for_role
 from ravel.tui.screens.admin import AdminScreen
 from ravel.tui.screens.lab import LabScreen
 from ravel.tui.screens.owner import OwnerScreen
-from ravel.tui.widgets import Notice, StatusTable
+from ravel.tui.widgets import KeyHints, Notice, StatusTable
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(300)]
 
@@ -1161,3 +1162,144 @@ async def test_the_administrators_screen_cannot_write_anything(
                     assert answer.status_code == 200, path
                 else:
                     assert answer.status_code in {403, 404}, answer.text
+
+
+# ── Speaking the reader's language ──────────────────────────────────────────
+
+
+async def test_the_owner_switches_the_console_between_two_languages(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """`F2` changes the language, and everything a reader sees changes with it.
+
+    Three surfaces, and they are three because they are written in three
+    different places. A panel's *heading* comes from the catalogue at draw time
+    (`Panel.heading`), its *body* comes from `format.py`'s call to `t`, and the
+    key hints come from a binding description that `KeyHints` translates on the
+    way to the line. A switch that reached only one of them would leave a
+    reader with Chinese headings over English sentences, which is the exact
+    failure this test exists to catch, and it is why the assertions here are
+    literal Chinese rather than a comparison against the catalogue: comparing
+    against `MESSAGES` would pass even if the catalogue's Chinese half were an
+    empty string.
+
+    **The round trip is part of the claim.** `F2` twice is English again, so a
+    reader who pressed it by accident is not stuck in a language they cannot
+    read out of.
+    """
+    async with console(
+        live_gateway,
+        username="ada",
+        project_id=world.owner_project.project_id,
+        first_panel="attention",
+    ) as (app, pilot, screen):
+        assert screen.panel("attention").heading == "Attention required"
+        assert screen.panel("attention").plain == "Nothing needs you. Master is working."
+        assert "Quit" in app.query_one(KeyHints).plain
+
+        await pilot.press("f2")
+        await settle(
+            pilot,
+            lambda: app.role_screen is not None
+            and app.role_screen is not screen
+            and app.role_screen.is_mounted,
+            what="the screen to be rebuilt in the other language",
+        )
+        chinese = app.role_screen
+        assert chinese is not None
+        await settle(
+            pilot,
+            lambda: chinese.panel("attention").plain == "暂时不需要你。Master 正在工作。",
+            what="the attention panel to be filled in Chinese",
+        )
+
+        assert chinese.panel("attention").heading == "需要你处理"
+        assert chinese.panel("dag-summary").heading == "科学 DAG"
+        # The status vocabulary is deliberately *not* translated: `RUNNING` is
+        # the same word here, in the API, in the database and in the logs, and a
+        # console that renamed it would be one whose reader cannot match what
+        # they see to what an operator can be told over the phone.
+        assert "PROJECT_OWNER" in chinese.panel("dag-summary").plain
+        # And the footer now names the key that goes back.
+        assert "退出" in app.query_one(KeyHints).plain
+        assert "English" in app.query_one(KeyHints).plain
+
+        await pilot.press("f2")
+        await settle(
+            pilot,
+            lambda: app.role_screen is not None
+            and app.role_screen is not chinese
+            and app.role_screen.is_mounted,
+            what="the screen to be rebuilt in English",
+        )
+        back = app.role_screen
+        assert back is not None
+        await settle(
+            pilot,
+            lambda: back.panel("attention").heading == "Attention required",
+            what="the headings to come back in English",
+        )
+
+
+async def test_a_console_started_in_chinese_is_chinese(
+    live_gateway: LiveGateway, world: World
+) -> None:
+    """A deployment that asked for Chinese gets it, on the first screen.
+
+    `RAVEL_TUI_LANGUAGE` is read when `ravel.tui.i18n` is imported, which is
+    what `tests/unit/test_tui_i18n.py` covers by reloading the module. What is
+    checked here is the other half: that a console already speaking Chinese
+    draws a whole screen in it without anything having to be switched — that is,
+    that no screen, panel or table reads its words from anywhere but the
+    catalogue. `set_language` is the same function the environment variable is
+    resolved through, so this is the deployment's state and not a different one.
+    """
+    before = i18n.current()
+    i18n.set_language("zh")
+    try:
+        async with console(
+            live_gateway,
+            username="bench",
+            project_id=world.owner_project.project_id,
+            first_panel="instruction",
+        ) as (_app, _pilot, screen):
+            assert isinstance(screen, LabScreen)
+            assert screen.panel("instruction").heading == "契约"
+            assert str(screen.query_one("#tasks-heading", Static).content) == "你的任务"
+    finally:
+        i18n.set_language(before)
+
+
+async def test_switching_language_on_the_sign_in_form_keeps_what_was_typed(
+    live_gateway: LiveGateway,
+) -> None:
+    """The one screen that is relabelled rather than rebuilt.
+
+    Every other screen is thrown away and drawn again, which is safe because
+    there is nothing in it that belongs to the reader. The sign-in form is the
+    exception: somebody who cannot read it is exactly the somebody most likely
+    to have started typing in it, and losing half a password to a keystroke
+    about language would be a small cruelty. So this screen is relabelled in
+    place, and this test is what says so.
+    """
+    app = RavelTUI(base_url=live_gateway.url)
+    async with app.run_test() as pilot:
+        await settle(pilot, lambda: isinstance(app.screen, SignIn), what="the sign-in form")
+        form = app.screen
+        assert isinstance(form, SignIn)
+        await pilot.press("t", "y", "p", "e", "d")
+        await settle(
+            pilot,
+            lambda: app.screen.query_one("#username", Input).value == "typed",
+            what="the username to be typed in",
+        )
+
+        await pilot.press("f2")
+        await settle(
+            pilot,
+            lambda: app.screen.query_one("#username", Input).placeholder == "用户名",
+            what="the form to be relabelled in Chinese",
+        )
+        assert app.screen is form, "the sign-in form was rebuilt rather than relabelled"
+        assert form.query_one("#username", Input).value == "typed"
+        assert form.query_one("#password", Input).placeholder == "密码"

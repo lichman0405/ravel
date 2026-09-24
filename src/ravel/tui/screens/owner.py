@@ -27,19 +27,20 @@ from textual.widgets import Input, Select, TabbedContent, TabPane
 
 from ravel.tui import format as fmt
 from ravel.tui.client import GatewayClient
+from ravel.tui.i18n import t
 from ravel.tui.widgets import Notice, Panel, Scrolling, StatusTable
 
 if TYPE_CHECKING:  # the app imports this module, so the name is only a type
     from ravel.tui.app import RavelTUI
 
-#: The columns of the DAG table. Named here because the screen and the test
-#: that reads a row both need to agree about what a row is.
-DAG_COLUMNS = ("status", "node", "objective")
+#: The columns of the DAG table, as message keys. Named here because the screen
+#: and the test that reads a row both need to agree about what a row is.
+DAG_COLUMNS = ("column.status", "column.node", "column.objective")
 
 #: The columns of the member table. Same reason.
-MEMBER_COLUMNS = ("role", "username", "added by")
+MEMBER_COLUMNS = ("column.role", "column.username", "column.added_by")
 
-#: The roles an owner may confer, as a closed list.
+#: The roles an owner may confer, as a closed list of (label key, value).
 #:
 #: Closed because the Gateway validates the role against the domain enum and a
 #: free-text field would make a typo a 422 with a wall of JSON on the notice
@@ -47,11 +48,17 @@ MEMBER_COLUMNS = ("role", "username", "added by")
 #: `ADMIN` is present because an owner may confer it — the domain's ranking
 #: exists so that authority cannot be *escalated*, and granting an operational
 #: role the granter never held is not that.
+#:
+#: The label is a key and the value is the enum: what a person reads is
+#: translated, and what is sent is the same string the database holds.
 MEMBER_ROLES = (
-    ("Lab user — works the bench", "LAB_USER"),
-    ("Project owner — may direct this project", "PROJECT_OWNER"),
-    ("Administrator — runtime only, no science", "ADMIN"),
+    ("owner.role.lab_user", "LAB_USER"),
+    ("owner.role.project_owner", "PROJECT_OWNER"),
+    ("owner.role.admin", "ADMIN"),
 )
+
+#: What the Select shows before anything is chosen.
+ROLE_PROMPT = "owner.select.as"
 
 #: Which tab the membership controls belong to.
 #:
@@ -81,15 +88,18 @@ class OwnerScreen(Scrolling):
     """Everything about one project, read-only except for five commands."""
 
     can_focus = True
+    # The descriptions are message *keys*, not sentences: `KeyHints` looks them
+    # up on the way to the bottom line, which is the only way a footer can
+    # follow a language that changed. See `ravel.tui.widgets.KeyHints`.
     BINDINGS: ClassVar[list[BindingType]] = [
-        ("p", "pause", "Pause"),
-        ("r", "resume", "Resume"),
-        ("e", "focus_composer", "Message Master"),
-        ("m", "membership_tab", "Membership"),
-        ("a", "add_member", "Add member"),
-        ("x", "withdraw_member", "Withdraw member"),
-        ("n", "new_project", "New project"),
-        ("f5", "reload", "Refresh"),
+        ("p", "pause", "binding.pause"),
+        ("r", "resume", "binding.resume"),
+        ("e", "focus_composer", "binding.focus_composer"),
+        ("m", "membership_tab", "binding.membership_tab"),
+        ("a", "add_member", "binding.add_member"),
+        ("x", "withdraw_member", "binding.withdraw_member"),
+        ("n", "new_project", "binding.new_project"),
+        ("f5", "reload", "binding.reload"),
     ]
 
     def __init__(
@@ -108,29 +118,29 @@ class OwnerScreen(Scrolling):
     def compose(self) -> ComposeResult:
         yield Notice(id="notice")
         # 1. Master, present and at the top.
-        yield Panel("Master", id="master-focus")
+        yield Panel("owner.panel.master", id="master-focus")
         # 2. What wants a person. Approvals sit directly under it because an
         # open one *is* something waiting on a person, and it is the only state
         # in which the runtime has stopped on purpose.
-        yield Panel("Approvals", id="approvals")
-        yield Panel("Attention required", id="attention")
+        yield Panel("owner.panel.approvals", id="approvals")
+        yield Panel("owner.panel.attention", id="attention")
         # 3. What is running.
-        yield Panel("Execution", id="execution")
+        yield Panel("owner.panel.execution", id="execution")
         # 4. The graph, read-only.
-        yield Panel("Scientific DAG", id="dag-summary")
+        yield Panel("owner.panel.dag", id="dag-summary")
         yield StatusTable(DAG_COLUMNS, id="dag")
         # 5. Why the graph is the shape it is.
         with TabbedContent(id="record"):
-            with TabPane("Decisions", id="tab-decisions"):
-                yield Panel("Decisions", id="decisions")
-            with TabPane("Reviews", id="tab-reviews"):
-                yield Panel("Reviews", id="reviews")
-            with TabPane("Research", id="tab-research"):
-                yield Panel("Research results", id="research")
-            with TabPane("Evidence", id="tab-evidence"):
-                yield Panel("Evidence", id="evidence")
-            with TabPane("Membership", id="tab-membership"):
-                yield Panel("Who is in this project", id="members")
+            with TabPane(t("owner.tab.decisions"), id="tab-decisions"):
+                yield Panel("owner.panel.decisions", id="decisions")
+            with TabPane(t("owner.tab.reviews"), id="tab-reviews"):
+                yield Panel("owner.panel.reviews", id="reviews")
+            with TabPane(t("owner.tab.research"), id="tab-research"):
+                yield Panel("owner.panel.research", id="research")
+            with TabPane(t("owner.tab.evidence"), id="tab-evidence"):
+                yield Panel("owner.panel.evidence", id="evidence")
+            with TabPane(t("owner.tab.membership"), id="tab-membership"):
+                yield Panel("owner.panel.members", id="members")
                 yield StatusTable(
                     MEMBER_COLUMNS,
                     id="member-table",
@@ -138,15 +148,21 @@ class OwnerScreen(Scrolling):
                     first_column_is_a_status=False,
                 )
                 with Horizontal(id="member-row"):
-                    yield Input(placeholder="username to add", id="member-username")
-                    yield Select(MEMBER_ROLES, prompt="as", id="member-role")
+                    yield Input(placeholder=t("owner.placeholder.member"), id="member-username")
+                    yield Select(
+                        [(t(label), value) for label, value in MEMBER_ROLES],
+                        prompt=t(ROLE_PROMPT),
+                        id="member-role",
+                    )
                 # Opening a project belongs on this tab rather than beside the
                 # commands, because it is the same thing the panel above is
                 # about: a project's first membership is its creator's, and
                 # there is nothing else a new project is.
-                yield Input(placeholder="title for a new project", id="new-project-title")
+                yield Input(
+                    placeholder=t("owner.placeholder.new_project"), id="new-project-title"
+                )
         with Horizontal(id="composer-row"):
-            yield Input(placeholder="Ask Master, or tell it something.", id="composer")
+            yield Input(placeholder=t("owner.placeholder.composer"), id="composer")
 
     # ── Following it ────────────────────────────────────────────────────────
 
@@ -186,7 +202,7 @@ class OwnerScreen(Scrolling):
             except Exception as dropped:  # a dropped socket is not a reason to exit
                 if not self._watching:
                     return
-                self.notice(f"Lost the live stream ({dropped}); retrying.", level="bad")
+                self.notice(t("owner.notice.stream_lost", error=dropped), level="bad")
             if self._watching:
                 await asyncio.sleep(RECONNECT_SECONDS)
 
@@ -273,7 +289,7 @@ class OwnerScreen(Scrolling):
             [
                 f"{fmt.symbol_for(project.get('status', ''))} "
                 f"{project.get('status', '')}  —  {fmt.node_summary(self.nodes)}",
-                (f"your role: {self.projection.get('role', '')}", "muted"),
+                (t("owner.dag.role", role=self.projection.get("role", "")), "muted"),
             ]
         )
         self.query_one("#dag", StatusTable).fill(fmt.node_row(node) for node in self.nodes)
@@ -304,11 +320,11 @@ class OwnerScreen(Scrolling):
         reader of this panel needs is which of the two is talking.
         """
         if not messages:
-            return [("Nothing said yet. Say something below.", "muted")]
+            return [(t("owner.conversation.empty"), "muted")]
         lines: list[tuple[str, str]] = []
         for message in messages[-4:]:
             from_master = str(message.get("author_type", "")) == "AGENT"
-            speaker = "Master" if from_master else "you"
+            speaker = t("owner.conversation.master" if from_master else "owner.conversation.you")
             token = "accent" if from_master else "muted"
             body = fmt.elide(str(message.get("body", "")), 140)
             lines.append((f"{speaker}: {body}", token))
@@ -322,20 +338,20 @@ class OwnerScreen(Scrolling):
         if not text:
             return
         event.input.value = ""
-        self.notice("Asking Master…", level="wait")
+        self.notice(t("owner.notice.asking"), level="wait")
         try:
             await self.client.say(self.project_id, text)
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"Master did not answer: {refused}", level="bad")
+            self.notice(t("owner.notice.no_answer", error=refused), level="bad")
             return
-        self.notice("Master answered.", level="good")
+        self.notice(t("owner.notice.answered"), level="good")
         await self.refresh_everything()
 
     async def action_pause(self) -> None:
-        await self._control("pause", "Paused.")
+        await self._control("pause", "owner.notice.paused")
 
     async def action_resume(self) -> None:
-        await self._control("resume", "Resumed.")
+        await self._control("resume", "owner.notice.resumed")
 
     async def action_focus_composer(self) -> None:
         self.query_one("#composer", Input).focus()
@@ -354,20 +370,20 @@ class OwnerScreen(Scrolling):
         username = self.query_one("#member-username", Input).value.strip()
         chosen = self.query_one("#member-role", Select).value
         if not username:
-            self.notice("Name somebody to add.", level="bad")
+            self.notice(t("owner.notice.name_somebody"), level="bad")
             return
         if not isinstance(chosen, str):
-            self.notice("Choose the role to give them.", level="bad")
+            self.notice(t("owner.notice.choose_role"), level="bad")
             return
 
-        self.notice(f"Adding {username} as {chosen}…", level="wait")
+        self.notice(t("owner.notice.adding", username=username, role=chosen), level="wait")
         try:
             await self.client.add_member(self.project_id, username, chosen)
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"{username} was not added: {refused}", level="bad")
+            self.notice(t("owner.notice.not_added", username=username, error=refused), level="bad")
             return
         self.query_one("#member-username", Input).value = ""
-        self.notice(f"{username} is now {chosen} here.", level="good")
+        self.notice(t("owner.notice.now_role", username=username, role=chosen), level="good")
         await self.refresh_everything()
 
     async def action_withdraw_member(self) -> None:
@@ -384,19 +400,26 @@ class OwnerScreen(Scrolling):
             return
         chosen = self._selected_member()
         if chosen is None:
-            self.notice("Select the member to withdraw in the table first.", level="bad")
+            self.notice(t("owner.notice.select_member"), level="bad")
             return
 
-        self.notice(f"Withdrawing {chosen.get('username', '')}…", level="wait")
+        self.notice(
+            t("owner.notice.withdrawing", username=chosen.get("username", "")), level="wait"
+        )
         try:
             await self.client.revoke_member(self.project_id, str(chosen.get("user_id", "")))
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"{chosen.get('username', '')} was not withdrawn: {refused}", level="bad")
+            self.notice(
+                t(
+                    "owner.notice.not_withdrawn",
+                    username=chosen.get("username", ""),
+                    error=refused,
+                ),
+                level="bad",
+            )
             return
         self.notice(
-            f"{chosen.get('username', '')} no longer holds a role here; the record of "
-            "the withdrawal stays.",
-            level="good",
+            t("owner.notice.withdrawn", username=chosen.get("username", "")), level="good"
         )
         await self.refresh_everything()
 
@@ -418,20 +441,17 @@ class OwnerScreen(Scrolling):
             return
         title = self.query_one("#new-project-title", Input).value.strip()
         if not title:
-            self.notice("Name the new project in the box, then press n again.", level="bad")
+            self.notice(t("owner.notice.name_project"), level="bad")
             return
-        self.notice(f"Opening {title}…", level="wait")
+        self.notice(t("owner.notice.opening", title=title), level="wait")
         try:
-            opened = await self.client.open_project(
-                title, "Opened from the console; no objective has been stated yet."
-            )
+            opened = await self.client.open_project(title, t("owner.new_project.objective"))
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"{title} was not opened: {refused}", level="bad")
+            self.notice(t("owner.notice.not_opened", title=title, error=refused), level="bad")
             return
         self.query_one("#new-project-title", Input).value = ""
         self.notice(
-            f"Opened {opened.get('display_id', '')} ({title}). "
-            "Press ctrl+n to move to it.",
+            t("owner.notice.opened", display_id=opened.get("display_id", ""), title=title),
             level="good",
         )
         await cast("RavelTUI", self.app).reload_memberships()
@@ -451,9 +471,7 @@ class OwnerScreen(Scrolling):
         record = self.query_one("#record", TabbedContent)
         if record.active == MEMBERSHIP_TAB:
             return True
-        self.notice(
-            "Membership is on its own tab — press m to open it.", level="bad"
-        )
+        self.notice(t("owner.notice.membership_tab"), level="bad")
         return False
 
     def action_membership_tab(self) -> None:
@@ -488,6 +506,9 @@ class OwnerScreen(Scrolling):
         Both are the owner's alone — the Gateway checks `may_direct_project` —
         and neither touches the DAG: stopping a project stops work, it does not
         rewrite the plan.
+
+        `done` is a message key rather than a sentence, because the two callers
+        are the only two sentences this method can be asked to say.
         """
         client = self.client
         try:
@@ -496,9 +517,9 @@ class OwnerScreen(Scrolling):
             else:
                 await client.resume(self.project_id)
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"{command} was refused: {refused}", level="bad")
+            self.notice(t("owner.notice.refused", command=command, error=refused), level="bad")
             return
-        self.notice(done, level="good")
+        self.notice(t(done), level="good")
         await self.refresh_everything()
 
     # ── Small helpers the tests read too ────────────────────────────────────
@@ -515,5 +536,6 @@ __all__ = [
     "MEMBERSHIP_TAB",
     "MEMBER_COLUMNS",
     "MEMBER_ROLES",
+    "ROLE_PROMPT",
     "OwnerScreen",
 ]

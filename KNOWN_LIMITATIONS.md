@@ -1342,3 +1342,50 @@ when a shared script changes.
   own suites, and that a change to a shared script, a shared model, or a shared
   route is the case where somebody should run the gate before calling the item
   done — a judgement, not a mechanism.
+
+## L-35 — The Chinese console has been translated, and not read by a Chinese speaker
+
+- **Since:** Phase 11's follow-on work on the TUI (`feat/tui-bilingual`)
+- **Where:** `src/ravel/tui/i18n.py`, `tests/unit/test_tui_i18n.py`
+
+Every sentence the console draws exists in both languages, `F2` switches between
+them, and `RAVEL_TUI_LANGUAGE` decides what a deployment starts in. What has
+*not* happened is a review of the Chinese by somebody who reads it natively. The
+translations were written alongside the catalogue, by the same process that
+wrote the English, and the tests around them check the properties a test can
+check — that both halves of a pair exist, that both ask for the same
+placeholders, that no other module holds a sentence — and not whether a
+sentence reads well or says the right thing in a laboratory.
+
+**The mechanisms have limits of their own, and they are worth stating.**
+
+- The sweep that keeps sentences out of the other modules is a heuristic, not a
+  parser. It flags a string literal containing two runs of two or more letters
+  separated by whitespace — which catches `"    added by "` and does not catch
+  `" on "` or `"attempt "`. A short untranslated fragment can therefore survive
+  in a module it does not belong in, and the way it shows up is a reader
+  noticing one English word in a Chinese line rather than a failing test. The
+  remedy is the same one the flagged cases take — move it into the catalogue —
+  but nothing *makes* anybody.
+- A few lines are assembled from several messages at the point of use
+  (`lab.notice.sent` plus `lab.notice.still_owed`), so their word order is the
+  concatenation of two translated halves. Both languages here happen to read
+  correctly that way; a third language whose clauses must come in the other
+  order would need those lines to become one message each.
+- The translation stops deliberately at the system's own vocabulary — statuses,
+  review outcomes, role names, backend and service names, identifiers,
+  timestamps and exception text are the same strings here as in the API, the
+  database and the logs. A Chinese screen is therefore not *only* Chinese, and
+  a reader who takes `WAITING_DECISION` for an English word that somebody forgot
+  to translate has misread a decision (see `docs/08` §8).
+- The language is process state: it is read once at import and lives for the
+  session. Nothing is written to disk, so there is no per-user preference to
+  set and no way to remember a switch across launches; two people sharing one
+  terminal get whatever the last `F2` left. The reason is §2 of `docs/08` —
+  the TUI holds no authoritative state and this is one more thing not to hold.
+
+**Do not conclude** that this is a language feature that has been finished.
+It is a console whose sentences have translations, checked for the failures a
+test can see; it is not a console somebody has been handed in Chinese and used.
+The first person who does that should be asked what reads wrong, and the
+catalogue is the one file that would change.

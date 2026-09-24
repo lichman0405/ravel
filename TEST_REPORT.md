@@ -144,6 +144,18 @@ is the newer and the item's table is what the item was accepted on. The unit
 count has not moved since P11-01 (1106); `tests/integration` has grown from 580
 to 709 and `tests/e2e` from 20 to 27 across the phase.
 
+**Two of these rows have moved since, and this table is the 2026-09-23 run.**
+The follow-on work in §7.13 (the console in two languages) added 15
+unit cases and 3 e2e cases, so `unit` reads 1121 and `e2e` reads 30 on that
+tree; both were re-measured with the same commands the gate uses, and §7.13
+names them. What was *also* re-measured is `phase11-acceptance` — 49 passed, 1
+skipped, unchanged — because it is the row that drives the console, and a
+refactor of every string the console draws is exactly the kind of change that
+could break it without breaking anything else. The other sixteen rows are as
+they were measured on 2026-09-23 and were not re-run: the follow-on touches
+`src/ravel/tui` and nothing else, and a row whose subject did not change is not
+evidence that improved by being re-measured.
+
 **One suite reads the deployment database; every other one reads `ravel_test`.**
 `tests/dsh` hands a tool server the settings `.env` names, so it needs that
 database migrated and now refuses to start against one that is behind the
@@ -1538,6 +1550,121 @@ Both certification cases ran on the fixed file, and the live one's evidence abov
 comes from the run before the leak fix — the fix is entirely inside the scripted
 case (two reads moved inside their block), so the live case's own code is
 byte-for-byte what produced that record.
+
+### 7.13 The console in two languages
+
+Phase 11's follow-on work, on the branch `feat/tui-bilingual`. Every screen the
+console draws is now available in English and in Chinese, `F2` switches between
+them from any screen including the sign-in form, and `RAVEL_TUI_LANGUAGE=en|zh`
+decides what a deployment starts in. A value that is neither is refused at
+startup rather than fallen back from.
+
+**The claim is not "there are translations"; it is that a sentence has one
+home.** All of them are in `src/ravel/tui/i18n.py`, as `key: (english, chinese)`
+pairs, and a unit test makes that structural rather than aspirational:
+`test_every_sentence_in_the_console_lives_in_this_catalogue` walks the syntax
+tree of every other module under `ravel/tui` and fails on a string literal that
+reads like prose. It is paired with
+`test_the_catalogue_is_the_only_module_with_sentences_in_it`, which asserts that
+the catalogue itself *does* contain prose — without that second test, a sweep
+that had quietly stopped finding anything would pass. Because the two languages
+are one tuple and not two dictionaries, a message cannot exist in one and be
+missing from the other: there is no parity test to forget to write, which is
+why the sweep can be about *location* and nothing else.
+
+**Keyed text is checked from both ends.** A call to `t()` with a key that is not
+in the catalogue raises `UnknownMessage` where it is made, which
+`test_a_key_that_does_not_exist_is_named_rather_than_shown` covers — a missing
+message is a bug in this program and the reader is not shown the key of it. And
+`test_both_languages_ask_for_the_same_fields` closes the hole the data's shape
+does not: a translation that dropped `{username}` would be a line that silently
+loses a fact.
+
+**Three surfaces had to be reached, and they are written in three places.** A
+panel's heading is read from the catalogue when it draws (`Panel.heading` is a
+property, not a stored string), its body comes from `format.py`'s calls to `t`,
+and the key hints along the bottom come from binding *descriptions* — which in
+this program are message keys, `("p", "pause", "binding.pause")`. The third is
+why Textual's `Footer` is gone: `Footer` prints a description as it stands, and
+there is no supported way to change a binding's description after the class is
+defined without rewriting the framework's own binding map on every keystroke.
+`widgets.KeyHints` instead reads the public `screen.active_bindings` and looks
+each description up on the way to the line, which is what Textual's own footer
+does internally. A switch that reached only one of the three would leave Chinese
+headings over English sentences, which is the failure the new e2e case asserts
+against directly.
+
+**Changing the language rebuilds every screen except the one with a form on
+it.** A `DataTable`'s column headers and a `TabPane`'s label are set when the
+widget is constructed, so a role screen is redrawn through `show_project()`,
+which is the same path a project switch takes. The sign-in form is the
+exception, and it is relabelled in place: somebody who cannot read the form is
+exactly the somebody most likely to have started typing in it, and the line
+under it is a three-state machine (`nothing to say` / `signing in` / `refused`)
+rather than whatever text was last written there — so a redraw does not have to
+guess whether what is on it is a sentence this program wrote or a Gateway's own
+words, which stay as the Gateway wrote them.
+
+**One setting was removed deliberately.** `ENABLE_COMMAND_PALETTE = False`. The
+palette lists action *names* — `pause`, `add_member`, `report_deviation` — which
+are identifiers from `ravel.tui.app` and not messages anything has a translation
+for, so a Chinese screen would have opened a palette of English identifiers.
+The console's keys all fit on one line at the bottom, and `F2` names itself in
+the language it switches *to* (`中文` on an English screen, `English` on a
+Chinese one) so that a reader who cannot read the screen can still see which key
+to press.
+
+**The boundary is stated rather than implied**: statuses, review outcomes, the
+five agent roles, backend and service names, identifiers, timestamps and
+exception text are not translated — they are the same strings here as in the
+API, the database and the logs. What is translated is what the console *says*;
+what it *sends* is a term. A deviation picker reads `契约不允许的操作` and posts
+`action`; the member-role picker reads `项目负责人` and posts `PROJECT_OWNER`.
+`docs/08` §8 records the rule, and `KNOWN_LIMITATIONS.md` L-35 records what
+remains unproven about it — chiefly that no Chinese speaker has read any of it.
+
+| | |
+|---|---|
+| Catalogue and behaviour | `pytest tests/unit/test_tui_i18n.py` — **15 passed** |
+| Formatters, unchanged behaviour | `pytest tests/unit/test_tui_format.py` — **35 passed** |
+| Console end to end, both languages | `pytest tests/e2e/test_tui.py -m e2e` — **22 passed** (was 19; +3) |
+| The suite that drives the console for a whole phase | `pytest tests/acceptance -m phase11` — **49 passed, 1 skipped** in 22:58, unchanged from §2 |
+| Unit | `pytest tests/unit` — **1121 passed** in 5.47s (was 1106; +15) |
+| E2E, whole directory | `make test-e2e` — **30 passed** in 49.92s (was 27; +3) |
+| Static analysis | `ruff check src tests` and `pyright src tests` — clean |
+
+The phase 11 acceptance row is the one worth the most here, and it is the one
+that was re-run rather than argued about: it carries a real Master, a real
+Review, five seats and the console itself, so a refactor that changed every
+string the console draws would have to survive it. It did — 49 passed and 1
+skipped is the same summary §2 records for that row, and the one skip is still
+P11-05's live cluster (`RAVEL_SLURM_HOST` unset) and not anything here.
+
+**What the new tests found, in the order they found it.** Three of the findings
+were in the work itself and are recorded because each is a place a reader would
+otherwise have to guess:
+
+- `pyright` caught the one real defect: `StatusTable` had grown an attribute
+  named `columns`, which is `DataTable.columns` — the framework's own dict of
+  column objects. It is now `column_keys`, under a name the framework does not
+  own, and the class docstring says why.
+- `ruff`'s `RUF001` fired 62 times on the Chinese half of the catalogue, asking
+  whether `：`, `，`, `（` and `；` were meant to be their ASCII lookalikes. They
+  are not; that is how Chinese punctuates. The rule is disabled for
+  `src/ravel/tui/i18n.py` alone, with the reason in `pyproject.toml`, rather
+  than silenced 62 times at the lines.
+- The sweep found `"    added by "` — a fragment with a translated head and an
+  untranslated preposition, in a formatted line. Fixing it is what produced
+  `fmt.members.line` and `fmt.reviews.line`, and it is also the case that
+  `KNOWN_LIMITATIONS.md` L-35 quotes when it says the sweep is a heuristic: it
+  would not have caught `" on "` or `"attempt "`.
+
+**What has not been done is a reading.** The Chinese was written by the same
+process that wrote the English, and what has been checked is the properties a
+test can check — both halves exist, both ask for the same placeholders, no
+other module holds a sentence, the round trip through `F2` comes back. Nothing
+here says a sentence reads well, or says the right thing in a laboratory. L-35
+says so in the same words, and names the one file a correction would touch.
 
 ## 8. What these numbers do not say
 

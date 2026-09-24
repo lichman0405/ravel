@@ -16,6 +16,7 @@ import argparse
 import os
 
 from ravel.tui.app import RavelTUI
+from ravel.tui.i18n import t
 
 #: The environment variables the credentials are read from when no flag is
 #: given. Named the same as the Gateway's own, so one `.env` configures both.
@@ -24,23 +25,31 @@ ENV_PASSWORD = "RAVEL_TUI_PASSWORD"
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """The four arguments, described in the language the console will speak.
+
+    There is deliberately no `--language` flag. The parser is what would have to
+    read it, so a flag would have to be parsed before the text describing it
+    could be written — a chicken and egg whose only honest resolution is the
+    environment variable `ravel.tui.i18n` already reads, which `--help` follows
+    for the same reason the screen does.
+    """
     parser = argparse.ArgumentParser(
         prog="ravel.tui",
-        description="The RAVEL console. Reads and controls; decides nothing.",
+        description=t("cli.description"),
     )
     parser.add_argument(
         "--url",
         default=os.environ.get("RAVEL_GATEWAY_URL", "http://127.0.0.1:8000"),
-        help="the Gateway to talk to (default: %(default)s)",
+        help=t("cli.url"),
     )
-    parser.add_argument("--project", default="", help="open this project instead of asking")
+    parser.add_argument("--project", default="", help=t("cli.project"))
     parser.add_argument(
-        "--username", default=os.environ.get(ENV_USERNAME, ""), help="sign in without the form"
+        "--username", default=os.environ.get(ENV_USERNAME, ""), help=t("cli.username")
     )
     parser.add_argument(
         "--password",
         default=os.environ.get(ENV_PASSWORD, ""),
-        help=f"sign in without the form (or set {ENV_PASSWORD})",
+        help=t("cli.password", env=ENV_PASSWORD),
     )
     return parser
 

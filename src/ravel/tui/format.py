@@ -11,6 +11,20 @@ theatre. Two rules do most of the work: nothing is padded to a fixed width
 (a terminal that is 80 columns wide and one that is 200 should both look
 right), and empty is a sentence rather than a blank, because a blank panel
 reads as a bug.
+
+**Every sentence here is a message key.** A function that returns
+`["No decisions yet."]` returns `[t("fmt.decisions.empty")]` instead, and the
+words live in `ravel.tui.i18n` in both languages. What stays in this file is
+the *shape* of a line: which glyph leads it, which facts are on it, how much of
+a long objective survives `elide`. That split is the reason these functions can
+stay pure — a formatter that decided both what a line says and which language
+it says it in would be a formatter worth testing twice.
+
+**The vocabulary itself is untranslated.** A status, a node's `display_id`, a
+backend's name, a failure class and a timestamp are the same strings in the
+API, the database and the logs; they are interpolated into a translated
+sentence rather than translated themselves, so that what a reader sees here is
+what an operator can be told over the phone.
 """
 
 from __future__ import annotations
@@ -18,6 +32,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from ravel.tui.i18n import t
 from ravel.tui.tokens import symbol_for
 
 #: How much of a long objective, decision or message to show before eliding.
@@ -58,7 +73,13 @@ def moment(value: Any) -> str:
 
 
 def ago(value: Any, *, now: datetime | None = None) -> str:
-    """How long ago, coarsely. For "is this still moving" and nothing finer."""
+    """How long ago, coarsely. For "is this still moving" and nothing finer.
+
+    The unit names are messages rather than a suffix glued onto a number,
+    because English pluralises with an `s` and Chinese does not pluralise at
+    all — `fmt.ago.minute` and `fmt.ago.minute.one` are two keys, and the
+    Chinese halves of both pairs are the same sentence.
+    """
     if not isinstance(value, str) or not value:
         return ""
     try:
@@ -69,7 +90,7 @@ def ago(value: Any, *, now: datetime | None = None) -> str:
         parsed = parsed.replace(tzinfo=UTC)
     seconds = ((now or datetime.now(UTC)) - parsed).total_seconds()
     if seconds < 0:
-        return "just now"
+        return t("fmt.ago.now")
     for limit, unit, size in (
         (90, "second", 1),
         (5400, "minute", 60),
@@ -77,8 +98,8 @@ def ago(value: Any, *, now: datetime | None = None) -> str:
     ):
         if seconds < limit:
             count = int(seconds // size)
-            return f"{count} {unit}{'s' if count != 1 else ''} ago"
-    return f"{int(seconds // 86400)} days ago"
+            return t(f"fmt.ago.{unit}", count=count)
+    return t("fmt.ago.day", count=int(seconds // 86400))
 
 
 def status_line(status: str, label: str = "") -> str:
@@ -111,7 +132,7 @@ def node_summary(nodes: list[dict[str, Any]]) -> str:
     the reader do the sorting.
     """
     if not nodes:
-        return "No nodes yet. Master has not planned this project."
+        return t("fmt.nodes.empty")
     order = [
         "FAILED",
         "BLOCKED",
@@ -129,7 +150,10 @@ def node_summary(nodes: list[dict[str, Any]]) -> str:
     for node in nodes:
         status = str(node.get("status", ""))
         counts[status] = counts.get(status, 0) + 1
+
     def described(status: str, count: int) -> str:
+        # A glyph, a status and a number, and not a sentence: none of the three
+        # is translated, so there is nothing here for a catalogue to hold.
         return f"{symbol_for(status)} {status} {count}"
 
     parts = [described(status, counts[status]) for status in order if status in counts]
@@ -173,19 +197,20 @@ def attention_lines(projection: dict[str, Any], nodes: list[dict[str, Any]]) -> 
 
     for deviation in projection.get("open_deviations", []):
         lines.append(
-            f"{symbol_for('WAITING_DECISION')} deviation on {deviation.get('node_id', '')}: "
-            f"{elide(str(deviation.get('description', '')), 90)}"
+            f"{symbol_for('WAITING_DECISION')} "
+            + t(
+                "fmt.attention.deviation",
+                node=deviation.get("node_id", ""),
+                description=elide(str(deviation.get("description", "")), 90),
+            )
         )
 
     if projection.get("is_concludable"):
-        lines.append(
-            f"{symbol_for('READY')} nothing left to run — Master can conclude "
-            "this project"
-        )
+        lines.append(f"{symbol_for('READY')} " + t("fmt.attention.concludable"))
     if projection.get("is_finished"):
-        lines.append(f"{symbol_for('COMPLETED')} this project has ended")
+        lines.append(f"{symbol_for('COMPLETED')} " + t("fmt.attention.finished"))
 
-    return lines or ["Nothing needs you. Master is working."]
+    return lines or [t("fmt.attention.empty")]
 
 
 def execution_lines(nodes: list[dict[str, Any]], executions: list[dict[str, Any]]) -> list[str]:
@@ -195,7 +220,7 @@ def execution_lines(nodes: list[dict[str, Any]], executions: list[dict[str, Any]
     person reading this panel is asking "where is my work".
     """
     if not executions:
-        return ["Nothing has been submitted to a backend yet."]
+        return [t("fmt.execution.empty")]
 
     by_node = {str(node.get("node_id", "")): node for node in nodes}
     lines = []
@@ -208,7 +233,7 @@ def execution_lines(nodes: list[dict[str, Any]], executions: list[dict[str, Any]
             f"{state} on {job.get('backend', '?')}",
         ]
         if job.get("attempt", 1) > 1:
-            parts.append(f"attempt {job['attempt']}")
+            parts.append(t("fmt.execution.attempt", count=job["attempt"]))
         if job.get("failure_class"):
             # The class is why an operator is looking at this row at all, so it
             # goes on the line rather than behind a detail view.
@@ -223,7 +248,7 @@ def execution_lines(nodes: list[dict[str, Any]], executions: list[dict[str, Any]
 def decision_lines(decisions: list[dict[str, Any]]) -> list[str]:
     """Master's decisions, newest last, each with what it was about."""
     if not decisions:
-        return ["No decisions yet."]
+        return [t("fmt.decisions.empty")]
     return [
         f"{moment(decision.get('created_at'))}  {decision.get('decision_type', '')}  "
         f"{elide(str(decision.get('rationale', '')), 110)}"
@@ -239,13 +264,18 @@ def review_lines(reviews: list[dict[str, Any]]) -> list[str]:
     showed only the failures would look identical to one that failed outright.
     """
     if not reviews:
-        return ["No reviews yet."]
+        return [t("fmt.reviews.empty")]
     lines = []
     for review in reviews:
         outcome = str(review.get("outcome", ""))
         lines.append(
-            f"{symbol_for(outcome)} {review.get('checkpoint', '')} on "
-            f"{review.get('node_id', '')} — {outcome}"
+            f"{symbol_for(outcome)} "
+            + t(
+                "fmt.reviews.line",
+                checkpoint=review.get("checkpoint", ""),
+                node=review.get("node_id", ""),
+                outcome=outcome,
+            )
         )
         for result in review.get("criterion_results", []):
             mark = symbol_for("PASSED" if result.get("satisfied") else "FAILED")
@@ -268,7 +298,7 @@ def research_lines(evidence: list[dict[str, Any]]) -> list[str]:
     supported, and a list that led with the facts would bury it.
     """
     if not evidence:
-        return ["No research results yet. Nothing has been recorded as evidence."]
+        return [t("fmt.research.empty")]
 
     by_class: dict[str, int] = {}
     by_tier: dict[str, int] = {}
@@ -284,15 +314,17 @@ def research_lines(evidence: list[dict[str, Any]]) -> list[str]:
         if not row.get("sources"):
             unsourced += 1
 
-    lines = [f"{len(evidence)} claim(s) recorded"]
+    lines = [t("fmt.research.claims", count=len(evidence))]
     for name, count in sorted(by_class.items(), key=lambda pair: pair[0] != "HYPOTHESIS"):
         lines.append(f"    {name}: {count}")
-    lines.append("by source tier:  " + "   ".join(f"{k} {v}" for k, v in sorted(by_tier.items())))
+    lines.append(
+        t("fmt.research.by_tier", tiers="   ".join(f"{k} {v}" for k, v in sorted(by_tier.items())))
+    )
     if unsourced:
         # A `FACT` cannot rest on nothing and a `HYPOTHESIS` may, so this is a
         # count and not a fault — but it is the number that says how much of
         # the answer nobody has supported, which is why it is on the screen.
-        lines.append(f"    {unsourced} of them cite no source at all")
+        lines.append(t("fmt.research.unsourced", count=unsourced))
     return lines
 
 
@@ -306,7 +338,7 @@ def approval_lines(approvals: list[dict[str, Any]]) -> list[str]:
     asked immediately after.
     """
     if not approvals:
-        return ["Nothing has needed a human decision."]
+        return [t("fmt.approvals.empty")]
     open_now = [item for item in approvals if str(item.get("status", "")) == "PENDING"]
     resolved = [item for item in approvals if str(item.get("status", "")) != "PENDING"]
 
@@ -316,11 +348,16 @@ def approval_lines(approvals: list[dict[str, Any]]) -> list[str]:
             f"{symbol_for('WAITING_DECISION')} {elide(str(approval.get('question', '')), 120)}"
         )
         lines.append(
-            f"    needs {approval.get('required_role', '?')}   "
-            f"raised {ago(approval.get('requested_at'))}"
+            "    "
+            + t(
+                "fmt.approvals.needs",
+                role=approval.get("required_role", "?"),
+                ago=ago(approval.get("requested_at")),
+            )
         )
     for approval in resolved:
-        answer = "approved" if approval.get("approved") else "refused"
+        approved = approval.get("approved")
+        answer = t("fmt.approvals.approved" if approved else "fmt.approvals.refused")
         lines.append(
             f"{symbol_for('PASSED' if approval.get('approved') else 'FAILED')} "
             f"{elide(str(approval.get('question', '')), 100)} — {answer}"
@@ -339,16 +376,21 @@ def member_lines(members: list[dict[str, Any]]) -> list[str]:
     nobody granted is the project's creator and says so.
     """
     if not members:
-        return ["Nobody is a member of this project."]
+        return [t("fmt.members.empty")]
     lines = []
     for member in members:
         granter = member.get("granted_by")
         # The project's creator is the one membership nobody conferred, and
         # saying so is better than an empty field that reads as a missing name.
-        by = str(granter) if granter else "nobody — the project's first member"
+        by = str(granter) if granter else t("fmt.members.creator")
         lines.append(
-            f"{member.get('role', '?')}  {member.get('username', '?')}"
-            f"   added by {by}   {ago(member.get('granted_at'))}"
+            t(
+                "fmt.members.line",
+                role=member.get("role", "?"),
+                username=member.get("username", "?"),
+                by=by,
+                ago=ago(member.get("granted_at")),
+            )
         )
     return lines
 
@@ -363,11 +405,11 @@ def member_row(member: dict[str, Any]) -> tuple[str, str, str]:
     rather than as the project's first member.
     """
     granter = member.get("granted_by")
-    by = str(granter) if granter else "nobody — the first member"
+    by = str(granter) if granter else t("fmt.members.nobody")
     return (
         str(member.get("role", "?")),
         str(member.get("username", "?")),
-        f"added by {by}",
+        t("fmt.members.added_by", by=by),
     )
 
 
@@ -386,7 +428,7 @@ def evidence_lines(evidence: list[dict[str, Any]]) -> list[str]:
     supported yet, which is worth knowing.
     """
     if not evidence:
-        return ["No evidence recorded yet."]
+        return [t("fmt.evidence.empty")]
     lines = []
     for row in evidence:
         claim = row.get("evidence", {})
@@ -396,7 +438,7 @@ def evidence_lines(evidence: list[dict[str, Any]]) -> list[str]:
         )
         sources = row.get("sources", [])
         if not sources:
-            lines.append("    no source cited")
+            lines.append(t("fmt.evidence.no_source"))
             continue
         for source in sources:
             reference = source.get("doi") or source.get("url") or source.get("source_id", "")
@@ -419,20 +461,30 @@ def instruction_lines(task: dict[str, Any]) -> list[str]:
     """
     contract = task.get("instruction")
     if not contract:
-        return ["No execution contract yet. Do not start this task."]
+        return [t("fmt.instruction.empty")]
     lines = [
         elide(str(contract.get("objective", ""))),
         "",
-        f"allowed actions: {', '.join(contract.get('allowed_actions', [])) or 'none'}",
+        t(
+            "fmt.instruction.actions",
+            names=", ".join(contract.get("allowed_actions", [])) or t("fmt.none"),
+        ),
     ]
     ranges = contract.get("allowed_ranges") or {}
     lines.append(
-        "allowed ranges:  "
-        + (", ".join(f"{key} {value}" for key, value in ranges.items()) if ranges else "none")
+        t(
+            "fmt.instruction.ranges",
+            names=", ".join(f"{key} {value}" for key, value in ranges.items()) or t("fmt.none"),
+        )
     )
-    lines.append(f"required outputs: {', '.join(contract.get('required_outputs', [])) or 'none'}")
+    lines.append(
+        t(
+            "fmt.instruction.outputs",
+            names=", ".join(contract.get("required_outputs", [])) or t("fmt.none"),
+        )
+    )
     if contract.get("frozen_at"):
-        lines.append(f"frozen {moment(contract['frozen_at'])}")
+        lines.append(t("fmt.instruction.frozen", moment=moment(contract["frozen_at"])))
     return lines
 
 
@@ -463,25 +515,20 @@ def preparation_lines(task: dict[str, Any]) -> list[str]:
     """
     handover = task.get("handover")
     if not handover:
-        return [
-            "Nothing has been handed to a bench for this task yet.",
-            "The prepared package is built when the work is handed over; until "
-            "then there is nothing to work from.",
-        ]
+        return [t("fmt.preparation.none"), t("fmt.preparation.why")]
 
     record = handover.get("handover") or {}
     lines: list[str] = []
     package = handover.get("package")
     if package is None:
-        lines.append(
-            f"{symbol_for('BLOCKED')} a package was handed over and is no longer "
-            "readable here; what survives is the manifest, which records each "
-            "file's name and hash"
-        )
+        lines.append(f"{symbol_for('BLOCKED')} " + t("fmt.preparation.lost"))
     else:
         lines.append(
-            f"prepared by {package.get('materializer', '?')} "
-            f"{package.get('materializer_version', '')}"
+            t(
+                "fmt.preparation.prepared_by",
+                by=package.get("materializer", "?"),
+                version=package.get("materializer_version", ""),
+            )
         )
         for document in package.get("documents", []):
             lines.append(
@@ -489,26 +536,32 @@ def preparation_lines(task: dict[str, Any]) -> list[str]:
                 f"{str(document.get('sha256', ''))[:12]}"
             )
         if not package.get("documents"):
-            lines.append("    the package records no files")
+            lines.append(t("fmt.preparation.no_files"))
 
     answered = list(handover.get("answered_outputs", []))
     missing = list(handover.get("missing_outputs", []))
     lines.append("")
     lines.append(
-        "required outputs: "
-        + (", ".join(answered + missing) if answered or missing else "none")
+        t(
+            "fmt.instruction.outputs",
+            names=", ".join(answered + missing) if answered or missing else t("fmt.none"),
+        )
     )
     for name in answered:
-        lines.append(f"    {symbol_for('PASSED')} {name} — sent")
+        lines.append(f"    {symbol_for('PASSED')} " + t("fmt.preparation.sent", name=name))
     for name in missing:
         # The artifact identifier is what a person quotes when asking about the
         # file; the fact that it is missing is what they do about it.
-        lines.append(f"    {symbol_for('WAITING_EXTERNAL')} {name} — still owed")
+        lines.append(
+            f"    {symbol_for('WAITING_EXTERNAL')} " + t("fmt.preparation.owed", name=name)
+        )
 
     state = str(record.get("state", ""))
     if state:
         lines.append("")
-        lines.append(f"handover {state} — attempt {record.get('attempt', '?')}")
+        lines.append(
+            t("fmt.preparation.handover", state=state, attempt=record.get("attempt", "?"))
+        )
     return lines
 
 
@@ -525,23 +578,38 @@ def harness_lines(health: dict[str, Any], runtime: dict[str, Any]) -> list[str]:
     lines = [
         f"{health.get('name', '?')} {health.get('tag', '')} "
         f"({str(health.get('commit', ''))[:12]})",
-        f"provider {health.get('provider', '?')}   model {health.get('model', '?')}",
+        t(
+            "fmt.harness.provider",
+            provider=health.get("provider", "?"),
+            model=health.get("model", "?"),
+        ),
     ]
     if health.get("patches_required"):
-        lines.append(f"{symbol_for('FAILED')} this deployment carries patches; the pin does not")
+        lines.append(f"{symbol_for('FAILED')} " + t("fmt.harness.patched"))
     if not health.get("home_exists", False):
-        lines.append(f"{symbol_for('BLOCKED')} harness home has not been created")
+        lines.append(f"{symbol_for('BLOCKED')} " + t("fmt.harness.no_home"))
 
     pool = runtime.get("harness", {})
     if not pool.get("pool_started"):
-        lines.append("No runtime has been started in this process.")
+        lines.append(t("fmt.harness.no_runtime"))
     else:
         lines.append(
-            f"{symbol_for('RUNNING')} {pool.get('live_runtimes', 0)} runtime(s), "
-            f"{pool.get('live_sessions', 0)} session(s), {pool.get('total_turns', 0)} turn(s)"
+            f"{symbol_for('RUNNING')} "
+            + t(
+                "fmt.harness.pool",
+                runtimes=pool.get("live_runtimes", 0),
+                sessions=pool.get("live_sessions", 0),
+                turns=pool.get("total_turns", 0),
+            )
         )
         for scope in pool.get("scopes", []):
-            lines.append(f"    {scope.get('role', '?')} for {scope.get('project_id', '?')}")
+            lines.append(
+                t(
+                    "fmt.harness.scope",
+                    role=scope.get("role", "?"),
+                    project=scope.get("project_id", "?"),
+                )
+            )
     return lines
 
 
@@ -549,8 +617,17 @@ def temporal_lines(health: dict[str, Any]) -> list[str]:
     """Whether the queue is up, said plainly. A down service is information."""
     mark = symbol_for("RUNNING") if health.get("reachable") else symbol_for("FAILED")
     return [
-        f"{mark} {health.get('host', '?')} namespace {health.get('namespace', '?')}",
-        f"task queue {health.get('task_queue', '?')} — {health.get('detail', '')}",
+        f"{mark} "
+        + t(
+            "fmt.temporal.line",
+            host=health.get("host", "?"),
+            namespace=health.get("namespace", "?"),
+        ),
+        t(
+            "fmt.temporal.queue",
+            queue=health.get("task_queue", "?"),
+            detail=health.get("detail", ""),
+        ),
     ]
 
 
@@ -575,37 +652,55 @@ def service_lines(health: dict[str, Any]) -> list[str]:
     """
     services = health.get("services", [])
     if not services:
-        return ["This deployment names no long-running services."]
+        return [t("fmt.services.empty")]
     lines = []
     for service in services:
         name = str(service.get("service", "?"))
         if not service.get("reporting"):
-            lines.append(f"{symbol_for('PLANNED')} {name} — has never reported here")
+            lines.append(f"{symbol_for('PLANNED')} " + t("fmt.services.never", name=name))
             continue
         if service.get("stopped"):
             # `PAUSED`'s glyph and colour, because that is what this is: a
             # process that was stopped deliberately and can be started again.
             lines.append(
-                f"{symbol_for('PAUSED')} {name} — stopped "
-                f"{moment(service.get('stopped_at'))}, and not by a fault"
+                f"{symbol_for('PAUSED')} "
+                + t(
+                    "fmt.services.stopped",
+                    name=name,
+                    when=moment(service.get("stopped_at")),
+                )
             )
             continue
         if service.get("stale"):
-            mark, note = symbol_for("FAILED"), "STALE"
+            mark, note = symbol_for("FAILED"), t("fmt.services.stale")
         else:
-            mark, note = symbol_for("RUNNING"), "alive"
+            mark, note = symbol_for("RUNNING"), t("fmt.services.alive")
         seconds = float(service.get("silent_for_seconds") or 0.0)
+        budget = float(service.get("silence_budget_seconds") or 0)
         lines.append(
-            f"{mark} {name} — {note}, last spoke {seconds:.0f}s ago "
-            f"(budget {float(service.get('silence_budget_seconds') or 0):.0f}s)"
+            f"{mark} "
+            + t(
+                "fmt.services.line",
+                name=name,
+                note=note,
+                seconds=f"{seconds:.0f}",
+                budget=f"{budget:.0f}",
+            )
         )
         lines.append(
-            f"    {service.get('instance', '?')} "
-            f"since {moment(service.get('started_at'))}"
+            t(
+                "fmt.services.instance",
+                instance=service.get("instance", "?"),
+                when=moment(service.get("started_at")),
+            )
         )
         held = int(service.get("projects_held") or 0)
-        mine = "including this one" if service.get("holds_this_project") else "not this one"
-        lines.append(f"    holding {held} project(s), {mine}")
+        mine = t(
+            "fmt.services.this_one"
+            if service.get("holds_this_project")
+            else "fmt.services.not_this_one"
+        )
+        lines.append(t("fmt.services.holding", count=held, mine=mine))
     return lines
 
 
@@ -622,14 +717,19 @@ def backend_lines(health: dict[str, Any]) -> list[str]:
     used = health.get("used", [])
     lines: list[str] = []
     if not used:
-        lines.append("No backend has been handed any of this project's work yet.")
+        lines.append(t("fmt.backends.empty"))
     for backend in used:
         states = "  ".join(
             f"{state} {count}" for state, count in (backend.get("states") or {}).items()
         )
-        kinds = ", ".join(backend.get("node_types", [])) or "unknown kind"
+        kinds = ", ".join(backend.get("node_types", [])) or t("fmt.backends.unknown_kind")
         lines.append(
-            f"{backend.get('backend', '?')} — {backend.get('jobs', 0)} job(s) for {kinds}"
+            t(
+                "fmt.backends.line",
+                backend=backend.get("backend", "?"),
+                jobs=backend.get("jobs", 0),
+                kinds=kinds,
+            )
         )
         lines.append(f"    {states}")
 
@@ -637,17 +737,35 @@ def backend_lines(health: dict[str, Any]) -> list[str]:
     lines.append("")
     if slurm.get("configured"):
         lines.append(
-            f"{symbol_for('READY')} slurm: {slurm.get('username', '?')}@"
-            f"{slurm.get('host', '?')}:{slurm.get('port', '?')}"
+            f"{symbol_for('READY')} "
+            + t(
+                "fmt.backends.slurm",
+                username=slurm.get("username", "?"),
+                host=slurm.get("host", "?"),
+                port=slurm.get("port", "?"),
+            )
         )
     else:
-        lines.append(f"{symbol_for('PLANNED')} no Slurm cluster is configured")
-    lines.append(f"    authentication {slurm.get('authentication', '?')}")
+        lines.append(f"{symbol_for('PLANNED')} " + t("fmt.backends.no_slurm"))
+    lines.append(t("fmt.backends.authentication", authentication=slurm.get("authentication", "?")))
     lines.append(
-        f"    jobs root {slurm.get('jobs_root', '?')}   "
-        f"unknown host keys {'accepted' if slurm.get('trust_unknown_host') else 'refused'}"
+        t(
+            "fmt.backends.jobs_root",
+            root=slurm.get("jobs_root", "?"),
+            policy=t(
+                "fmt.backends.accepted"
+                if slurm.get("trust_unknown_host")
+                else "fmt.backends.refused"
+            ),
+        )
     )
-    lines.append(f"    reachability: {slurm.get('reachability', '')} — {slurm.get('why', '')}")
+    lines.append(
+        t(
+            "fmt.backends.reachability",
+            reachability=slurm.get("reachability", ""),
+            why=slurm.get("why", ""),
+        )
+    )
     return lines
 
 
@@ -662,24 +780,38 @@ def job_lines(jobs: dict[str, Any]) -> list[str]:
     open_now = jobs.get("open", [])
     ended = jobs.get("ended", [])
     if not open_now and not ended:
-        return ["No backend job has ever been submitted for this project."]
+        return [t("fmt.jobs.empty")]
 
     lines: list[str] = []
     for job in open_now:
+        state = str(job.get("state", ""))
         lines.append(
-            f"{symbol_for(str(job.get('state', '')))} {job.get('display_id') or job.get('node_id')}"
-            f"  {job.get('state', '')} on {job.get('backend', '?')} "
-            f"attempt {job.get('attempt', '?')}"
+            f"{symbol_for(state)} "
+            + t(
+                "fmt.jobs.open",
+                node=job.get("display_id") or job.get("node_id"),
+                state=state,
+                backend=job.get("backend", "?"),
+                attempt=job.get("attempt", "?"),
+            )
         )
         if job.get("backend_state"):
-            lines.append(f"    the backend says: {elide(str(job['backend_state']), 100)}")
+            lines.append(t("fmt.jobs.backend_says", state=elide(str(job["backend_state"]), 100)))
     for job in ended:
         failure = job.get("failure_class")
+        state = str(job.get("state", ""))
         lines.append(
-            f"{symbol_for(str(job.get('state', '')))} {job.get('display_id') or job.get('node_id')}"
-            f"  {job.get('state', '')} on {job.get('backend', '?')}"
-            + (f"  [{failure}]" if failure else "")
-            + f"  ended {moment(job.get('ended_at'))}"
+            f"{symbol_for(state)} "
+            + t(
+                "fmt.jobs.ended",
+                node=job.get("display_id") or job.get("node_id"),
+                state=state,
+                backend=job.get("backend", "?"),
+                # A field rather than a suffix glued on in Python, so that a
+                # language free to put the bracket somewhere else can.
+                failure=f"  [{failure}]" if failure else "",
+                when=moment(job.get("ended_at")),
+            )
         )
         if job.get("detail"):
             lines.append(f"    {elide(str(job['detail']), 120)}")
@@ -688,7 +820,7 @@ def job_lines(jobs: dict[str, Any]) -> list[str]:
     if classes:
         lines.append("")
         lines.append(
-            "failures by class:  " + "   ".join(f"{k} {v}" for k, v in classes.items())
+            t("fmt.jobs.by_class", classes="   ".join(f"{k} {v}" for k, v in classes.items()))
         )
     return lines
 
@@ -707,26 +839,39 @@ def reconciliation_lines(recovered: dict[str, Any]) -> list[str]:
     """
     total = int(recovered.get("total") or 0)
     if total == 0:
-        return ["No run has had to be recovered in this project."]
-    lines = [f"{total} run(s) recovered"]
+        return [t("fmt.recon.empty")]
+    lines = [t("fmt.recon.total", count=total)]
     by_class = recovered.get("by_class") or {}
     if by_class:
-        lines.append("by class:  " + "   ".join(f"{k} {v}" for k, v in by_class.items()))
+        lines.append(
+            t("fmt.recon.by_class", classes="   ".join(f"{k} {v}" for k, v in by_class.items()))
+        )
     by_observation = recovered.get("by_observation") or {}
     if by_observation:
         lines.append(
-            "the probe said:  " + "   ".join(f"{k} {v}" for k, v in by_observation.items())
+            t(
+                "fmt.recon.by_probe",
+                observations="   ".join(f"{k} {v}" for k, v in by_observation.items()),
+            )
         )
     lines.append("")
     for record in recovered.get("recent", []):
         lines.append(
             f"{symbol_for(str(record.get('failure_class', '')))} "
-            f"{record.get('observed', '?')}  {record.get('node_id', '')[:12]}  "
-            f"{record.get('node_status_before', '?')} → {record.get('node_status_after', '?')}"
+            + t(
+                "fmt.recon.record",
+                observed=record.get("observed", "?"),
+                node=str(record.get("node_id", ""))[:12],
+                before=record.get("node_status_before", "?"),
+                after=record.get("node_status_after", "?"),
+            )
         )
         lines.append(
-            f"    workflow {str(record.get('workflow_id', ''))[:40]}  "
-            f"{moment(record.get('created_at'))}"
+            t(
+                "fmt.recon.workflow",
+                workflow=str(record.get("workflow_id", ""))[:40],
+                when=moment(record.get("created_at")),
+            )
         )
         if record.get("detail"):
             lines.append(f"    {elide(str(record['detail']), 120)}")
@@ -741,8 +886,12 @@ def runtime_lines(runtime: dict[str, Any]) -> list[str]:
         f"{status} {count}" for status, count in (nodes.get("by_status") or {}).items()
     )
     lines = [
-        f"nodes {nodes.get('total', 0)}   {counted}",
-        f"backend jobs {jobs.get('total', 0)}, of which {jobs.get('unfinished', 0)} unfinished",
+        t("fmt.runtime.nodes", total=nodes.get("total", 0), counted=counted),
+        t(
+            "fmt.runtime.jobs",
+            total=jobs.get("total", 0),
+            unfinished=jobs.get("unfinished", 0),
+        ),
     ]
     logs = runtime.get("logs", {})
     for name, path in logs.items():
