@@ -149,3 +149,46 @@ On reconnect:
 - authenticate
 - fetch current projection
 - replay events after sequence
+
+## 8. Language
+
+Every screen the console draws is available in English and in Chinese, and the
+reader switches between them with `F2` at any point, including on the sign-in
+form. `RAVEL_TUI_LANGUAGE=en|zh` decides which one a deployment starts in;
+anything else is refused at startup rather than silently fallen back from.
+
+Translation covers what the console *says*: panel titles, column headers, tab
+names, placeholders, empty-panel sentences, notice lines and the key hints along
+the bottom. It does not cover what the rest of the system *calls* things —
+node and project statuses, review outcomes, the five agent roles, backend and
+service names, identifiers, timestamps, model and exception text. Those strings
+are the same in the API, the database and the logs, and a console that renamed
+them would be one whose reader cannot match what they see to what an operator
+can be told over the phone.
+
+So a Chinese screen reads `科学 DAG`, `需要你处理` and `暂停`, and still reads
+`RUNNING`, `PROJECT_OWNER` and `WAITING_DECISION`.
+
+Two consequences worth stating as requirements rather than as details:
+
+- **A sentence has exactly one home.** All of them are in
+  `src/ravel/tui/i18n.py`, as `key: (english, chinese)` pairs, and no other
+  module under `ravel/tui` may contain a sentence — a unit test walks the
+  syntax trees of the rest to prove it. A message cannot exist in one language
+  and be missing from the other, because the shape of the data is the
+  invariant.
+- **The language is process state, not stored state.** It is read once at
+  startup and lives for the session; nothing is written to disk, and there is
+  no per-user preference file. A console that remembered a keystroke would be
+  inventing a second kind of state for the TUI to hold, which §2 forbids it.
+- **What the console says is translated; what it *sends* is not.** One rule and
+  not two, and the difference is who the string is for. A deviation's kind is a
+  term the record keeps (`parameter`), while the words beside it in the picker
+  are a sentence a bench reads; a member's role is sent as `PROJECT_OWNER`,
+  while the line above it says `项目负责人`. The case that looks like an
+  exception is the same rule: the objective the console writes for a project
+  opened from here — `Opened from the console; no objective has been stated
+  yet.` — *is* stored text, and it is stored in the language of the person who
+  opened it, because a person who had stated an objective would have stated it
+  in their own language. This is that sentence with the objective left out, so
+  it is written in the language of whoever the objective would have come from.
