@@ -17,6 +17,17 @@ that lied about its role would show itself a screen whose buttons all fail.
 put in it.** `project_id` may be given (the CLI's `--project`, and what the
 tests use); otherwise the only membership is chosen, and with more than one the
 screen says which and waits to be told.
+
+**`F2` changes the language, and changing it rebuilds.** The console speaks
+English or Chinese — see `ravel.tui.i18n` — and the two are a process setting
+rather than a per-widget one, so the switch is one call and then a redraw. The
+redraw is a `show_project` rather than a walk over the mounted widgets, and
+that is the honest repair rather than a lazy one: a panel reads its title out of
+the catalogue every time it draws, but a `DataTable`'s column headers and a
+`TabPane`'s label are set once, when they are constructed. Rebuilding is what
+makes those two come out in the new language, and the cost — re-reading the
+routes — is a handful of indexed reads behind a keystroke nobody presses twice
+a second.
 """
 
 from __future__ import annotations
@@ -27,13 +38,16 @@ from textual.app import App, ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Input, Label
+from textual.widgets import Header, Input, Label
 
+from ravel.tui import i18n
 from ravel.tui.client import GatewayClient, GatewayError
+from ravel.tui.i18n import t
 from ravel.tui.screens.admin import AdminScreen
 from ravel.tui.screens.lab import LabScreen
 from ravel.tui.screens.owner import OwnerScreen
 from ravel.tui.tokens import TOKENS
+from ravel.tui.widgets import KeyHints
 
 #: Which screen each role gets. `docs/08` §5, as a table.
 #:
@@ -61,7 +75,7 @@ Header {{
     background: {_COLOURS["surface"]};
     color: {_COLOURS["text"]};
 }}
-Footer {{
+KeyHints {{
     background: {_COLOURS["surface"]};
     color: {_COLOURS["muted"]};
 }}
@@ -125,19 +139,53 @@ class SignIn(Screen[None]):
     There is no account creation here and no password reset: `docs/06` fixes
     the three roles and `ravel.gateway` exposes no route that makes a user, so
     a "register" button would be a button that cannot work.
+
+    **The line under the form is a small state machine, not a string.** It has
+    three states — nothing to say, a sign-in in flight, and a refusal — and
+    which one it is in is held as a fact rather than as whatever text was last
+    written there. That is what lets `relabel` redraw the line when the language
+    changes without having to guess whether what is on it is a sentence this
+    program wrote or a Gateway's own words, which stay as the Gateway wrote
+    them.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [("escape", "quit_app", "Quit")]
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "quit_app", "binding.quit_app")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        #: True while a sign-in is in flight.
+        self.trying = False
+        #: The Gateway's own refusal, shown as it wrote it.
+        self.refused = ""
 
     def compose(self) -> ComposeResult:
         with Container(id="signin"), Container(id="signin-form"):
             yield Label("RAVEL")
-            yield Input(placeholder="username", id="username")
-            yield Input(placeholder="password", password=True, id="password")
+            yield Input(placeholder=t("signin.username"), id="username")
+            yield Input(placeholder=t("signin.password"), password=True, id="password")
             yield Label("", id="signin-error")
 
     def on_mount(self) -> None:
         self.query_one("#username", Input).focus()
+
+    def relabel(self) -> None:
+        """Say the same thing in the language the console is speaking now.
+
+        What was typed is left alone — a person who switched language halfway
+        through typing their password should not have to type it again — and so
+        is a refusal, which is the Gateway's sentence and not this program's.
+        """
+        self.query_one("#username", Input).placeholder = t("signin.username")
+        self.query_one("#password", Input).placeholder = t("signin.password")
+        self._show()
+
+    def _show(self) -> None:
+        """Draw whichever of the three states the form is in."""
+        label = self.query_one("#signin-error", Label)
+        if self.trying:
+            label.update(t("signin.signing_in"))
+        else:
+            label.update(self.refused)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Try to sign in once both fields have something in them.
@@ -153,14 +201,19 @@ class SignIn(Screen[None]):
             password.focus()
             return
 
-        error = self.query_one("#signin-error", Label)
-        error.update("Signing in…")
+        self.trying = True
+        self.refused = ""
+        self._show()
         try:
             await cast(RavelTUI, self.app).sign_in(username.value.strip(), password.value)
         except GatewayError as refused:
-            error.update(refused.detail)
-            return
-        error.update("")
+            self.refused = refused.detail
+        self.trying = False
+        # A sign-in that worked is one where `sign_in` has already taken this
+        # screen down, and a widget that is no longer mounted has no line to
+        # update — and no refusal to show either, which is the good ending.
+        if self.is_mounted:
+            self._show()
 
 
 class RavelTUI(App[None]):
@@ -168,9 +221,19 @@ class RavelTUI(App[None]):
 
     CSS = CSS
     TITLE = "RAVEL"
+    #: No command palette. It lists action *names* — `pause`, `add_member`,
+    #: `report_deviation` — which are identifiers from this module's methods
+    #: rather than messages anyone has a translation for, and a palette of
+    #: English identifiers over a Chinese screen is worse than no palette on a
+    #: console whose keys are all on one line at the bottom.
+    ENABLE_COMMAND_PALETTE = False
+    # The descriptions are message keys rather than sentences, and
+    # `binding.toggle_language` names F2 in the language it switches *to* — so
+    # a reader who cannot read the screen can see which key to press.
     BINDINGS: ClassVar[list[BindingType]] = [
-        ("ctrl+q", "quit", "Quit"),
-        ("ctrl+n", "next_project", "Next project"),
+        ("ctrl+q", "quit", "binding.quit"),
+        ("ctrl+n", "next_project", "binding.next_project"),
+        ("f2", "toggle_language", "binding.toggle_language"),
     ]
 
     def __init__(
@@ -194,7 +257,7 @@ class RavelTUI(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Container(id="body")
-        yield Footer()
+        yield KeyHints(id="key-hints")
 
     async def on_mount(self) -> None:
         """Sign in if credentials were given, else ask for them.
@@ -246,11 +309,7 @@ class RavelTUI(App[None]):
         if screen_type is None:
             self.role_screen = None
             await self.body.mount(
-                Label(
-                    f"This program has no screen for the role {standing['role']}. "
-                    "That is a gap here, not a problem with your account.",
-                    id="unknown-role",
-                )
+                Label(t("app.unknown_role", role=standing["role"]), id="unknown-role")
             )
             return
 
@@ -273,12 +332,36 @@ class RavelTUI(App[None]):
         return None
 
     def _no_project_message(self) -> str:
+        """What to say when there is no project this caller is looking at.
+
+        Two different facts, and the second is not a failure: somebody in
+        several projects has simply not been told which one, and the sentence
+        that says so names them all.
+        """
         if not self.memberships:
-            return "You are not a member of any project. Nothing here is yours to see."
+            return t("app.no_membership")
         named = ", ".join(
             f"{membership['display_id']} ({membership['role']})" for membership in self.memberships
         )
-        return f"Several projects. Press ctrl+n to move between them: {named}"
+        return t("app.several_projects", named=named)
+
+    async def action_toggle_language(self) -> None:
+        """Switch between the languages this console speaks, and redraw.
+
+        The sign-in screen is relabelled in place rather than rebuilt, because
+        rebuilding it would take half-typed credentials with it — a person who
+        cannot read the form is exactly the person most likely to have started
+        typing in it. Every other screen is rebuilt through `show_project`,
+        which is the same path a project switch takes and therefore the same
+        one the tests already cover.
+        """
+        i18n.toggle()
+        top = self.screen_stack[-1] if self.screen_stack else None
+        if isinstance(top, SignIn):
+            top.relabel()
+        else:
+            await self.show_project()
+        self.query_one(KeyHints).refresh_hints()
 
     async def action_next_project(self) -> None:
         """Move to the next membership, and redraw for the role held there.

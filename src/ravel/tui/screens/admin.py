@@ -57,6 +57,7 @@ from textual.binding import BindingType
 
 from ravel.tui import format as fmt
 from ravel.tui.client import GatewayClient
+from ravel.tui.i18n import t
 from ravel.tui.widgets import Notice, Panel, Scrolling
 
 
@@ -65,7 +66,7 @@ class AdminScreen(Scrolling):
 
     can_focus = True
     BINDINGS: ClassVar[list[BindingType]] = [
-        ("f5", "reload", "Refresh"),
+        ("f5", "reload", "binding.reload"),
     ]
 
     def __init__(
@@ -78,14 +79,14 @@ class AdminScreen(Scrolling):
 
     def compose(self) -> ComposeResult:
         yield Notice(id="notice")
-        yield Panel("Processes", id="services")
-        yield Panel("Harness", id="harness")
-        yield Panel("Temporal", id="temporal")
-        yield Panel("Backends", id="backends")
-        yield Panel("Jobs", id="jobs")
-        yield Panel("Recovered runs", id="reconciliation")
-        yield Panel("This project", id="runtime")
-        yield Panel("Where the logs are", id="logs")
+        yield Panel("admin.panel.services", id="services")
+        yield Panel("admin.panel.harness", id="harness")
+        yield Panel("admin.panel.temporal", id="temporal")
+        yield Panel("admin.panel.backends", id="backends")
+        yield Panel("admin.panel.jobs", id="jobs")
+        yield Panel("admin.panel.reconciliation", id="reconciliation")
+        yield Panel("admin.panel.runtime", id="runtime")
+        yield Panel("admin.panel.logs", id="logs")
 
     async def refresh_everything(self) -> None:
         """Read the health routes and fill the panels.
@@ -129,9 +130,9 @@ class AdminScreen(Scrolling):
                 f"{name.replace('_', ' ')}: {path}"
                 for name, path in (runtime.get("logs") or {}).items()
             ]
-            or ["This deployment has not been told where its logs are."]
+            or [t("admin.notice.no_logs")]
         )
-        self.notice("Runtime health read.", level="good")
+        self.notice(t("admin.notice.read"), level="good")
 
     async def action_reload(self) -> None:
         await self.refresh_everything()

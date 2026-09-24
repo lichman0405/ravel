@@ -1,17 +1,26 @@
 """The handful of widgets the screens are built from.
 
-Three ideas, and the screens are combinations of them. A **panel** is a titled
+Four ideas, and the screens are combinations of them. A **panel** is a titled
 block of lines. A **table** is columns. A **notice** is one line that says what
-just happened. Everything `docs/08` §4 asks for in a console — density,
-hierarchy, few borders — comes from having only these, because a screen that
-can only be a panel or a table cannot grow a fourth kind of decoration.
+just happened. A **key hint line** is the keys that work right now. Everything
+`docs/08` §4 asks for in a console — density, hierarchy, few borders — comes
+from having only these, because a screen that can only be a panel or a table
+cannot grow a fourth kind of decoration.
 
 **Each widget keeps the lines it is showing.** `Panel.lines` is the plain text
 behind the renderable, and the tests read it instead of picking through Rich's
 object graph. That is not only for the tests: it is also the honest description
 of what a panel *is* here — a list of strings with, at most, a colour each — and
-a widget whose content could only be recovered by rendering it would be a
-widget that had stopped being about the data.
+a widget whose content could only be recovered by rendering it would be a widget
+that had stopped being about the data.
+
+**Titles and column names are message keys, not sentences.** `Panel("owner.panel.master")`
+and `StatusTable(("column.status", …))` say *which* words, and `ravel.tui.i18n`
+says what they are in the language the console is speaking. A panel reads its
+title out of the catalogue each time it draws, so a language that changes
+reaches the next redraw without anything having to remember what the old title
+was; a table's headers are set when the table is built, which is why the screens
+are rebuilt rather than patched when somebody presses `F2`.
 """
 
 from __future__ import annotations
@@ -23,6 +32,7 @@ from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Static
 
+from ravel.tui.i18n import MESSAGES, t
 from ravel.tui.tokens import TOKENS, colour_for, symbol_for
 
 #: One line of a panel: plain text, or text and the token it is drawn in.
@@ -39,8 +49,9 @@ class Panel(Static):
     """
 
     def __init__(self, title: str, *, id: str | None = None, classes: str | None = None) -> None:
+        """`title` is a message key — see this module's docstring."""
         super().__init__(id=id, classes=classes)
-        self.title_text = title
+        self.title_key = title
         self.lines: list[Line] = []
         self._redraw()
 
@@ -51,17 +62,32 @@ class Panel(Static):
 
     def _redraw(self) -> None:
         body = Text()
-        body.append(self.title_text.upper() + "\n", style=f"bold {TOKENS['muted']}")
+        body.append(t(self.title_key).upper() + "\n", style=f"bold {TOKENS['muted']}")
         if not self.lines:
-            body.append("Nothing to show.\n", style=TOKENS["muted"])
+            body.append(t("widget.panel.empty") + "\n", style=TOKENS["muted"])
         for line in self.lines:
             text, token = line if isinstance(line, tuple) else (line, "text")
             body.append(text + "\n", style=TOKENS.get(token, TOKENS["text"]))
         self.update(body)
 
     @property
+    def heading(self) -> str:
+        """The title as it is drawn, which is the title in the current language.
+
+        A property rather than a stored string, because a stored one would be
+        the old language the moment the language changed: the panel translates
+        its title on the way to the screen, and this is the same translation.
+        """
+        return t(self.title_key)
+
+    @property
     def plain(self) -> str:
-        """The panel as text, which is what a person reading it would see."""
+        """The body as text, which is what a person reading it would see.
+
+        The title is not in it. It is drawn above the body by `_redraw` and a
+        reader looking for a sentence would not expect to find it appended to
+        one; `heading` is where it lives.
+        """
         return "\n".join(line if isinstance(line, str) else line[0] for line in self.lines)
 
 
@@ -79,6 +105,11 @@ class StatusTable(DataTable[Text]):
     status" is worth seeing on a DAG. A role is not an unrecognised status, it
     is not a status at all, and `first_column_is_a_status=False` is how a table
     asks for the columns it actually has.
+
+    **The columns are message keys**, so the header a reader sees is in their
+    language; `StatusTable.column_keys` is what this program calls them, under a
+    name that is not `DataTable.columns` — that one belongs to the framework and
+    holds its own column objects.
     """
 
     def __init__(
@@ -104,9 +135,9 @@ class StatusTable(DataTable[Text]):
             cursor_type="row" if selectable else "cell",
             show_cursor=selectable,
         )
-        self._columns = list(columns)
+        self.column_keys = tuple(columns)
         self._first_is_a_status = first_column_is_a_status
-        self.add_columns(*self._columns)
+        self.add_columns(*(t(column) for column in self.column_keys))
 
     def fill(self, rows: Iterable[tuple[str, str, str]]) -> None:
         """Replace every row. `(status, identifier, summary)`.
@@ -147,14 +178,77 @@ class Notice(Static):
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
+        #: The line as it stands. Read by the tests, which ask what the screen
+        #: is saying rather than what it is rendering.
         self.message = ""
         self.level = "info"
-        self.say("Ready.", level="info")
+        self.say(t("widget.notice.ready"))
 
     def say(self, message: str, *, level: str = "info") -> None:
         self.message = message
         self.level = level
         self.update(Text(message, style=TOKENS[self.LEVELS.get(level, "accent")]))
+
+
+class KeyHints(Static):
+    """The bottom line: which keys work, said in the reader's language.
+
+    This is the console's own footer, and it replaces Textual's `Footer` for one
+    reason. A binding's description in this program is a *message key* —
+    `("p", "pause", "binding.pause")` — and `Footer` prints that string as it
+    stands, because as far as the framework is concerned it is prose somebody
+    wrote for a person to read. Translating it would mean rewriting Textual's
+    binding map on every keystroke of the language switch; this widget instead
+    reads the public `active_bindings` — "this property may be used to inspect
+    current bindings" — and looks each description up on the way to the screen.
+
+    **A description this program did not write is shown as its author wrote it.**
+    Framework widgets declare their own English descriptions; none of them sets
+    `show=True` today, and one that did would appear here in English rather than
+    disappear. Showing a key that works in a language this console does not
+    speak is a worse sentence than the sentence it is written in, but it is
+    better than a key that silently does nothing.
+
+    Textual's `Footer` also draws the command palette's own key and gives every
+    entry a tooltip. Neither is kept: this console's keys fit on one line, and
+    the palette lists action names from `ravel.tui.app`, which is a vocabulary
+    nobody has a translation for.
+    """
+
+    def on_mount(self) -> None:
+        """Follow the focus, because that is what changes the keys."""
+        self.screen.bindings_updated_signal.subscribe(self, self._on_bindings_updated)
+        self.refresh_hints()
+
+    def _on_bindings_updated(self, _screen: object = None) -> None:
+        """Redraw after the framework has finished with the bindings."""
+        self.call_after_refresh(self.refresh_hints)
+
+    def refresh_hints(self) -> None:
+        """Draw the keys that are live right now. Called by `F2`, too."""
+        hints = Text()
+        seen: set[str] = set()
+        for active in self.screen.active_bindings.values():
+            binding = active.binding
+            if not binding.show or binding.action in seen:
+                continue
+            seen.add(binding.action)
+            if hints:
+                hints.append("  ")
+            hints.append(self.app.get_key_display(binding), style=TOKENS["muted"])
+            hints.append(" ")
+            hints.append(self._describe(binding.description), style=TOKENS["text"])
+        self.update(hints)
+
+    @property
+    def plain(self) -> str:
+        """The line as text, which is what a person reading it would see."""
+        return str(self.content)
+
+    @staticmethod
+    def _describe(description: str) -> str:
+        """The description in the current language, or as it was written."""
+        return t(description) if description in MESSAGES else description
 
 
 class Scrolling(VerticalScroll):
@@ -165,4 +259,4 @@ class Scrolling(VerticalScroll):
     """
 
 
-__all__ = ["Line", "Notice", "Panel", "Scrolling", "StatusTable"]
+__all__ = ["KeyHints", "Line", "Notice", "Panel", "Scrolling", "StatusTable"]

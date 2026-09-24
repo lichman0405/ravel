@@ -32,23 +32,29 @@ from textual.widgets import Input, Select, Static, TabbedContent, TabPane
 
 from ravel.tui import format as fmt
 from ravel.tui.client import GatewayClient
+from ravel.tui.i18n import t
 from ravel.tui.widgets import Notice, Panel, Scrolling, StatusTable
 
-TASK_COLUMNS = ("status", "task", "objective")
+#: The columns of the task table, as message keys.
+TASK_COLUMNS = ("column.status", "column.task", "column.objective")
 
-#: The kinds of deviation a bench can report, as a closed list.
+#: The kinds of deviation a bench can report, as a closed list of
+#: (label key, value).
 #:
 #: Closed because the Gateway's `DeviationRequest` demands a named action, and
 #: a free-text field would let somebody type the action they meant in a way
 #: that no later reader could group. These are the shapes the Execution
 #: Contract vocabulary actually has — an action, a parameter, a substitution,
 #: a stop — plus the honest fourth, "none of the above".
+#:
+#: The label is a key and the value is what is sent: a bench reads a sentence
+#: and the record keeps a term.
 DEVIATION_KINDS = (
-    ("An action the contract does not allow", "action"),
-    ("A parameter outside the allowed range", "parameter"),
-    ("A substitution the contract does not permit", "substitution"),
-    ("A stop condition the contract does not name", "stop"),
-    ("Something else", "other"),
+    ("lab.deviation.action", "action"),
+    ("lab.deviation.parameter", "parameter"),
+    ("lab.deviation.substitution", "substitution"),
+    ("lab.deviation.stop", "stop"),
+    ("lab.deviation.other", "other"),
 )
 
 
@@ -56,10 +62,12 @@ class LabScreen(Scrolling):
     """The bench terminal."""
 
     can_focus = True
+    # Message keys rather than sentences: `KeyHints` translates them on the way
+    # to the bottom line. See `ravel.tui.widgets.KeyHints`.
     BINDINGS: ClassVar[list[BindingType]] = [
-        ("u", "upload", "Upload"),
-        ("d", "report_deviation", "Report deviation"),
-        ("f5", "reload", "Refresh"),
+        ("u", "upload", "binding.upload"),
+        ("d", "report_deviation", "binding.report_deviation"),
+        ("f5", "reload", "binding.reload"),
     ]
 
     def __init__(
@@ -73,37 +81,41 @@ class LabScreen(Scrolling):
 
     def compose(self) -> ComposeResult:
         yield Notice(id="notice")
-        yield Static("Your tasks", id="tasks-heading")
+        yield Static(t("lab.heading.tasks"), id="tasks-heading")
         # Selectable, because on this screen the table is not only a report: a
         # person with two experiments picks the one they are standing at, and
         # the panel below follows the pick.
         yield StatusTable(TASK_COLUMNS, id="tasks", selectable=True)
         with TabbedContent(id="task-record"):
-            with TabPane("Instruction", id="tab-instruction"):
-                yield Panel("Contract", id="instruction")
-            with TabPane("Prepared", id="tab-prepared"):
-                yield Panel("What was handed over", id="prepared")
-            with TabPane("Status", id="tab-status"):
-                yield Panel("Status", id="status")
-            with TabPane("Messages", id="tab-messages"):
-                yield Panel("Messages", id="messages")
-            with TabPane("Reported", id="tab-reported"):
-                yield Panel("What was reported", id="reported")
-        yield Panel("Send a result", id="upload-panel")
+            with TabPane(t("lab.tab.instruction"), id="tab-instruction"):
+                yield Panel("lab.panel.contract", id="instruction")
+            with TabPane(t("lab.tab.prepared"), id="tab-prepared"):
+                yield Panel("lab.panel.prepared", id="prepared")
+            with TabPane(t("lab.tab.status"), id="tab-status"):
+                yield Panel("lab.panel.status", id="status")
+            with TabPane(t("lab.tab.messages"), id="tab-messages"):
+                yield Panel("lab.panel.messages", id="messages")
+            with TabPane(t("lab.tab.reported"), id="tab-reported"):
+                yield Panel("lab.panel.reported", id="reported")
+        yield Panel("lab.panel.upload", id="upload-panel")
         with Horizontal(id="upload-row"):
-            yield Input(placeholder="path to the file to send", id="upload-path")
+            yield Input(placeholder=t("lab.placeholder.path"), id="upload-path")
             # Which output the file answers, asked rather than inferred: the
             # names are the contract's, and a screen that guessed one from a
             # filename would be deciding what a person's data is. The list is
             # the handover's owed outputs and is filled in `refresh_everything`.
-            yield Select([], prompt="answers which output", id="upload-output")
-        yield Panel("Report a deviation", id="deviation-panel")
+            yield Select([], prompt=t("lab.placeholder.output"), id="upload-output")
+        yield Panel("lab.panel.deviation", id="deviation-panel")
         with Horizontal(id="deviation-row"):
-            yield Select(DEVIATION_KINDS, prompt="what happened", id="deviation-kind")
+            yield Select(
+                [(t(label), value) for label, value in DEVIATION_KINDS],
+                prompt=t("lab.placeholder.kind"),
+                id="deviation-kind",
+            )
         with Horizontal(id="deviation-action-row"):
-            yield Input(placeholder="the action that was not permitted", id="deviation-action")
+            yield Input(placeholder=t("lab.placeholder.action"), id="deviation-action")
         with Horizontal(id="deviation-description-row"):
-            yield Input(placeholder="what the bench actually needs", id="deviation-description")
+            yield Input(placeholder=t("lab.placeholder.description"), id="deviation-description")
 
     # ── Reading ─────────────────────────────────────────────────────────────
 
@@ -127,9 +139,7 @@ class LabScreen(Scrolling):
         if not self.tasks:
             self.selected = ""
             self._offer_outputs([])
-            self.panel("instruction").show(
-                ["No experiment tasks in this project yet. Master has not planned any."]
-            )
+            self.panel("instruction").show([t("lab.notice.no_tasks")])
             for name in ("prepared", "status", "messages", "reported"):
                 self.panel(name).show([])
             return
@@ -165,7 +175,10 @@ class LabScreen(Scrolling):
         owed = set(handover.get("missing_outputs") or [])
         names = (handover.get("handover") or {}).get("required_outputs") or []
         return [
-            (f"{name} — still owed" if name in owed else f"{name} — already sent", str(name))
+            (
+                t("lab.output.owed" if name in owed else "lab.output.sent", name=name),
+                str(name),
+            )
             for name in names
         ]
 
@@ -181,7 +194,7 @@ class LabScreen(Scrolling):
         field = self.query_one("#upload-output", Select)
         chosen = field.value
         field.set_options(options)
-        if isinstance(chosen, str) and any(value == chosen for _label, value in options):
+        if isinstance(chosen, str) and any(value == chosen for _, value in options):
             field.value = chosen
 
     @staticmethod
@@ -201,23 +214,35 @@ class LabScreen(Scrolling):
         ]
         if contract:
             lines.append(
-                f"working under contract {str(contract.get('contract_id', ''))[:12]} "
-                f"v{contract.get('version', '?')}"
+                t(
+                    "lab.instruction.contract",
+                    contract=str(contract.get("contract_id", ""))[:12],
+                    version=contract.get("version", "?"),
+                )
             )
         else:
-            lines.append("no contract is bound to this task")
+            lines.append(t("lab.instruction.no_contract"))
         job = task.get("backend_job")
         if job is None:
-            lines.append("no backend job has been submitted for this task")
+            lines.append(t("lab.instruction.no_job"))
         else:
             lines.append(
-                f"backend {job.get('backend', '?')} attempt {job.get('attempt', '?')} — "
-                f"{job.get('state', '?')}"
+                t(
+                    "lab.instruction.backend",
+                    backend=job.get("backend", "?"),
+                    attempt=job.get("attempt", "?"),
+                    state=job.get("state", "?"),
+                )
             )
             if job.get("backend_state"):
-                lines.append(f"the backend says: {fmt.elide(str(job['backend_state']), 100)}")
+                lines.append(
+                    t(
+                        "lab.instruction.backend_says",
+                        state=fmt.elide(str(job["backend_state"]), 100),
+                    )
+                )
             if job.get("failure_class"):
-                lines.append(f"failure class {job['failure_class']}")
+                lines.append(t("lab.instruction.failure", failure=job["failure_class"]))
         return lines
 
     @staticmethod
@@ -237,10 +262,10 @@ class LabScreen(Scrolling):
         """
         messages = task.get("messages", [])
         if not messages:
-            return ["The Worker has not sent anything about this task."]
+            return [t("lab.messages.empty")]
         lines = []
         for message in messages:
-            outside = "" if message.get("approved_by_contract", True) else "  [not in contract]"
+            outside = "" if message.get("approved_by_contract", True) else t("lab.messages.outside")
             lines.append(
                 f"{fmt.moment(message.get('sent_at'))}  {message.get('kind', '')}{outside}"
             )
@@ -257,7 +282,7 @@ class LabScreen(Scrolling):
         """
         deviations = task.get("deviations", [])
         if not deviations:
-            return ["Nothing has been reported against this task."]
+            return [t("lab.reported.empty")]
         lines = []
         for deviation in deviations:
             open_now = deviation.get("resolved_by_decision_ref") is None
@@ -278,9 +303,9 @@ class LabScreen(Scrolling):
             await self.refresh_everything()
 
     async def action_reload(self) -> None:
-        self.notice("Reading again…", level="wait")
+        self.notice(t("lab.notice.reading"), level="wait")
         await self.refresh_everything()
-        self.notice("Up to date.", level="good")
+        self.notice(t("lab.notice.uptodate"), level="good")
 
     async def action_upload(self) -> None:
         """Send the file named in the path field, as the output named beside it.
@@ -306,28 +331,31 @@ class LabScreen(Scrolling):
         field = self.query_one("#upload-path", Input)
         chosen = self.query_one("#upload-output", Select)
         if not self.selected:
-            self.notice("No task is selected, so there is nothing to attach this to.", level="bad")
+            self.notice(t("lab.notice.no_task"), level="bad")
             return
         named = field.value.strip()
         if not named:
-            self.notice("Name a file to send.", level="bad")
+            self.notice(t("lab.notice.name_file"), level="bad")
             return
         if not isinstance(chosen.value, str) or not chosen.value:
-            self.notice("Say which required output this file answers.", level="bad")
+            self.notice(t("lab.notice.choose_output"), level="bad")
             return
 
         path = Path(named).expanduser()
         if not path.is_file():
-            self.notice(f"{named} is not a file this machine can read.", level="bad")
+            self.notice(t("lab.notice.not_a_file", named=named), level="bad")
             return
         try:
             content = path.read_bytes()
         except OSError as refused:
-            self.notice(f"could not read {named}: {refused}", level="bad")
+            self.notice(t("lab.notice.unreadable", named=named, error=refused), level="bad")
             return
 
         output = chosen.value
-        self.notice(f"Sending {path.name} as {output} ({len(content)} bytes)…", level="wait")
+        self.notice(
+            t("lab.notice.sending", file=path.name, output=output, bytes=len(content)),
+            level="wait",
+        )
         try:
             answer = await self.client.send_output(
                 self.project_id,
@@ -338,17 +366,19 @@ class LabScreen(Scrolling):
                 media_type=_media_type(path),
             )
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"the Gateway refused the upload: {refused}", level="bad")
+            self.notice(t("lab.notice.upload_refused", error=refused), level="bad")
             return
 
         field.value = ""
         missing = [str(name) for name in answer.get("missing_outputs") or []]
-        said = f"Sent {path.name} as {output}."
+        said = t("lab.notice.sent", file=path.name, output=output)
         said += (
-            f" Still owed: {', '.join(missing)}." if missing else " That was everything owed."
+            t("lab.notice.still_owed", missing=", ".join(missing))
+            if missing
+            else t("lab.notice.everything_owed")
         )
         if not answer.get("delivered_to_run", False):
-            said += " The run has not been told, so its wait is still open."
+            said += t("lab.notice.run_not_told")
         self.notice(said, level="good")
         await self.refresh_everything()
 
@@ -362,27 +392,27 @@ class LabScreen(Scrolling):
         Master rules is a decision this screen will show once it exists.
         """
         if not self.selected:
-            self.notice("No task is selected.", level="bad")
+            self.notice(t("lab.notice.no_task_selected"), level="bad")
             return
         kind = self.query_one("#deviation-kind", Select).value
         action = self.query_one("#deviation-action", Input).value.strip()
         description = self.query_one("#deviation-description", Input).value.strip()
         if not action or not description:
-            self.notice("A deviation needs both the action and what the bench needs.", level="bad")
+            self.notice(t("lab.notice.deviation_needs"), level="bad")
             return
 
         requested = f"{kind}: {action}" if isinstance(kind, str) else action
-        self.notice("Reporting…", level="wait")
+        self.notice(t("lab.notice.reporting"), level="wait")
         try:
             await self.client.report_deviation(
                 self.project_id, self.selected, requested, description
             )
         except Exception as refused:  # a refusal is shown, not swallowed
-            self.notice(f"the Gateway refused the report: {refused}", level="bad")
+            self.notice(t("lab.notice.report_refused", error=refused), level="bad")
             return
         for identifier in ("#deviation-action", "#deviation-description"):
             self.query_one(identifier, Input).value = ""
-        self.notice("Reported. Master decides what happens next.", level="good")
+        self.notice(t("lab.notice.reported"), level="good")
         await self.refresh_everything()
 
     def _selected_node(self) -> dict[str, Any]:
