@@ -55,6 +55,17 @@ The T02 task is adoption and verification, not a rewrite of these features.
 - LocalStack results are `SIMULATED_S3`: they prove client-side behavior but do not satisfy the GATES requirement for real MinIO. Real MinIO remains an internal environment gap.
 - `tests/e2e` and the Phase 11 acceptance matrix will be recorded with their actual exit codes/skips; skipped internal rows are not PASS.
 
+## Simulated / real / human distinction (T02-AC3)
+
+The merged source keeps execution-type and claim-type vocabularies in code:
+
+- `src/ravel/domain/enums.py` contains `RESEARCH_SOURCE`, `COMPUTATION`, `HUMAN_LAB`, `SIMULATED`.
+- The same domain surface carries `FACT`, `INFERENCE`, `HYPOTHESIS`.
+- `src/ravel/execution/reconcile.py`, `src/ravel/domain/reconciliation.py` and the gateway admin route keep `UNKNOWN` as an explicit state rather than a zero/empty PASS.
+- Phase 11 tests (`tests/unit/domain/test_reconciliation.py`, `tests/integration/reconcile/test_execution_reconcile.py`, `tests/unit/preparation/test_lab.py`, `tests/unit/preparation/test_raspa.py`) exercise those distinctions.
+
+These are code/test facts, not a claim that real HPC or a human experiment ran. The 39 live/dsh nodeids in `legacy-inventory.json` are explicitly classified `external` and remain **BLOCKED_EXTERNAL**; they are never counted as PASS.
+
 ## Conflict and line-ending notes
 
 - The Windows checkout writes shell scripts with CRLF. The canonical container needs LF for `scripts/install_services.sh` and the other shell scripts. The T02 worktree uses `extensions.worktreeConfig` + `core.autocrlf=false`; the shell scripts were normalized to LF in the working tree. No tracked content changed (the Git blobs are LF).

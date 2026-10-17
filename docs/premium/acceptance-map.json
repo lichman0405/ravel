@@ -128,7 +128,8 @@
       "test_nodeids": [],
       "manual_evidence_refs": [
         "PHASE11_ADOPTION.md",
-        "tasklogs/T02.md"
+        "tasklogs/T02.md",
+        "evidence/T02/manual-20261017-1525/manifest.json"
       ],
       "execution_commands": [
         {

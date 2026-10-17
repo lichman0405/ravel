@@ -1,0 +1,31 @@
+T02 Phase 11 adoption — manual verification record
+base_sha: b79fd5287c42ced28d80137e5f3f16e5c9487998
+imported_sha: c9815f13282c6df85e76e616679473511e94f812
+merge_sha: 7cca83e4bddffb2fa4017267c63e136c0ca15baa
+record_sha: ea5e6d1b6fc8889a4cd4e2d694393333ad7804dc (docs committed before this evidence run)
+
+$ make lint
+ruff check src tests -> All checks passed!
+pyright src tests -> 0 errors, 0 warnings, 0 informations
+
+$ .venv/bin/python -m pytest tests/unit -q --junitxml=/tmp/unit.xml
+exit=0
+tests=1106 failures=0 errors=0 skipped=2
+
+$ createdb ravel_phase11_empty; .venv/bin/python -m alembic upgrade head
+version_num = d1f7a40c8e21
+
+$ createdb ravel_phase11_upgrade; restore ravel_phase10_snapshot
+marker usr-phase10-marker present before upgrade
+$ .venv/bin/python -m alembic upgrade head
+version_num = d1f7a40c8e21
+marker usr-phase10-marker present after upgrade
+
+$ .venv/bin/python -m alembic heads
+d1f7a40c8e21 (head)
+
+AC3 code inspection (files containing the distinctions):
+src/ravel/domain/enums.py: RESEARCH_SOURCE COMPUTATION HUMAN_LAB SIMULATED; FACT INFERENCE HYPOTHESIS
+src/ravel/execution/reconcile.py, src/ravel/domain/reconciliation.py, src/ravel/gateway/routes/admin.py: UNKNOWN state retained
+tests/unit/domain/test_reconciliation.py, tests/integration/reconcile/test_execution_reconcile.py,
+tests/unit/preparation/test_lab.py, tests/unit/preparation/test_raspa.py: distinctions exercised
