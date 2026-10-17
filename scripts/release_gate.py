@@ -332,6 +332,15 @@ def environment_for(row: Row) -> dict[str, str]:
             key, _, value = line.partition("=")
             environment.setdefault(key.strip(), value.strip().strip("'\""))
     environment.update(row.env)
+    # The child must import this checkout's db_lock, not whatever editable
+    # package the shared virtualenv happens to point at.
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(REPO_ROOT / "src"),
+            str(REPO_ROOT / "scripts"),
+            environment.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
     return environment
 
 

@@ -399,6 +399,15 @@ def run_command(
     env.update({str(key): str(value) for key, value in command.get("env", {}).items()})
     env["RAVEL_PREMIUM_TASK"] = task_id
     env["RAVEL_PREMIUM_RUN_ID"] = run_identifier
+    # Children must import this checkout's code, including db_lock, even when
+    # the shared virtualenv was created from another worktree.
+    env["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(REPO_ROOT / "src"),
+            str(REPO_ROOT / "scripts"),
+            env.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
 
     if command.get("argv") is not None:
         argv = [str(part) for part in command["argv"]]
@@ -620,6 +629,7 @@ def run_task(
             print(f"{task_id}: running command {index}/{len(commands)}")
             database_command = (
                 force_database_lock
+                or task_needs_database
                 or command["needs_database"]
                 or command_uses_database(command)
             )

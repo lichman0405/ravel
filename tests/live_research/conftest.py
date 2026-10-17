@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 # use — it is the same stack, reached for the same reason — and duplicating
 # those fixtures would let the two definitions drift.
 from tests.integration.conftest import (  # noqa: F401
+    _database_test_lock,
     artifact_store,
     clean,
     database,

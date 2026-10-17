@@ -101,9 +101,36 @@ def lock_dir(env: Mapping[str, str] | None = None) -> Path:
     return directory
 
 
+def _dotenv_values() -> Mapping[str, str]:
+    """The repository's ``.env`` values, which Settings reads for host/port."""
+    path = _repo_root() / ".env"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    values: dict[str, str] = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+def _setting(
+    source: Mapping[str, str], name: str, default: str
+) -> str:
+    """A setting from the process environment, then ``.env``, then default."""
+    if name in source:
+        return source[name]
+    return _dotenv_values().get(name, default)
+
+
 def database_lock_path(env: Mapping[str, str] | None = None) -> Path:
     source: Mapping[str, str] = os.environ if env is None else env
-    host = source.get("RAVEL_POSTGRES_HOST", "127.0.0.1").strip().lower().strip("[]")
+    host = _setting(source, "RAVEL_POSTGRES_HOST", "127.0.0.1")
+    host = host.strip().lower().strip("[]")
     if host in {"localhost", "::1"}:
         host = "127.0.0.1"
     # The integration fixture selects the test database from RAVEL_TEST_DB and
@@ -112,7 +139,7 @@ def database_lock_path(env: Mapping[str, str] | None = None) -> Path:
     # release gate and a direct pytest different locks for the same database.
     identity = "{host}:{port}/{db}".format(
         host=host,
-        port=int(source.get("RAVEL_POSTGRES_PORT", "55432")),
+        port=int(_setting(source, "RAVEL_POSTGRES_PORT", "55432")),
         db=source.get("RAVEL_TEST_DB", "ravel_test").strip().lower(),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
@@ -159,8 +186,8 @@ class DatabaseLock:
     def __enter__(self) -> DatabaseLock:
         with _PROCESS_LOCKS_GUARD:
             if self.path in _PROCESS_LOCKS:
-                _PROCESS_LOCKS[self.path] += 1
                 self._entered = True
+                _PROCESS_LOCKS[self.path] += 1
                 return self
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -178,8 +205,8 @@ class DatabaseLock:
                     time.sleep(0.25)
                 else:
                     with _PROCESS_LOCKS_GUARD:
+                        self._entered = True
                         _PROCESS_LOCKS[self.path] = 1
-                    self._entered = True
                     return self
         except BaseException:
             self._close()
