@@ -1,0 +1,21 @@
+T03 contract freeze — verification record
+candidate: f75529707be1e77365a39287f9ec229ffb288170
+source_digest: 4df97caa68dff1a2ea4a654762227f58a8fdf3eedfab5ae79291b6c0199569e7
+
+$ python schemas/premium/check_contracts.py
+PASS: 12 premium schemas parse; $id unique; no broken local $ref
+
+$ python scripts/fill_acceptance_map.py
+updated 30 tasks
+
+$ python - <<'PY' (mapping audit)
+tasks 30 acs 102 unique 102
+T04-T29 mapped OK
+schemas parse OK 12
+PY
+
+$ python docs/premium/tools/tracker.py validate
+PASS: 30 tasks, dependency DAG, state fields, task cards
+
+$ git diff --check (worktree core.whitespace=cr-at-eol)
+PASS

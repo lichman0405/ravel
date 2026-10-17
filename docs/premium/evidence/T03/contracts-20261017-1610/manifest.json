@@ -1,0 +1,60 @@
+{
+  "run_id": "contracts-20261017-1610",
+  "task_id": "T03",
+  "acceptance_map": {
+    "T03-AC1": [
+      "check_contracts.py",
+      "README identity rule",
+      "CONTRACTS addendum"
+    ],
+    "T03-AC2": [
+      "ADR-001 decisions"
+    ],
+    "T03-AC3": [
+      "102 unique ACs",
+      "T04-T29 mapping audit"
+    ]
+  },
+  "started_at": "2026-10-17 16:00 Asia/Shanghai",
+  "completed_at": "2026-10-17 16:10 Asia/Shanghai",
+  "source_commit": "f75529707be1e77365a39287f9ec229ffb288170",
+  "source_digest": "4df97caa68dff1a2ea4a654762227f58a8fdf3eedfab5ae79291b6c0199569e7",
+  "platform": "Windows 11 + Python 3.14 (docs/schema task; no backend execution)",
+  "dependencies": {
+    "python": "3.14.6"
+  },
+  "commands": [
+    {
+      "command": "python schemas/premium/check_contracts.py",
+      "exit_code": 0
+    },
+    {
+      "command": "python scripts/fill_acceptance_map.py",
+      "exit_code": 0
+    },
+    {
+      "command": "python docs/premium/tools/tracker.py validate",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "cwd": "C:/Users/lishi/code/ravel-worktrees/T03",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs\\premium\\evidence\\T03\\contracts-20261017-1610\\commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs\\premium\\evidence\\T03\\contracts-20261017-1610\\commands.txt",
+      "sha256": "ca116d3d4e3ae1cc2a960984af62535f32a4347b8742839343432c0fdf3491b3",
+      "size": 616
+    }
+  ],
+  "data_mode": "REAL (document/schema validation)",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null
+}
