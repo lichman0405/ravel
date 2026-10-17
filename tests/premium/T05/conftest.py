@@ -9,6 +9,7 @@ database would also be a second place the `_test` safety interlock could drift.
 from __future__ import annotations
 
 from tests.integration.conftest import (  # noqa: F401
+    _database_test_lock,
     clean,
     database,
     integration_settings,
