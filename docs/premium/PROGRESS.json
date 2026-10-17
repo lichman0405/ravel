@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 14:00 Asia/Shanghai",
+  "updated_at": "2026-10-17 14:02 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -30,16 +30,16 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T01",
       "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
-      "head_sha": "2266aff5b5986f9d363674a2744a1db491c4ba07",
-      "source_digest": "8be298ab3b34052fbfe4a70bf006a4ec545f2121e1ae6b2ca9e1e8da526af740",
+      "head_sha": "81876b382276a4403d51903d41a053bb34db912c",
+      "source_digest": "abd716e3452104540f0a660ae806ce1b33e5924d68bb06c7a06baa4f42460f86",
       "review_ref": null,
       "gate_refs": [
-        "evidence/T01/run-20261017-135751/manifest.json"
+        "evidence/T01/run-20261017-140017/manifest.json"
       ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": "2026-10-17 14:00 Asia/Shanghai",
-      "note": "T01实现与canonical门禁PASS：25 T01 tests、make lint、preflight；unit 803 passed；integration PENDING（MinIO缺口）；dsh/live BLOCKED_EXTERNAL。等待独立Review。"
+      "last_updated": "2026-10-17 14:02 Asia/Shanghai",
+      "note": "T01实现与canonical门禁PASS：25 T01 tests、make lint、preflight；unit 803 passed；integration 538项中63项MinIO SKIP按FAIL记录；dsh/live BLOCKED_EXTERNAL。等待独立Review。"
     },
     "T02": {
       "status": "TODO",
