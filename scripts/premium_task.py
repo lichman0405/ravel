@@ -51,7 +51,13 @@ PREMIUM_ROOT = REPO_ROOT / "docs" / "premium"
 ACCEPTANCE_MAP = PREMIUM_ROOT / "acceptance-map.json"
 PROGRESS = PREMIUM_ROOT / "PROGRESS.json"
 LEGACY_INVENTORY = PREMIUM_ROOT / "legacy-inventory.json"
-EVIDENCE_ROOT = PREMIUM_ROOT / "evidence"
+#: Tests that exercise the runner itself must not leave probe manifests in the
+#: task evidence tree; production runs use the fixed repository path.
+EVIDENCE_ROOT = Path(
+    os.environ.get(
+        "RAVEL_PREMIUM_EVIDENCE_ROOT", str(PREMIUM_ROOT / "evidence")
+    )
+)
 
 SHANGHAI = timezone(timedelta(hours=8))
 

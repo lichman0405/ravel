@@ -31,6 +31,7 @@ def _environment(tmp_path: Path, *, timeout: float = 0.5) -> dict[str, str]:
         {
             "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path / "locks"),
             "RAVEL_PREMIUM_LOCK_TIMEOUT": str(timeout),
+            "RAVEL_PREMIUM_EVIDENCE_ROOT": str(tmp_path / "evidence"),
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
             "RAVEL_POSTGRES_DB": "ravel_test",
