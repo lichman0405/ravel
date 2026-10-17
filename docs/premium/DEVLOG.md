@@ -9,4 +9,7 @@
 
 | 2026-10-17 13:06 Asia/Shanghai | Supervisor | T00 | 只读扫描实际 HEAD/status/remote/worktree；创建 integration 与 T00 worktree；保留原工作区未跟踪交接包 | HEAD=79db86e，status 仅 `?? docs/premium/`；worktree 路径见 BASELINE.md | 完成状态文件初始化与 CLAUDE.md 入口 |
 | 2026-10-17 13:06 Asia/Shanghai | Supervisor | T00 | 校验 TASKS.json：30 个唯一任务 ID、依赖无缺失、依赖图无环；PROGRESS 初始全部 TODO | `python` 校验输出 `acyclic OK`、`statuses: ['TODO']`、`task count: 30` | 提交 T00 文档 commit 并请求独立 Review |
+| 2026-10-17 13:21 Asia/Shanghai | Supervisor | T00 | 提交 `docs(T00): adopt premium development contract`，候选 5356394；请求独立 Reviewer | commit 5356394；diff 仅 docs/premium/** + CLAUDE.md；`git diff --check` 0 | 等待 Review |
+| 2026-10-17 13:21 Asia/Shanghai | Reviewer | T00 | 独立子 Agent 审查固定候选 5356394，检查 AC1/AC2/AC3 | decision=APPROVE；三条 AC PASS；findings 空；`reviews/T00/1.json` | 集成候选复核 |
+
 

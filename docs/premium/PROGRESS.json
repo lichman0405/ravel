@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 13:06 Asia/Shanghai",
+  "updated_at": "2026-10-17 13:21 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -10,18 +10,20 @@
   "integration_head_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "tasks": {
     "T00": {
-      "status": "RUNNING",
+      "status": "INTEGRATING",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T00",
       "base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
-      "head_sha": null,
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
+      "head_sha": "53563949192d2f3d7fb817ac1c0838f76d4e3de6",
+      "source_digest": "a01df6b96896481c065b872dc7cd0f788d81361d4f3a2e15898c897a7893529f",
+      "review_ref": "reviews/T00/1.json",
+      "gate_refs": [
+        "evidence/T00/run-20261017-1306/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": "2026-10-17 13:06 Asia/Shanghai",
-      "note": "T00接管执行中：已完成只读扫描、worktree创建、交接包导入和任务图校验；等待提交与独立Review。"
+      "last_updated": "2026-10-17 13:21 Asia/Shanghai",
+      "note": "独立Reviewer APPROVE（T00-AC1/2/3 PASS）；等待集成候选复核与ff-only合并。"
     },
     "T01": {
       "status": "TODO",
