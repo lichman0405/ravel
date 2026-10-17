@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 from tests.acceptance.phase10_support import (
+    SCRIPTED_SEAT_OWNER,
     FakeHarness,
     ScriptedSeats,
     ScriptedWorker,
@@ -174,6 +175,15 @@ async def supervising(
             poll_seconds=0.05,
             loop_poll_seconds=0.02,
             loop_max_rounds=loop_max_rounds,
+            # The scripted seats acquire the project lease when a test builds
+            # them, often before this supervisor starts. Using the same owner
+            # makes the supervisor renew that lease instead of losing the
+            # project to its own test harness.
+            **(
+                {"instance_id": SCRIPTED_SEAT_OWNER}
+                if seats is not None
+                else {}
+            ),
         )
         task = asyncio.create_task(supervisor.run())
         run = SupervisorRun(supervisor=supervisor, task=task)
@@ -819,10 +829,13 @@ def seat_assertions(
     model said which role it was serving as. A seat that failed any of them
     would be a session reaching work by some route other than its own scope.
     """
-    assert json.loads(runtime.brief_path.read_text(encoding="utf-8")) == {
-        "project_id": project_id,
-        "role": role.value,
-    }, "the seat was launched under a scope that is not the one it serves"
+    brief = json.loads(runtime.brief_path.read_text(encoding="utf-8"))
+    assert brief["project_id"] == project_id and brief["role"] == role.value, (
+        "the seat was launched under a scope that is not the one it serves"
+    )
+    assert brief.get("owner_instance_id") and brief.get("lease_epoch") is not None, (
+        "the seat was launched without the lease binding T04 requires"
+    )
     assert runtime.work_dir.is_relative_to(settings.runtime_path("dsh_cwd")), (
         "the seat wrote outside the runtime root the deployment configures"
     )
