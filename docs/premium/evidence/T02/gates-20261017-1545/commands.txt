@@ -1,0 +1,27 @@
+T02 Phase 11 adoption — suite gate record
+source_commit: 54303ccf074311fc52e32a1b80e471c166fb65b5
+environment: ravel-premium-ubuntu24 (Ubuntu 24.04, Python 3.12.3)
+services: real PostgreSQL 16 + Temporal 1.25.2; S3 = LocalStack 3.8 (SIMULATED_S3)
+
+$ make lint
+ruff: All checks passed!
+pyright: 0 errors, 0 warnings, 0 informations
+
+$ pytest tests/unit -q --junitxml=/tmp/unit.xml
+exit=0 tests=1106 failures=0 errors=0 skipped=2
+
+$ pytest tests/integration -q -rxXs --junitxml=/tmp/integration.xml
+exit=0 100% (709 tests; no skip output in the final run)
+
+$ pytest tests/e2e -q -rxXs --junitxml=/tmp/e2e.xml
+exit=0 27 tests
+
+$ make phase11-acceptance
+11/11 demonstrated, 0 failed, 0 missing, pytest exit 0
+Individual skips: P11-02 live/external, P11-05 real cluster/external,
+P11-10 no user-level systemd in the container (internal environment gap),
+P11-11 live/external.
+
+$ make release-gate
+first attempt exit 2: release_gate.py invoked `ruff` from PATH and the container only had .venv/bin/ruff.
+second attempt with .venv/bin on PATH: running; result recorded separately.
