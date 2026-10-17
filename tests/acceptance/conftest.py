@@ -38,6 +38,7 @@ from tests.e2e.conftest import (  # noqa: F401
     ScriptedMasterPort,
     ScriptedReview,
     Task,
+    _database_test_lock,
     account,
     artifact_store,
     bearer,

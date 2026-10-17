@@ -34,6 +34,7 @@ import pytest
 from tests.integration.conftest import (  # noqa: F401
     DEFAULT_OUTPUTS,
     Prepared,
+    _database_test_lock,
     artifact_store,
     clean,
     database,

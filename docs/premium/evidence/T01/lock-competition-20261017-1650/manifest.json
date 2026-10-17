@@ -1,0 +1,76 @@
+{
+  "run_id": "lock-competition-20261017-1650",
+  "task_id": "T01",
+  "acceptance_map": {
+    "T01-AC2": [
+      "tests/premium/T01/test_lock.py",
+      "tests/premium/T01/test_lock_entrypoints.py",
+      "tests/premium/T04 (shared database fixture)",
+      "tests/integration/state/test_guards.py (shared database fixture)",
+      "cross-WSL/container lock competition"
+    ]
+  },
+  "started_at": "2026-10-17 16:50 Asia/Shanghai",
+  "completed_at": "2026-10-17 17:05 Asia/Shanghai",
+  "source_commit": "59db369d871aa870edbaf33c03f978898a67ef53",
+  "source_digest": "492bb4ac2ad41c8cc34de8ce65fe1fa316d7609c4d75f8d35dd142aa763b830a",
+  "platform": "Ubuntu 24.04 canonical container + WSL host",
+  "dependencies": {
+    "python": "3.12.3",
+    "postgres": "16",
+    "docker": "29.1.3",
+    "compose": "2.40.3"
+  },
+  "commands": [
+    {
+      "command": "pytest tests/premium/T01 -q -rxXs",
+      "exit_code": 0,
+      "tests": 47,
+      "passed": 47
+    },
+    {
+      "command": "make premium-task TASK=T01",
+      "exit_code": 0,
+      "result": "PASS",
+      "run_id": "run-20261017-164153"
+    },
+    {
+      "command": "pytest tests/premium/T04 -q -rxXs",
+      "exit_code": 0,
+      "tests": 6,
+      "passed": 6
+    },
+    {
+      "command": "pytest tests/integration/state/test_guards.py -q -rxXs",
+      "exit_code": 0,
+      "tests": 6,
+      "passed": 6
+    },
+    {
+      "command": "WSL holder + canonical-container competitor",
+      "exit_code": 1,
+      "result": "second process refused; no TRUNCATE"
+    },
+    {
+      "command": "release_gate.py --only unit",
+      "exit_code": 1,
+      "result": "lock acquired, row ran; NOT_CERTIFIED from CRLF in install_services.sh"
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/fix-db-lock",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs/premium/evidence/T01/lock-competition-20261017-1650/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T01/lock-competition-20261017-1650/commands.txt",
+      "sha256": "95551af843bda7a3827f974ea5356143d5068bf7a405b959e55d5d7737a80880",
+      "size": 2876
+    }
+  ],
+  "data_mode": "REAL (PostgreSQL + real process/container locks)",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null
+}
