@@ -21,7 +21,8 @@ WITH_ENV := set -a; . ./.env 2>/dev/null || true; set +a;
         test-integration test-dsh test-live test-e2e acceptance lint fmt \
         typecheck gateway tui acceptance-matrix acceptance-raw clean \
         phase10-acceptance phase10-acceptance-raw \
-        up worker project account
+        up worker project account \
+        premium-preflight premium-source-digest premium-task premium-inventory
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -134,6 +135,19 @@ project: ## Drive one project to an ending; make project PROJECT=<project_id>
 
 account: ## Create an account; make account ARGS="--username ada --new-project ..."
 	$(PY) scripts/create_account.py $(ARGS)
+
+premium-preflight: ## Verify the canonical Ubuntu 24.04/Python 3.12/Docker backend
+	$(PY) scripts/premium_preflight.py
+
+premium-source-digest: ## Print the source digest bound to the current commit
+	$(PY) scripts/premium_task.py digest
+
+premium-task: ## Run one premium task gate; make premium-task TASK=Txx
+	@test -n "$(TASK)" || { echo "usage: make premium-task TASK=Txx"; exit 2; }
+	$(PY) scripts/premium_task.py $(TASK)
+
+premium-inventory: ## Recollect legacy pytest nodeids and classify internal/external
+	$(PY) scripts/premium_task.py inventory
 
 clean: ## Remove caches and build output
 	rm -rf .pytest_cache .ruff_cache build dist

@@ -1,0 +1,186 @@
+{
+  "run_id": "run-20261017-135751",
+  "task_id": "T01",
+  "acceptance_map": {
+    "T01-AC1": {
+      "test_nodeids": [
+        "tests/premium/T01/test_digest.py::test_digest_ignores_record_changes",
+        "tests/premium/T01/test_digest.py::test_digest_changes_when_product_changes",
+        "tests/premium/T01/test_digest.py::test_digest_is_sha256_hex",
+        "tests/premium/T01/test_digest.py::test_dirty_paths_ignores_evidence_but_not_product",
+        "tests/premium/T01/test_lock.py::test_second_runner_cannot_enter_while_lock_held",
+        "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+        "tests/premium/T01/test_preflight.py::test_canonical_os_passes",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release0-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release1-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release2-aarch64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+        "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+        "tests/premium/T01/test_preflight.py::test_missing_docker_fails",
+        "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
+        "tests/premium/T01/test_preflight.py::test_cli_is_nonzero_when_docker_and_git_are_absent",
+        "tests/premium/T01/test_task_runner.py::test_failing_command_fails_the_task_and_is_recorded",
+        "tests/premium/T01/test_task_runner.py::test_empty_pytest_selection_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_skip_is_not_a_pass",
+        "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+        "tests/premium/T01/test_task_runner.py::test_no_commands_fails",
+        "tests/premium/T01/test_task_runner.py::test_dirty_tree_is_refused",
+        "tests/premium/T01/test_task_runner.py::test_manifest_binds_commit_digest_and_artifacts",
+        "tests/premium/T01/test_task_runner.py::test_digest_subcommand_prints_sha256",
+        "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T01-AC2": {
+      "test_nodeids": [
+        "tests/premium/T01/test_digest.py::test_digest_ignores_record_changes",
+        "tests/premium/T01/test_digest.py::test_digest_changes_when_product_changes",
+        "tests/premium/T01/test_digest.py::test_digest_is_sha256_hex",
+        "tests/premium/T01/test_digest.py::test_dirty_paths_ignores_evidence_but_not_product",
+        "tests/premium/T01/test_lock.py::test_second_runner_cannot_enter_while_lock_held",
+        "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+        "tests/premium/T01/test_preflight.py::test_canonical_os_passes",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release0-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release1-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release2-aarch64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+        "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+        "tests/premium/T01/test_preflight.py::test_missing_docker_fails",
+        "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
+        "tests/premium/T01/test_preflight.py::test_cli_is_nonzero_when_docker_and_git_are_absent",
+        "tests/premium/T01/test_task_runner.py::test_failing_command_fails_the_task_and_is_recorded",
+        "tests/premium/T01/test_task_runner.py::test_empty_pytest_selection_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_skip_is_not_a_pass",
+        "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+        "tests/premium/T01/test_task_runner.py::test_no_commands_fails",
+        "tests/premium/T01/test_task_runner.py::test_dirty_tree_is_refused",
+        "tests/premium/T01/test_task_runner.py::test_manifest_binds_commit_digest_and_artifacts",
+        "tests/premium/T01/test_task_runner.py::test_digest_subcommand_prints_sha256",
+        "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T01-AC3": {
+      "test_nodeids": [
+        "tests/premium/T01/test_digest.py::test_digest_ignores_record_changes",
+        "tests/premium/T01/test_digest.py::test_digest_changes_when_product_changes",
+        "tests/premium/T01/test_digest.py::test_digest_is_sha256_hex",
+        "tests/premium/T01/test_digest.py::test_dirty_paths_ignores_evidence_but_not_product",
+        "tests/premium/T01/test_lock.py::test_second_runner_cannot_enter_while_lock_held",
+        "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+        "tests/premium/T01/test_preflight.py::test_canonical_os_passes",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release0-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release1-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release2-aarch64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+        "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+        "tests/premium/T01/test_preflight.py::test_missing_docker_fails",
+        "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
+        "tests/premium/T01/test_preflight.py::test_cli_is_nonzero_when_docker_and_git_are_absent",
+        "tests/premium/T01/test_task_runner.py::test_failing_command_fails_the_task_and_is_recorded",
+        "tests/premium/T01/test_task_runner.py::test_empty_pytest_selection_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_skip_is_not_a_pass",
+        "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+        "tests/premium/T01/test_task_runner.py::test_no_commands_fails",
+        "tests/premium/T01/test_task_runner.py::test_dirty_tree_is_refused",
+        "tests/premium/T01/test_task_runner.py::test_manifest_binds_commit_digest_and_artifacts",
+        "tests/premium/T01/test_task_runner.py::test_digest_subcommand_prints_sha256",
+        "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T01-AC4": {
+      "test_nodeids": [
+        "tests/premium/T01/test_digest.py::test_digest_ignores_record_changes",
+        "tests/premium/T01/test_digest.py::test_digest_changes_when_product_changes",
+        "tests/premium/T01/test_digest.py::test_digest_is_sha256_hex",
+        "tests/premium/T01/test_digest.py::test_dirty_paths_ignores_evidence_but_not_product",
+        "tests/premium/T01/test_lock.py::test_second_runner_cannot_enter_while_lock_held",
+        "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+        "tests/premium/T01/test_preflight.py::test_canonical_os_passes",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release0-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release1-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release2-aarch64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+        "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+        "tests/premium/T01/test_preflight.py::test_missing_docker_fails",
+        "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
+        "tests/premium/T01/test_preflight.py::test_cli_is_nonzero_when_docker_and_git_are_absent",
+        "tests/premium/T01/test_task_runner.py::test_failing_command_fails_the_task_and_is_recorded",
+        "tests/premium/T01/test_task_runner.py::test_empty_pytest_selection_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_skip_is_not_a_pass",
+        "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+        "tests/premium/T01/test_task_runner.py::test_no_commands_fails",
+        "tests/premium/T01/test_task_runner.py::test_dirty_tree_is_refused",
+        "tests/premium/T01/test_task_runner.py::test_manifest_binds_commit_digest_and_artifacts",
+        "tests/premium/T01/test_task_runner.py::test_digest_subcommand_prints_sha256",
+        "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-17 13:57:48 +0800",
+  "completed_at": "2026-10-17 13:58:20 +0800",
+  "source_commit": "2266aff5b5986f9d363674a2744a1db491c4ba07",
+  "source_digest": "8be298ab3b34052fbfe4a70bf006a4ec545f2121e1ae6b2ca9e1e8da526af740",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T01 -q -rxXs --junitxml=/workspace/ravel-worktrees/T01/docs/premium/evidence/T01/run-20261017-135751/cmd-01-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T01",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T01/run-20261017-135751/cmd-01-junit.xml",
+  "log_path": "docs/premium/evidence/T01/run-20261017-135751/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T01/run-20261017-135751/cmd-01-junit.xml",
+      "sha256": "5934029098165499ed683b5d143476f5ecf797a2690119e252c8ea5b87893dd0",
+      "size": 3116
+    },
+    {
+      "ref": "docs/premium/evidence/T01/run-20261017-135751/cmd-01.txt",
+      "sha256": "d05d0f8c72b7df8f4516f62e7d00dcca38088076dbcfe585b6583e3dbf7c15b0",
+      "size": 242
+    },
+    {
+      "ref": "docs/premium/evidence/T01/run-20261017-135751/cmd-02.txt",
+      "sha256": "51b15bb04d3e02da0c49f4df997e4a4ea48f9e8fc413d4a4aeb6676fcc5f9d78",
+      "size": 239
+    },
+    {
+      "ref": "docs/premium/evidence/T01/run-20261017-135751/commands.txt",
+      "sha256": "0337c17278b6c39a99d6f9f28dd78a0ec0a497b2416a7577e07a32056b21fbb3",
+      "size": 762
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": false
+}
