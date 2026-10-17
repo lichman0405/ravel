@@ -16,6 +16,9 @@
 | 2026-10-17 15:08 Asia/Shanghai | Supervisor | T01 | 新增premium preflight/task runner、42项T01测试、Makefile/pyproject入口；建立Ubuntu 24.04 canonical容器 | T01 tests 42 passed、make lint PASS、preflight PASS；unit 803 passed；LocalStack integration 538项全通过（SIMULATED_S3）；真实MinIO仍缺失 | 独立AC复核 |
 | 2026-10-17 15:08 Asia/Shanghai | Reviewer | T01 | 独立AC1–AC4复核；两轮P1/P2修复（noncanonical绕过、DB锁默认可绕过） | decision=APPROVE；`reviews/T01/1.json`；两条P3 advisory | 集成候选复核 |
 | 2026-10-17 15:12 Asia/Shanghai | Supervisor | T01 | 最终门禁run-20261017-150746 PASS；候选7cae892 tree与tip f525ceb一致；ff-only推进integration | integration HEAD 7cae892；PROGRESS/T01=DONE；T02 eligible | 派发T02 |
+| 2026-10-17 15:20 Asia/Shanghai | Supervisor | T02 | `merge --no-ff c9815f1`；唯一冲突Makefile保留T01+Phase11全部targets；lint/unit 1106/0/2；空库与Phase10快照迁移到单head d1f7a40、marker保留 | merge 7cca83e；inventory 2069项/39 external；worktree LF规范化 | 运行integration/e2e |
+| 2026-10-17 15:45 Asia/Shanghai | Supervisor | T02 | integration 709 exit 0（LocalStack SIMULATED_S3）；e2e 27 exit 0；phase11 acceptance 11/11 demonstrated；修复两处acceptance竞态 | `reviews/T02/1.json` APPROVE；P3：真实MinIO/systemd/live/release-gate PATH | 集成候选 |
+| 2026-10-17 15:55 Asia/Shanghai | Supervisor | T02 | 候选4ec87e1 tree与tip c75d054一致、无删除文件；独立确认APPROVE；ff-only推进integration | integration HEAD 4ec87e1；PROGRESS/T02=DONE；T03 eligible | 派发T03 |
 
 
 
