@@ -152,6 +152,32 @@ class ProjectRow(Base):
     paused_reason: Mapped[str | None] = mapped_column(Text)
 
 
+class ProjectLeaseRow(Base):
+    """The one runtime that may drive a project, and its fencing epoch.
+
+    The row is never deleted: a release marks ``released_at`` and the next
+    acquisition increments ``epoch``. Keeping the row is what makes the epoch
+    monotonic across a clean restart, not only across an expiry takeover.
+    Expiry is compared against the database clock (``now()``), never a
+    process-local clock.
+    """
+
+    __tablename__ = "project_leases"
+    __table_args__ = (
+        CheckConstraint("epoch >= 1", name="epoch_positive"),
+        Index("ix_project_leases_expires_at", "expires_at"),
+    )
+
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_instance_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    epoch: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    renewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ProjectMembershipRow(Base):
     """What one user may do in one project.
 

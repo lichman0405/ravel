@@ -233,11 +233,19 @@
         "make premium-task TASK=T04"
       ],
       "classification": "internal",
-      "status": "PLANNED",
+      "status": "RUNNING",
       "test_nodeids": [
-        "tests/premium/T04"
+        "tests/premium/T04/test_lease.py::test_two_supervisors_only_one_acquires",
+        "tests/premium/T04/test_lease.py::test_expired_lease_is_taken_over_with_a_larger_epoch",
+        "tests/premium/T04/test_lease.py::test_release_keeps_the_epoch_monotonic",
+        "tests/premium/T04/test_lease.py::test_different_projects_can_be_held_in_parallel",
+        "tests/premium/T04/test_lease.py::test_guard_stops_after_the_lease_expires",
+        "tests/premium/T04/test_lease.py::test_supervisor_claim_is_a_gate_before_agents"
       ],
-      "manual_evidence_refs": [],
+      "manual_evidence_refs": [
+        "tasklogs/T04.md",
+        "evidence/T04/migration-20261017-1730/manifest.json"
+      ],
       "execution_commands": [
         {
           "argv": [
@@ -250,6 +258,15 @@
           ],
           "allow_skips": false,
           "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
           "external": false
         }
       ],

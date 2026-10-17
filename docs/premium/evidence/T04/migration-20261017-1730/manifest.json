@@ -1,0 +1,58 @@
+{
+  "run_id": "migration-20261017-1730",
+  "task_id": "T04",
+  "acceptance_map": {
+    "T04-AC1": [
+      "tests/premium/T04"
+    ],
+    "T04-AC2": [
+      "migration + tests"
+    ],
+    "T04-AC3": [
+      "lease expiry/takeover tests"
+    ],
+    "T04-AC4": [
+      "different projects parallel test"
+    ]
+  },
+  "started_at": "2026-10-17 17:20 Asia/Shanghai",
+  "completed_at": "2026-10-17 17:30 Asia/Shanghai",
+  "source_commit": "68390f21a2150732fb061248469246ec1d8a7279",
+  "source_digest": "d460d3d325a0e513f177e60c12bea6ea96ff95118eed314d154ba0b9ef3b1c71",
+  "platform": "Ubuntu 24.04 canonical container",
+  "dependencies": {
+    "python": "3.12.3",
+    "postgres": "16",
+    "ruff": "0.17.1",
+    "pyright": "1.1.414"
+  },
+  "commands": [
+    {
+      "command": "alembic upgrade head (fresh DB)",
+      "exit_code": 0,
+      "head": "b7e4c2a1d9f3"
+    },
+    {
+      "command": "pytest tests/premium/T04",
+      "exit_code": 0,
+      "tests": 6,
+      "passed": 6
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T04",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs\\premium\\evidence\\T04\\migration-20261017-1730\\commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs\\premium\\evidence\\T04\\migration-20261017-1730\\commands.txt",
+      "sha256": "6557ceaef6df22d36124bb49bf82f7f2bc49c73fce83c8b48b7946b0506562c2",
+      "size": 895
+    }
+  ],
+  "data_mode": "REAL (PostgreSQL)",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null
+}

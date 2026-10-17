@@ -450,6 +450,11 @@ class ProjectLoop:
     #: prose to be asked again; past that, the answer is not coming, and asking
     #: a fourth time is a model call that buys nothing.
     max_turns_per_question: int = 3
+    #: The lease fence. Called before every round; returning ``False`` means
+    #: this runtime no longer owns the project and the loop must stop before
+    #: another turn or execution start. `None` is the local, single-process
+    #: path used by tests and one-shot scripts.
+    lease_guard: Callable[[], bool] | None = None
     _rounds: int = field(default=0, init=False, repr=False)
     #: The `(node, status)` episodes an execution seat has already been given a
     #: turn for. Dispatch bookkeeping, not a record — see `_turn_list`.
@@ -477,6 +482,12 @@ class ProjectLoop:
         previous: Situation | None = None
 
         while self._rounds < self.max_rounds:
+            if self.lease_guard is not None and not self.lease_guard():
+                logger.warning(
+                    "project loop lost its lease; stopping before another turn: project=%s",
+                    self.project_id,
+                )
+                return self._end(self._read(), halted=True)
             situation = self._read()
             self._rounds += 1
 

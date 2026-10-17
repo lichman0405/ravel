@@ -1,0 +1,23 @@
+T04 lease migration and test record
+source_commit: 68390f21a2150732fb061248469246ec1d8a7279
+source_digest: d460d3d325a0e513f177e60c12bea6ea96ff95118eed314d154ba0b9ef3b1c71
+
+$ createdb ravel_t04_migration
+$ .venv/bin/python -m alembic upgrade head
+INFO ... Running upgrade d1f7a40c8e21 -> b7e4c2a1d9f3, project leases: one driver per project, with a monotonic epoch
+$ .venv/bin/python -m alembic heads
+b7e4c2a1d9f3 (head)
+
+$ psql -d ravel_t04_migration -c "\d project_leases"
+project_id varchar(32) PK
+owner_instance_id varchar(128) NOT NULL
+epoch integer NOT NULL default 1
+expires_at timestamptz NOT NULL
+renewed_at timestamptz NOT NULL
+released_at timestamptz NULL
+pk_project_leases; ix_project_leases_expires_at
+ck_project_leases_epoch_positive CHECK (epoch >= 1)
+fk_project_leases_project_id_projects REFERENCES projects(project_id) ON DELETE CASCADE
+
+$ pytest tests/premium/T04 -q
+6 passed

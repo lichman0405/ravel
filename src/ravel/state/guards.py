@@ -88,6 +88,9 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "project_memberships",
         "project_event_counters",
         "runtime_services",
+        # A lease is a mutable operational row: renew and release rewrite it,
+        # and takeover increments its epoch. It is not a scientific record.
+        "project_leases",
     }
 )
 
