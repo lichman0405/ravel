@@ -76,6 +76,13 @@ from ravel.execution.leases import (
 )
 from ravel.execution.loop import ProjectLoop
 from ravel.execution.reconcile import ExecutionReconciler
+from ravel.execution.retry_policy import (
+    DEFAULT_COOLDOWNS,
+    RetryEpisode,
+    RetryPolicy,
+    RetryQuestion,
+    RetryWiring,
+)
 from ravel.service import Heartbeat
 from ravel.state.database import Database
 from ravel.state.repositories.projects import ProjectRegistry
@@ -115,12 +122,80 @@ class ProjectSupervisor:
     #: that is the seam a test uses to answer for Temporal without a cluster.
     reconciler: ExecutionReconciler = field(init=False, repr=False)
     lease_service: LeaseService = field(init=False, repr=False)
+    #: The deployment's bounded-turn machinery, built once and shared by every
+    #: project loop this supervisor drives. Shared rather than per-loop because
+    #: the six-request cap is a deployment property: six loops each holding two
+    #: slots would be a cap of twelve. Built here rather than passed in so the
+    #: settings decide the limits; construction touches no connection, so a
+    #: supervisor that is never run still constructs.
+    retry: RetryWiring = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.reconciler = ExecutionReconciler(
             database=self.database, settings=self.settings
         )
         self.lease_service = LeaseService(database=self.database)
+        self.retry = RetryWiring.create(
+            self.database,
+            policy=RetryPolicy(
+                # The cooldowns are wall-clock delays, and the test environment
+                # runs on a clock it cannot accelerate — the same reason its
+                # settings shorten job deadlines and poll intervals. The budget,
+                # the operator gate and the turn timeout are unchanged there;
+                # tests that need the real cooldowns construct a wiring with the
+                # shipped values explicitly.
+                cooldowns_seconds=(
+                    (0.0, 0.0)
+                    if self.settings.env == "test"
+                    else DEFAULT_COOLDOWNS
+                ),
+                turn_timeout_seconds=self.settings.model_turn_timeout_seconds,
+                per_project_requests=self.settings.model_requests_per_project,
+                global_requests=self.settings.model_requests_global,
+            ),
+        )
+
+    def pending_escalations(self, project_id: str) -> list[RetryEpisode]:
+        """The project's stalled questions, one pending item per episode.
+
+        This is the projection an operator screen or a notification route
+        reads. It is a read of `retry_episodes`, not a message queue: the same
+        episode returns the same row however many ticks have passed, which is
+        what "one notification per episode" means when the loop keeps polling.
+
+        It is here rather than on the loop because it has to answer for a
+        project whose loop is not currently running — a question that reached
+        its ninth attempt before a supervisor restart is still waiting on a
+        person afterwards.
+        """
+        return self.retry.store.pending_escalations(project_id)
+
+    def operator_retry(
+        self,
+        project_id: str,
+        *,
+        actor: str,
+        question: RetryQuestion | None = None,
+    ) -> list[RetryEpisode]:
+        """An operator asks the project's stalled questions again.
+
+        Retires the live episode(s), records the actor on the retired row, and
+        opens replacements with fresh budgets. The running loop notices on its
+        next round: the replacement is an ordinary `ACTIVE` episode with
+        `attempts = 0`, so the question dispatches without anything having to
+        signal the loop. A supervisor restart between the two is harmless for
+        the same reason — the replacement is a row.
+
+        **Nothing calls this on a timer.** A cooldown is the runtime's own
+        delay; this method exists for a person, and the actor argument is
+        required so that the row says who intervened.
+        """
+        return self.retry.store.operator_retry(
+            project_id=project_id,
+            actor=actor,
+            question=question,
+            now=self.retry.now(),
+        )
 
     def _claim_project(self, project_id: str) -> ProjectLease | None:
         """Acquire or renew this project's lease, or return None if another owns it.
@@ -391,6 +466,7 @@ class ProjectSupervisor:
                 poll_seconds=self.loop_poll_seconds,
                 max_rounds=self.loop_max_rounds,
                 lease_guard=guard.ensure,
+                retry=self.retry,
             ).run()
             logger.info(
                 "supervisor project loop finished: project=%s status=%s rounds=%d halted=%s",

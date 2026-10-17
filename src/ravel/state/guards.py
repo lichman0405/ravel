@@ -91,6 +91,13 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         # A lease is a mutable operational row: renew and release rewrite it,
         # and takeover increments its epoch. It is not a scientific record.
         "project_leases",
+        # A retry episode is operational state too: an attempt advances its
+        # counters, a cooldown expiry clears the delay, the ninth attempt locks
+        # it to an operator, and an operator's retry retires it. It is a record
+        # of what the *runtime* did about an unanswered question, never of what
+        # the project's science is, which is why it is mutable and why the
+        # identity columns below are exactly the episode's identity.
+        "retry_episodes",
     }
 )
 
@@ -231,6 +238,25 @@ MEMBERSHIP_IDENTITY_COLUMNS: tuple[str, ...] = (
 #: writing `temporal-worker`'s beat onto it.
 RUNTIME_SERVICE_IDENTITY_COLUMNS: tuple[str, ...] = ("service",)
 
+#: Columns on `retry_episodes` that no update may touch. `episode_id` is first
+#: because it is what the trigger names the row by.
+#:
+#: Everything absent is bookkeeping a live episode must be able to advance:
+#: its status, attempt and round counters, cooldown and escalation timestamps,
+#: the operator who retried it, and its retirement. What is here is the
+#: episode's identity — which question, about which scientific state version —
+#: so a row cannot be rewritten to stand for a different question and thereby
+#: inherit or shed a budget.
+RETRY_EPISODE_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "episode_id",
+    "project_id",
+    "question",
+    "problem_key",
+    "fingerprint",
+    "state_version",
+    "created_at",
+)
+
 _TRANSITION_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS ravel_node_transitions (
     from_status text NOT NULL,
@@ -345,6 +371,7 @@ _LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
 _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
 _MEMBERSHIP_IDENTITY_TRIGGER = "ravel_project_memberships_identity"
 _RUNTIME_SERVICE_IDENTITY_TRIGGER = "ravel_runtime_services_identity"
+_RETRY_EPISODE_IDENTITY_TRIGGER = "ravel_retry_episodes_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -362,6 +389,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _DEVIATION_IDENTITY_TRIGGER,
     _MEMBERSHIP_IDENTITY_TRIGGER,
     _RUNTIME_SERVICE_IDENTITY_TRIGGER,
+    _RETRY_EPISODE_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -537,6 +565,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=RUNTIME_SERVICE_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "retry_episodes" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_RETRY_EPISODE_IDENTITY_TRIGGER,
+                table="retry_episodes",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=RETRY_EPISODE_IDENTITY_COLUMNS,
             )
         )
 

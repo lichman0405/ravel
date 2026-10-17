@@ -344,3 +344,40 @@ class ApprovalStatus(StrEnum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     EXPIRED = "EXPIRED"
+
+
+class RetryEpisodeStatus(StrEnum):
+    """Where one bounded-retry episode stands.
+
+    This is *automation* state, not scientific state: it says what the runtime
+    will do about an unanswered question, and it deliberately does not appear
+    on `ProjectStatus`. A project whose runtime has stalled is still the status
+    it was — a stall is a fact about the machinery, not an ending, and writing
+    it as `FAILED` or `SUCCESS` would be a scientific claim nobody made.
+
+    `ACTIVE` is "within budget, may ask now"; `COOLDOWN` is "within budget, may
+    ask after `cooldown_until`"; `AWAITING_OPERATOR` is "budget spent, and only
+    a person or a relevant scientific change reopens it"; `RETIRED` is history
+    — the question ended, the state moved on, or an operator asked again.
+    """
+
+    ACTIVE = "ACTIVE"
+    COOLDOWN = "COOLDOWN"
+    AWAITING_OPERATOR = "AWAITING_OPERATOR"
+    RETIRED = "RETIRED"
+
+
+class RetryQuestion(StrEnum):
+    """The four questions a `ProjectLoop` puts to Master and Review.
+
+    The values are the prefixes of the loop's question keys, so the persisted
+    row says which power was being asked without the retry table having to
+    import the loop. Execution-seat turns are deliberately absent: a seat is
+    given one turn per `(node, status)` episode, and a long HPC or human-lab
+    wait is not a model question that can go unanswered.
+    """
+
+    DECISION = "decision"
+    PRE_FLIGHT = "pre-flight"
+    VERDICT = "verdict"
+    ENDING = "ending"

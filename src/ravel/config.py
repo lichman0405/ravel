@@ -178,6 +178,21 @@ class Settings(BaseSettings):
     #: `sbatch` returns immediately from rather than waiting on.
     slurm_command_timeout_seconds: float = 60.0
 
+    # ── Model turns ────────────────────────────────────────────────────────
+    # How long one dispatch to a model-backed seat may take before the turn is
+    # treated as unanswered. The DSH session has a timeout of its own
+    # (`dsh_turn_timeout_seconds`), but that one bounds a single harness call;
+    # this bounds the loop's turn, so a seat that never returns cannot hold a
+    # project's sequencing forever. A turn that times out has still spent its
+    # attempt — the persisted retry budget is what prevents a retry loop.
+    model_turn_timeout_seconds: float = 180.0
+    # Concurrency caps for model requests: per project, and across the whole
+    # deployment. The second is what bounds a supervisor driving many
+    # projects; the first stops one project from taking the deployment's
+    # whole allowance.
+    model_requests_per_project: int = 2
+    model_requests_global: int = 6
+
     # ── Harness ────────────────────────────────────────────────────────────
     dsh_home: Path = Path("./runtime/dsh_home")
     dsh_bin: str | None = None
