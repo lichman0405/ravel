@@ -1,0 +1,62 @@
+RAVEL premium T01-AC2 — one system-wide database test lock
+Run: 2026-10-17 16:50 Asia/Shanghai
+Source: cc/fix-db-lock @ 59db369 (fix commit; evidence is outside source digest)
+
+===== 1. T01 lock and entrypoint competition =====
+$ .venv/bin/python -m pytest tests/premium/T01 -q -rxXs
+...............................................
+47 passed
+
+The suite includes:
+- DatabaseLock exclusion and timeout.
+- second runner cannot enter while the lock is held.
+- premium-task refuses to enter while the lock is held (real `premium_task.py T04 --skip-preflight` child).
+- release-gate refuses to enter while the lock is held (real `release_gate.py --only unit` child).
+- direct pytest refuses to enter while the lock is held (real `pytest` child against `tests/integration/state/test_guards.py`).
+- a blocked runner enters after the holder releases.
+
+$ make premium-task TASK=T01
+{"task_id": "T01", "result": "PASS", "run_id": "run-20261017-164153",
+ "manifest": "docs/premium/evidence/T01/run-20261017-164153/manifest.json",
+ "failed_commands": []}
+
+===== 2. Shared fixture on real database suites =====
+$ .venv/bin/python -m pytest tests/premium/T04 -q -rxXs
+......
+6 passed
+
+$ .venv/bin/python -m pytest tests/integration/state/test_guards.py -q -rxXs
+......
+6 passed
+
+===== 3. Cross-WSL / container lock competition =====
+Holder (WSL host, working directory /mnt/c/Users/lishi/code/ravel-worktrees/fix-db-lock):
+HOLDER_ACQUIRED /mnt/c/Users/lishi/code/.ravel-test-locks/database-1938431b0fad23c3e1bfebcc7442700b.lock
+
+Second process (canonical Ubuntu 24.04 container, same host checkout mounted at /workspace):
+Traceback (most recent call last):
+  ...
+  File "/workspace/ravel-worktrees/fix-db-lock/src/ravel/state/db_lock.py", line 130, in __enter__
+    raise TimeoutError(
+TimeoutError: timed out waiting for database test lock /workspace/.ravel-test-locks/database-1938431b0fad23c3e1bfebcc7442700b.lock
+SECOND_EXIT=1
+
+The host and container paths name the same file. The second process was refused after its
+1-second wait; it did not proceed to a TRUNCATE. This is the cross-boundary proof the
+same-container subprocess tests cannot provide on their own.
+
+===== 4. Release gate =====
+$ .venv/bin/python scripts/release_gate.py --only unit
+── unit ── ...
+1103 passed, 2 skipped, 1 failed in 20.77s
+
+The release gate acquired the lock and ran its row. The unit failure is a separate
+environmental defect: `scripts/install_services.sh` had CRLF line endings in the
+container checkout, so bash rejected `set -o pipefail`. The gate verdict was
+NOT_CERTIFIED and is not claimed as a pass. The full gate remains unfinished (see
+BLOCKERS.md B03).
+
+===== 5. Environment =====
+Canonical backend: Ubuntu 24.04 x86_64, Python 3.12.3, PostgreSQL 16,
+Docker 29.1.3, Compose 2.40.3. Tests ran with the canonical
+ravel-premium-ubuntu24:latest image and the worktree's test database.
