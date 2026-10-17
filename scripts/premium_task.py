@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import errno
 import hashlib
 import json
 import os
@@ -44,6 +43,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from ravel.state.db_lock import DatabaseLock, database_lock_path, lock_dir
 
 REPO_ROOT = Path(os.environ.get("RAVEL_PREMIUM_REPO_ROOT", Path(__file__).resolve().parents[1]))
 PREMIUM_ROOT = REPO_ROOT / "docs" / "premium"
@@ -335,121 +336,6 @@ def command_uses_database(command: dict[str, Any]) -> bool:
         for marker in DATABASE_PATH_MARKERS
     )
 
-
-#: A fixed shared directory, not per-user TMPDIR: two runners launched with
-#: different environments must still meet at the same lock file. Override it
-#: explicitly for a non-default deployment.
-DEFAULT_LOCK_DIR = (
-    Path("/tmp/ravel-premium-locks")
-    if os.name == "posix"
-    else Path(tempfile.gettempdir()).resolve() / "ravel-premium-locks"
-)
-
-
-def lock_dir(env: dict[str, str] | None = None) -> Path:
-    env = os.environ if env is None else env
-    configured = env.get("RAVEL_PREMIUM_LOCK_DIR")
-    if configured:
-        return Path(configured).expanduser().resolve()
-    return DEFAULT_LOCK_DIR
-
-
-def _canonical_host(value: str) -> str:
-    host = value.strip().lower().strip("[]")
-    if host in {"localhost", "::1"}:
-        return "127.0.0.1"
-    return host
-
-
-def database_lock_path(env: dict[str, str] | None = None) -> Path:
-    env = os.environ if env is None else env
-    identity = "{host}:{port}/{db}".format(
-        host=_canonical_host(env.get("RAVEL_POSTGRES_HOST", "127.0.0.1")),
-        port=int(env.get("RAVEL_POSTGRES_PORT", "55432")),
-        db=env.get("RAVEL_POSTGRES_DB", "ravel_test").strip().lower(),
-    )
-    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
-    return lock_dir(env) / f"database-{digest}.lock"
-
-
-class DatabaseLock:
-    """System-wide exclusive lock for suites that truncate the test database."""
-
-    def __init__(self, path: Path | None = None, timeout: float = 1800.0) -> None:
-        self.path = path or database_lock_path()
-        self.timeout = timeout
-        self._handle: Any = None
-
-    def __enter__(self) -> DatabaseLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._handle = open(self.path, "a+", encoding="utf-8")
-        deadline = time.monotonic() + self.timeout
-        while True:
-            try:
-                self._acquire()
-                return self
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    self._handle.close()
-                    self._handle = None
-                    raise TimeoutError(
-                        f"timed out waiting for database test lock {self.path}"
-                    ) from None
-                time.sleep(0.25)
-            except BaseException:
-                self._handle.close()
-                self._handle = None
-                raise
-
-    @staticmethod
-    def _contention(error: OSError) -> bool:
-        return error.errno in {
-            errno.EACCES,
-            errno.EAGAIN,
-            errno.EWOULDBLOCK,
-            errno.EDEADLK,
-        }
-
-    def _acquire(self) -> None:
-        try:
-            import fcntl
-        except ImportError:  # pragma: no cover - Windows development only
-            import msvcrt
-
-            assert self._handle is not None
-            self._handle.seek(0)
-            try:
-                msvcrt.locking(self._handle.fileno(), msvcrt.LK_NBLCK, 1)
-            except OSError as error:
-                if self._contention(error):
-                    raise BlockingIOError(str(error)) from error
-                raise
-            return
-
-        assert self._handle is not None
-        try:
-            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            if self._contention(error):
-                raise BlockingIOError(str(error)) from error
-            raise
-
-    def __exit__(self, *exc: object) -> None:
-        if self._handle is None:
-            return
-        try:
-            import fcntl
-        except ImportError:  # pragma: no cover - Windows development only
-            import msvcrt
-
-            self._handle.seek(0)
-            with contextlib.suppress(OSError):
-                msvcrt.locking(self._handle.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            with contextlib.suppress(OSError):
-                fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
-        self._handle.close()
-        self._handle = None
 
 
 def run_preflight() -> int:

@@ -45,6 +45,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
+# Run against this checkout's source even when the gate is invoked with an
+# interpreter whose editable install points at another worktree. The gate and
+# the suites it launches must agree on the database lock implementation.
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from ravel.state.db_lock import DatabaseLock  # noqa: E402
+
 GREEN = "\033[32m"
 RED = "\033[31m"
 YELLOW = "\033[33m"
@@ -417,8 +423,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{row.name}: {' '.join(row.command)}")
         return 0
 
-    for row in selected:
-        run(row, environment_for(row))
+    # One lock for the whole gate. Every row that touches the database —
+    # integration, e2e and acceptance — truncates the same test database, and
+    # a direct pytest or premium task must not do so between rows. Holding the
+    # lock across the run also means the gate's verdict describes one
+    # uninterrupted test session rather than several interleaved ones.
+    try:
+        with DatabaseLock():
+            for row in selected:
+                run(row, environment_for(row))
+    except TimeoutError as error:
+        print(f"{RED}{error}{RESET}", file=sys.stderr)
+        return 1
     report(selected)
 
     # A gate that did not run is a non-zero exit, because the caller is a
