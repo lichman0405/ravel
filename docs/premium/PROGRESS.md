@@ -1,12 +1,12 @@
 # 开发进度（从PROGRESS.json生成）
 
-更新时间：2026-10-17 13:24 Asia/Shanghai；工程状态：IN_PROGRESS。
-任务完成：1/30。真实认证单列；计划与交接文档检查不计开发完成。
+更新时间：2026-10-17 15:12 Asia/Shanghai；工程状态：IN_PROGRESS。
+任务完成：2/30。真实认证单列；计划与交接文档检查不计开发完成。
 
 | Task | 标题 | 依赖 | 状态 | 作者 | 候选/合并 |
 |---|---|---|---|---|---|
 | [T00](TASKS/T00-takeover.md) | 接管本地仓库与建立开发记录 | 无 | DONE | SUPERVISOR | 5356394919/ace2b182a7 |
-| [T01](TASKS/T01-environment-gates.md) | Linux 环境、测试隔离及证据执行入口 | T00 | TODO | 未派发 | — |
+| [T01](TASKS/T01-environment-gates.md) | Linux 环境、测试隔离及证据执行入口 | T00 | DONE | SUPERVISOR | 5495e06e51/7cae892cbe |
 | [T02](TASKS/T02-phase11-adoption.md) | 审查并引入已存在的 Phase 11 | T00, T01 | TODO | 未派发 | — |
 | [T03](TASKS/T03-contracts.md) | 冻结高端版接口、范围与 AC 映射 | T02 | TODO | 未派发 | — |
 | [T04](TASKS/T04-project-lease.md) | Supervisor 项目租约与过期进程隔离 | T03 | TODO | 未派发 | — |
@@ -36,6 +36,6 @@
 | [T28](TASKS/T28-vm-live.md) | Docker 与真实专用 VM 可替换验证 | T23 | TODO | 未派发 | — |
 | [T29](TASKS/T29-certified-release.md) | 全真实科研闭环与最终交付 | T24, T25, T26, T27, T28 | TODO | 未派发 | — |
 
-当前可派发（仍需文件锁/环境）：T01
+当前可派发（仍需文件锁/环境）：T02
 
 更新方法：Supervisor修改PROGRESS.json后执行 `python docs/premium/tools/tracker.py validate` 和 `render`。

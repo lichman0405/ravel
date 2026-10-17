@@ -13,6 +13,9 @@
 | 2026-10-17 13:21 Asia/Shanghai | Reviewer | T00 | 独立子 Agent 审查固定候选 5356394，检查 AC1/AC2/AC3 | decision=APPROVE；三条 AC PASS；findings 空；`reviews/T00/1.json` | 集成候选复核 |
 | 2026-10-17 13:24 Asia/Shanghai | Supervisor | T00 | 创建 candidate-T00，merge --no-ff 候选 5356394；Reviewer 复核集成候选 | merge SHA ace2b18；source_digest 仍 a01df6b9…；变更仅记录文件；Reviewer APPROVE | ff-only 推进 integration，T00 DONE |
 | 2026-10-17 13:24 Asia/Shanghai | Supervisor | T00 | `git merge --ff-only cc/candidate-T00` 推进 cc/ravel-premium-v1；PROGRESS/T00=DONE | integration HEAD ace2b18；T01 eligible | 派发 T01 |
+| 2026-10-17 15:08 Asia/Shanghai | Supervisor | T01 | 新增premium preflight/task runner、42项T01测试、Makefile/pyproject入口；建立Ubuntu 24.04 canonical容器 | T01 tests 42 passed、make lint PASS、preflight PASS；unit 803 passed；LocalStack integration 538项全通过（SIMULATED_S3）；真实MinIO仍缺失 | 独立AC复核 |
+| 2026-10-17 15:08 Asia/Shanghai | Reviewer | T01 | 独立AC1–AC4复核；两轮P1/P2修复（noncanonical绕过、DB锁默认可绕过） | decision=APPROVE；`reviews/T01/1.json`；两条P3 advisory | 集成候选复核 |
+| 2026-10-17 15:12 Asia/Shanghai | Supervisor | T01 | 最终门禁run-20261017-150746 PASS；候选7cae892 tree与tip f525ceb一致；ff-only推进integration | integration HEAD 7cae892；PROGRESS/T01=DONE；T02 eligible | 派发T02 |
 
 
 

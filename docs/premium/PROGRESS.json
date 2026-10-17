@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 15:08 Asia/Shanghai",
+  "updated_at": "2026-10-17 15:12 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "ace2b182a7ab9326b24e4e8309d8049c2cd646c1",
+  "integration_head_sha": "7cae892cbead7366def99e172f8355b1449f1a04",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -26,7 +26,7 @@
       "note": "T00 DONE：独立Reviewer APPROVE（候选5356394，集成候选ace2b18复核对齐source_digest），ff-only合入cc/ravel-premium-v1。"
     },
     "T01": {
-      "status": "INTEGRATING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T01",
       "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
@@ -36,10 +36,10 @@
       "gate_refs": [
         "evidence/T01/run-20261017-150746/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "7cae892cbead7366def99e172f8355b1449f1a04",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 15:08 Asia/Shanghai",
-      "note": "独立AC1-AC4复核APPROVE；42 T01 tests、make lint、preflight PASS；P3 advisory仅两处（异常pytest形式、日志redaction）。等待集成候选复核。"
+      "last_updated": "2026-10-17 15:12 Asia/Shanghai",
+      "note": "T01 DONE：独立AC1-AC4复核APPROVE；最终门禁run-20261017-150746 PASS；集成候选7cae892与任务tip f525ceb tree一致，Reviewer确认；ff-only合入cc/ravel-premium-v1。"
     },
     "T02": {
       "status": "TODO",
