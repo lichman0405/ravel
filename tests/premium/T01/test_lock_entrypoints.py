@@ -31,7 +31,12 @@ def _environment(tmp_path: Path, *, timeout: float = 0.5) -> dict[str, str]:
         {
             "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path / "locks"),
             "RAVEL_PREMIUM_LOCK_TIMEOUT": str(timeout),
-            "RAVEL_PREMIUM_EVIDENCE_ROOT": str(tmp_path / "evidence"),
+            # The runner records log paths relative to the repository, so the
+            # evidence root must stay inside it. `.pytest_cache` is ignored by
+            # Git and therefore cannot make the clean-tree preflight fail.
+            "RAVEL_PREMIUM_EVIDENCE_ROOT": str(
+                REPO_ROOT / ".pytest_cache" / "premium-evidence" / tmp_path.name
+            ),
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
             "RAVEL_TEST_DB": "ravel_test",
