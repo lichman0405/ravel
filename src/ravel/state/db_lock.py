@@ -5,18 +5,14 @@ all reach the same PostgreSQL test database, and every integration test starts
 by truncating it. They must therefore share one lock, not merely one naming
 convention.
 
-The default directory is chosen from the repository layout so that a host
-``pytest`` run, a WSL run and a container run of the same checkout meet at the
-same file:
-
-* a task worktree is ``<shared>/ravel-worktrees/Txx``, so ``<shared>`` is its
-  grandparent;
-* the main checkout is ``<shared>/ravel``, so ``<shared>`` is its parent.
-
-Both resolve to the same ``<shared>/.ravel-test-locks``. The container sees
-the same directory at ``/workspace/.ravel-test-locks``. ``RAVEL_PREMIUM_LOCK_DIR``
-overrides the directory; a non-writable shared directory falls back to the
-platform temporary directory.
+The default directory is derived from Git's common directory, not from a
+worktree's path: every worktree of one repository resolves to the same
+``<repo-parent>/.ravel-test-locks``. The container sees that directory at
+``/workspace/.ravel-test-locks`` when the host checkout is mounted at
+``/workspace``. ``RAVEL_PREMIUM_LOCK_DIR`` overrides it for a deliberate
+deployment. A shared directory that cannot be written is a hard error: falling
+back to a per-process temporary directory would silently remove the exclusion
+this module exists to provide.
 """
 
 from __future__ import annotations
@@ -37,33 +33,63 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _git_common_dir() -> Path:
+    """The repository's common Git directory, shared by every worktree."""
+    entry = _repo_root() / ".git"
+    if entry.is_dir():
+        return entry.resolve()
+    if not entry.is_file():
+        raise RuntimeError(
+            f"cannot locate the Git directory for the database test lock: {entry}"
+        )
+    line = entry.read_text(encoding="utf-8").strip()
+    if not line.startswith("gitdir:"):
+        raise RuntimeError(f"{entry} does not name a Git directory")
+    gitdir = Path(line.partition(":")[2].strip()).expanduser()
+    if not gitdir.is_absolute():
+        gitdir = entry.parent / gitdir
+    gitdir = gitdir.resolve()
+    # A linked worktree's gitdir is <common>/worktrees/<name>.
+    if gitdir.parent.name != "worktrees":
+        raise RuntimeError(f"unexpected linked-worktree Git directory: {gitdir}")
+    return gitdir.parent.parent
+
+
 def _shared_parent() -> Path:
-    root = _repo_root()
-    if root.parent.name == "ravel-worktrees":
-        return root.parent.parent
-    return root.parent
+    # The common directory is <repo>/.git for the main checkout and for every
+    # linked worktree, so its grandparent is the host directory the container
+    # mounts at /workspace.
+    return _git_common_dir().parent.parent
 
 
 def lock_dir(env: Mapping[str, str] | None = None) -> Path:
-    """The shared lock directory, or a writable fallback.
+    """The one shared lock directory for this repository's test databases.
 
-    The directory is created on demand by ``DatabaseLock``. The function is
-    deterministic for a given checkout so two processes compute the same path.
+    The directory is created on demand. A non-writable shared directory is an
+    error rather than a fallback: a process that quietly locks a private
+    directory has no exclusion at all.
     """
     source: Mapping[str, str] = os.environ if env is None else env
     configured = source.get("RAVEL_PREMIUM_LOCK_DIR")
     if configured:
-        return Path(configured).expanduser().resolve()
+        directory = Path(configured).expanduser().resolve()
+    else:
+        directory = (_shared_parent() / ".ravel-test-locks").resolve()
 
-    shared = (_shared_parent() / ".ravel-test-locks").resolve()
     try:
-        shared.mkdir(parents=True, exist_ok=True)
-        probe = shared / ".probe"
-        probe.write_text("", encoding="utf-8")
-        probe.unlink()
-        return shared
-    except OSError:
-        return Path(os.path.abspath(os.sep + "tmp")) / "ravel-premium-locks"
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / f".probe-{os.getpid()}-{time.time_ns()}"
+        try:
+            probe.write_text("", encoding="utf-8")
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                probe.unlink()
+    except OSError as error:
+        raise RuntimeError(
+            f"database test lock directory {directory} is not writable; refusing "
+            "to fall back to a non-shared directory"
+        ) from error
+    return directory
 
 
 def database_lock_path(env: Mapping[str, str] | None = None) -> Path:
@@ -71,10 +97,14 @@ def database_lock_path(env: Mapping[str, str] | None = None) -> Path:
     host = source.get("RAVEL_POSTGRES_HOST", "127.0.0.1").strip().lower().strip("[]")
     if host in {"localhost", "::1"}:
         host = "127.0.0.1"
+    # The integration fixture selects the test database from RAVEL_TEST_DB and
+    # refuses any name without the _test suffix. RAVEL_POSTGRES_DB is the
+    # deployment database when .env exists, so using it here would give the
+    # release gate and a direct pytest different locks for the same database.
     identity = "{host}:{port}/{db}".format(
         host=host,
         port=int(source.get("RAVEL_POSTGRES_PORT", "55432")),
-        db=source.get("RAVEL_POSTGRES_DB", "ravel_test").strip().lower(),
+        db=source.get("RAVEL_TEST_DB", "ravel_test").strip().lower(),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
     return lock_dir(source) / f"database-{digest}.lock"

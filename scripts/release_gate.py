@@ -39,6 +39,7 @@ import argparse
 import os
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -80,6 +81,10 @@ class Row:
     command: list[str]
     #: What this row is evidence *for*, in one line.
     covers: str
+    #: Whether this row can touch the test database. Database rows that run
+    #: pytest take the lock in the child's fixture; only a non-pytest database
+    #: command is wrapped by the gate itself.
+    database: bool = True
     #: Set for a row that must not skip. A gate that can pass by not running is
     #: not a gate, which is why `tests/dsh` is run with `RAVEL_REQUIRE_DSH=1`
     #: wherever it appears.
@@ -133,6 +138,15 @@ def a_pytest(expr: str) -> list[str]:
     ]
 
 
+def runs_pytest(command: list[str]) -> bool:
+    """Whether a row starts pytest, which takes the database lock itself."""
+    return any(Path(part).name in {"pytest", "py.test"} for part in command) or (
+        "-m" in command
+        and command.index("-m") + 1 < len(command)
+        and Path(command[command.index("-m") + 1]).name in {"pytest", "py.test"}
+    )
+
+
 def rows() -> list[Row]:
     """Every gate, in the order a reader would fix them if one failed.
 
@@ -149,16 +163,19 @@ def rows() -> list[Row]:
             name="ruff",
             command=["ruff", "check", "src", "tests"],
             covers="style and the mistakes a linter catches before a test does",
+            database=False,
         ),
         Row(
             name="pyright",
             command=["pyright", "src", "tests"],
             covers="types over the whole tree, src and tests alike",
+            database=False,
         ),
         Row(
             name="unit",
             command=a_pytest("tests/unit"),
             covers="every unit of logic, with no service running",
+            database=False,
         ),
         Row(
             name="integration",
@@ -423,14 +440,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{row.name}: {' '.join(row.command)}")
         return 0
 
-    # One lock for the whole gate. Every row that touches the database —
-    # integration, e2e and acceptance — truncates the same test database, and
-    # a direct pytest or premium task must not do so between rows. Holding the
-    # lock across the run also means the gate's verdict describes one
-    # uninterrupted test session rather than several interleaved ones.
+    # A pytest row owns the lock through the child's database fixture. Holding
+    # it here as well would deadlock the child against its parent. Only a
+    # database row that is not a pytest invocation needs the gate to hold it.
     try:
-        with DatabaseLock():
-            for row in selected:
+        for row in selected:
+            with (
+                DatabaseLock()
+                if row.database and not runs_pytest(row.command)
+                else nullcontext()
+            ):
                 run(row, environment_for(row))
     except TimeoutError as error:
         print(f"{RED}{error}{RESET}", file=sys.stderr)

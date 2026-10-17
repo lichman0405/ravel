@@ -36,6 +36,7 @@ import uvicorn
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 from tests.integration.backends.conftest import (  # noqa: F401
+    _database_test_lock,
     artifact_store,
     clean,
     database,

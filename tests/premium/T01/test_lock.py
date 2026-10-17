@@ -56,7 +56,7 @@ def test_lock_dir_honors_injected_environment(tmp_path: Path) -> None:
         "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
         "RAVEL_POSTGRES_HOST": "127.0.0.1",
         "RAVEL_POSTGRES_PORT": "55432",
-        "RAVEL_POSTGRES_DB": "ravel_test",
+        "RAVEL_TEST_DB": "ravel_test",
     }
     from ravel.state.db_lock import database_lock_path, lock_dir
 
@@ -77,7 +77,7 @@ def test_lock_path_normalizes_localhost_alias(tmp_path: Path) -> None:
     base = {
         "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
         "RAVEL_POSTGRES_PORT": "55432",
-        "RAVEL_POSTGRES_DB": "ravel_test",
+        "RAVEL_TEST_DB": "ravel_test",
     }
     from ravel.state.db_lock import database_lock_path
 
@@ -95,21 +95,21 @@ def test_lock_path_is_stable_and_database_specific() -> None:
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "ravel_test",
+            "RAVEL_TEST_DB": "ravel_test",
         }
     )
     second = premium_task.database_lock_path(
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "ravel_test",
+            "RAVEL_TEST_DB": "ravel_test",
         }
     )
     other = premium_task.database_lock_path(
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "other_test",
+            "RAVEL_TEST_DB": "other_test",
         }
     )
     assert first == second

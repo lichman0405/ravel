@@ -34,7 +34,7 @@ def _environment(tmp_path: Path, *, timeout: float = 0.5) -> dict[str, str]:
             "RAVEL_PREMIUM_EVIDENCE_ROOT": str(tmp_path / "evidence"),
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "ravel_test",
+            "RAVEL_TEST_DB": "ravel_test",
             "PYTHONPATH": os.pathsep.join(
                 [str(REPO_ROOT / "src"), str(REPO_ROOT / "scripts")]
             ),
@@ -82,7 +82,11 @@ def test_release_gate_entrypoint_is_refused_while_lock_held(
     environment = _environment(tmp_path)
     with DatabaseLock(_lock_path(tmp_path), timeout=0.5):
         result = _run(
-            [str(REPO_ROOT / "scripts" / "release_gate.py"), "--only", "unit"],
+            [
+                str(REPO_ROOT / "scripts" / "release_gate.py"),
+                "--only",
+                "research-readback",
+            ],
             cwd=REPO_ROOT,
             environment=environment,
         )

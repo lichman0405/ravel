@@ -330,6 +330,26 @@ def _database_target(target: str) -> bool:
     return False
 
 
+def command_is_pytest(command: dict[str, Any]) -> bool:
+    """Whether this command starts pytest in this process.
+
+    A pytest process takes the database lock itself, through the integration
+    fixture. The runner must not hold it across that child: the child would
+    wait for a lock its parent owns until the child times out.
+    """
+    tokens = _command_tokens(command)
+    for index, token in enumerate(tokens):
+        if Path(token).name in {"pytest", "py.test"}:
+            return True
+        if (
+            token == "-m"
+            and index + 1 < len(tokens)
+            and Path(tokens[index + 1]).name in {"pytest", "py.test"}
+        ):
+            return True
+    return False
+
+
 def command_uses_database(command: dict[str, Any]) -> bool:
     tokens = _command_tokens(command)
     if any(_database_target(target) for target in _pytest_positionals(tokens)):
@@ -593,15 +613,25 @@ def run_task(
     needs_database = force_database_lock or task_needs_database or any(
         c["needs_database"] or command_uses_database(c) for c in commands
     )
-    lock_context: Iterator[None] = (
-        DatabaseLock() if needs_database else contextlib.nullcontext()
-    )
 
     results: list[CommandResult] = []
     try:
-        with lock_context:
-            for index, command in enumerate(commands, start=1):
-                print(f"{task_id}: running command {index}/{len(commands)}")
+        for index, command in enumerate(commands, start=1):
+            print(f"{task_id}: running command {index}/{len(commands)}")
+            database_command = (
+                force_database_lock
+                or command["needs_database"]
+                or command_uses_database(command)
+            )
+            # A pytest child owns the lock through its database fixture. Only a
+            # non-pytest database command (a migration, a seeding script) needs
+            # the runner to hold it across the child.
+            lock_context: Iterator[None] = (
+                DatabaseLock()
+                if database_command and not command_is_pytest(command)
+                else contextlib.nullcontext()
+            )
+            with lock_context:
                 results.append(
                     run_command(
                         command,
