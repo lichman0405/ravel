@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 17:40 Asia/Shanghai",
+  "updated_at": "2026-10-17 17:45 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "dc3b6b9564d8604f3008579a83d69d4c80502dd2",
+  "integration_head_sha": "0e75a91628412855c72761a91308df30421c40ed",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -75,7 +75,7 @@
       "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS；候选dc3b6b9与tip tree一致，ff-only合入。"
     },
     "T04": {
-      "status": "INTEGRATING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T04",
       "base_sha": "80b261c69e0522fd5ce0b32d1f115a663a9ab868",
@@ -86,10 +86,10 @@
         "evidence/T04/run-20261017-160705/manifest.json",
         "evidence/T04/migration-20261017-1730/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "0e75a91628412855c72761a91308df30421c40ed",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 17:40 Asia/Shanghai",
-      "note": "T04独立AC1-AC2/AC3-AC4复核APPROVE；6项lease测试+lint+迁移PASS；P3 advisory为DB异常fail-closed、Temporal submission-key引用、in-turn fence留T06。等待集成候选复核。"
+      "last_updated": "2026-10-17 17:45 Asia/Shanghai",
+      "note": "T04 DONE：project_leases表/迁移、LeaseService/LeaseGuard、supervisor抢租约与turn fence；6项测试+lint+空库迁移PASS；AC1-AC4独立复核APPROVE；候选0e75a91与tip tree一致并ff-only合入。"
     },
     "T05": {
       "status": "TODO",

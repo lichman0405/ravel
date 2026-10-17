@@ -21,6 +21,8 @@
 | 2026-10-17 15:55 Asia/Shanghai | Supervisor | T02 | 候选4ec87e1 tree与tip c75d054一致、无删除文件；独立确认APPROVE；ff-only推进integration | integration HEAD 4ec87e1；PROGRESS/T02=DONE；T03 eligible | 派发T03 |
 | 2026-10-17 16:10 Asia/Shanghai | Supervisor | T03 | 12个premium schema、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；schema check/tracker/diff-check PASS | `reviews/T03/1.json` APPROVE（AC1/AC2独立PASS，AC3确定性审计PASS） | 集成候选 |
 | 2026-10-17 16:15 Asia/Shanghai | Supervisor | T03 | 候选dc3b6b9 tree与tip一致；ff-only推进integration | integration HEAD dc3b6b9；PROGRESS/T03=DONE；T04/T06/T07/T08/T12/T22 eligible | 派发T04 |
+| 2026-10-17 17:35 Asia/Shanghai | Supervisor | T04 | project_leases表/迁移、LeaseService/LeaseGuard、supervisor抢租约+每轮fence；6项测试+lint+空库迁移 | lease tests 6 passed；head b7e4c2a1d9f3；AC1-AC4独立复核APPROVE；P3 advisory已记录 | 集成候选 |
+| 2026-10-17 17:45 Asia/Shanghai | Supervisor | T04 | 候选0e75a91 tree与tip 0a8c57a一致；ff-only推进integration | integration HEAD 0e75a91；PROGRESS/T04=DONE；T05/T06/T07/T08/T12/T22 eligible | 下一波（T05/T06） |
 
 
 
