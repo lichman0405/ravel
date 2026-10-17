@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "task_id": "T05",
+  "attempt": 1,
+  "reviewer_id": "independent-T05-AC1-AC4",
+  "base_sha": "b5ad0cad6fe787a4517b44875f6f5f79e0b22174",
+  "candidate_sha": "365b871",
+  "source_digest": "a6fa4c9f80eb09eff79d58e327e7dd622f69ca395ca3aefde6098ecc1a97248b",
+  "reviewed_at": "2026-10-17 19:42 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T05-AC1",
+      "result": "PASS",
+      "evidence": "Persistent PostgreSQL budget keyed by project + problem fingerprint + state version; attempt spent before the model call; attempt 9 sets AWAITING_OPERATOR with a stable escalation_event_id. Ten real ProjectSupervisor restarts over one DB make [3,3,3,0,...] = 9 calls; a year-later tenth reservation is refused; a timer cannot unlock. Independent review PASS."
+    },
+    {
+      "id": "T05-AC2",
+      "result": "PASS",
+      "evidence": "180s turn timeout, 2/project and 6/global limits; cooldown admits no call at 59s and attempt 4 at 60s; 300s boundary; operator_retry requires a non-empty actor, retires the episode and opens a replacement. Independent review PASS."
+    },
+    {
+      "id": "T05-AC3",
+      "result": "PASS",
+      "evidence": "One durable retry row + stable escalation_event_id; pending_escalations is a projection, one item across ten reads and one log line per loop. A RUNNING/WAITING_EXTERNAL node over 30 simulated days has stalled_rounds==0, zero model calls, no episode, and preserved scientific evidence. Independent review PASS."
+    },
+    {
+      "id": "T05-AC4",
+      "result": "PASS",
+      "evidence": "Paused/ended project and lost lease dispatch no new turns; frozen acceptance, execution contract, pre-run PASS and node status remain. Independent review PASS."
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 310,
+      "trigger": "T05 map used a directory as test_nodeids and omitted the migration at the reviewed code head",
+      "impact": "gate would not exercise the new table on a fresh DB",
+      "acceptance_id": "T05-AC1",
+      "required_fix": "Fixed after review: 35 concrete nodeids, alembic upgrade head, and make lint; final gate run-20261017-194349 PASS.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/execution/supervisor.py",
+      "line": 158,
+      "trigger": "pending_escalations/operator_retry have no authenticated Gateway/TUI route",
+      "impact": "operator interface is follow-on wiring outside T05 write scope",
+      "acceptance_id": "T05-AC2",
+      "required_fix": "T07/T22 must expose the authenticated route; supervisor API and state are tested.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/retry_policy.py",
+      "line": 727,
+      "trigger": "global 6-slot semaphore is per supervisor process",
+      "impact": "not a cluster-wide cap; acceptable for V0 single-supervisor CVM",
+      "acceptance_id": "T05-AC2",
+      "required_fix": "Documented residual for multi-supervisor deployment.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/loop.py",
+      "line": 505,
+      "trigger": "lease_guard checked once per round",
+      "impact": "a loss inside a round can allow that round's remaining turns; tool writes remain T04-fenced",
+      "acceptance_id": "T05-AC4",
+      "required_fix": "Pre-existing T04 behavior; not introduced by T05.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The operator route is not authenticated/wired yet; only the supervisor API exists.",
+    "The global concurrency cap is per process, not cluster-wide.",
+    "Fresh-DB migration evidence predates the integration merge; the post-merge gate applied alembic on an already-migrated DB. Migration files are unchanged.",
+    "pending_escalations is not filtered by project status; a paused/cancelled project can retain a prior stall item.",
+    "The partial-unique-index flush order under operator retry is not separately asserted.",
+    "Migration downgrade is structurally correct but not exercised.",
+    "env=test compresses cooldowns to 0; real 60/300s behavior is covered by explicit wiring + fake clock.",
+    "The loop-level test does not fail if _dispatch bypassed the limiter; the limiter is tested in isolation."
+  ],
+  "gate_evidence_refs": [
+    "evidence/T05/run-20261017-194349/manifest.json",
+    "evidence/T05/run-20261017-193645/manifest.json"
+  ],
+  "integration_candidate": false
+}

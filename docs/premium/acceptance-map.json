@@ -382,6 +382,15 @@
           "allow_skips": false,
           "needs_database": true,
           "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
+          "external": false
         }
       ],
       "fill_rule": "T03 frozen plan: each AC has a unique id, a type, and expected evidence; internal tests must be concrete nodeids before a task can PASS.",
