@@ -16,6 +16,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ravel.domain.roles import AgentRole
@@ -137,6 +138,53 @@ def require_review(context: ToolContext, tool: str) -> None:
         PermissionError: The scope's role is not Review.
     """
     require_role(context, tool, AgentRole.REVIEW)
+
+
+def require_current_lease(context: ToolContext, tool: str) -> None:
+    """Refuse a side-effecting tool when this runtime's binding is stale.
+
+    The binding travels in the brief file the supervisor wrote at launch: a
+    role's ``owner_instance_id``, ``lease_epoch`` and ``binding_id``. The
+    database row, not the brief, is authoritative; a takeover increments the
+    epoch, so a tool server left over from the previous supervisor is refused
+    here even though its brief file still looks valid.
+
+    Raises:
+        PermissionError: The brief carries no binding, or the binding's owner
+            and epoch no longer match a live lease.
+    """
+    brief = context.scope.brief()
+    if (
+        not brief.binding_id
+        or not brief.owner_instance_id
+        or brief.lease_epoch is None
+    ):
+        raise PermissionError(
+            f"{tool} requires a trusted lease binding; this runtime was not "
+            "launched with one"
+        )
+    with context.read() as session:
+        live = session.execute(
+            text(
+                "SELECT 1 FROM project_leases "
+                "WHERE project_id = :project_id "
+                "AND owner_instance_id = :owner "
+                "AND epoch = :epoch "
+                "AND released_at IS NULL "
+                "AND expires_at > now()"
+            ),
+            {
+                "project_id": context.project_id,
+                "owner": brief.owner_instance_id,
+                "epoch": brief.lease_epoch,
+            },
+        ).scalar_one_or_none()
+    if live is None:
+        raise PermissionError(
+            f"{tool} refused: the runtime binding for project "
+            f"{context.project_id} is stale (owner={brief.owner_instance_id}, "
+            f"epoch={brief.lease_epoch})"
+        )
 
 
 def require_research(context: ToolContext, tool: str) -> None:

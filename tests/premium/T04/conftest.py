@@ -13,5 +13,6 @@ from tests.integration.conftest import (  # noqa: F401
     database,
     integration_settings,
     other_project,
+    prepare,
     project,
 )

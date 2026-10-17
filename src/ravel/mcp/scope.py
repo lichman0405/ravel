@@ -43,6 +43,12 @@ class RuntimeBrief:
     objective: str | None = None
     phase: str | None = None
     bindings: tuple[dict[str, object], ...] = ()
+    #: The lease binding this runtime was launched under. Trusted because the
+    #: brief is written by the supervisor into RAVEL's own runtime directory;
+    #: the server still re-reads the current lease row for every side effect.
+    binding_id: str | None = None
+    owner_instance_id: str | None = None
+    lease_epoch: int | None = None
 
     @classmethod
     def from_file(cls, path: Path, role: AgentRole, project_id: str) -> RuntimeBrief:
@@ -83,6 +89,8 @@ class RuntimeBrief:
         if not isinstance(bindings, list):
             raise ScopeError(f"runtime brief at {path} has a non-list 'bindings'")
 
+        raw_epoch = payload.get("lease_epoch")
+        lease_epoch = raw_epoch if isinstance(raw_epoch, int) else None
         return cls(
             project_id=project_id,
             project_title=str(payload.get("project_title") or project_id),
@@ -90,6 +98,15 @@ class RuntimeBrief:
             objective=payload.get("objective"),
             phase=payload.get("phase"),
             bindings=tuple(bindings),
+            binding_id=(
+                str(payload["binding_id"]) if payload.get("binding_id") else None
+            ),
+            owner_instance_id=(
+                str(payload["owner_instance_id"])
+                if payload.get("owner_instance_id")
+                else None
+            ),
+            lease_epoch=lease_epoch,
         )
 
 
