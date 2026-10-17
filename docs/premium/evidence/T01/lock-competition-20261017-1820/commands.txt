@@ -1,0 +1,49 @@
+RAVEL premium T01-AC2 — final shared-lock evidence
+Run: 2026-10-17 18:20 Asia/Shanghai
+Source: cc/fix-db-lock final lock code (code commit 0e8994b; evidence commits excluded)
+
+===== 1. T01 lock and entrypoint competition =====
+$ .venv/bin/python -m pytest tests/premium/T01 -q -rxXs
+................................................
+48 passed
+
+===== 2. T04 premium-task gate (pytest child owns the lock) =====
+$ make premium-task TASK=T04
+{"task_id": "T04", "result": "PASS", "run_id": "run-20261017-181911",
+ "manifest": "docs/premium/evidence/T04/run-20261017-181911/manifest.json",
+ "failed_commands": []}
+
+The runner's first command is a pytest database suite; its child fixture took the
+lock. The second command is `make lint` with an explicit needs_database:false and
+did not take it. No parent/child deadlock.
+
+===== 3. Cross-WSL / container lock competition =====
+Holder (WSL host):
+HOLDER_ACQUIRED /mnt/c/Users/lishi/code/.ravel-test-locks/database-1938431b0fad23c3e1bfebcc7442700b.lock
+
+Second process (canonical Ubuntu 24.04 container, same checkout at /workspace):
+Traceback (most recent call last):
+  ...
+  File "/workspace/ravel-worktrees/fix-db-lock/src/ravel/state/db_lock.py", line 202, in __enter__
+    raise TimeoutError(
+TimeoutError: timed out waiting for database test lock /workspace/.ravel-test-locks/database-1938431b0fad23c3e1bfebcc7442700b.lock
+SECOND_EXIT=1
+
+Same file, two path spellings. The second process waited one second and was
+refused; it did not reach a TRUNCATE.
+
+===== 4. Release gate database row =====
+$ .venv/bin/python scripts/release_gate.py --only research-readback
+.......... 10 passed in 73.50s
+
+── Phase 11 release gate ──
+  PASS   research-readback  Research's result reaching Master through the record
+CERTIFIED
+
+This row is a single-row gate, not the full release gate. The full gate remains
+open under BLOCKERS.md B03.
+
+===== 5. Environment =====
+Ubuntu 24.04 x86_64 canonical container; Python 3.12.3; PostgreSQL 16;
+Docker 29.1.3; Compose 2.40.3. Tests ran serially; no other database suite
+was running.
