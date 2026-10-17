@@ -1,0 +1,17 @@
+===== command 1: .venv/bin/python -m pytest tests/premium/T01 -q -rxXs --junitxml=/workspace/ravel-worktrees/fix-db-lock/docs/premium/evidence/T01/run-20261017-182217/cmd-01-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T01 -q -rxXs --junitxml=/workspace/ravel-worktrees/fix-db-lock/docs/premium/evidence/T01/run-20261017-182217/cmd-01-junit.xml
+
+................................................                         [100%]
+
+===== command 2: make lint =====
+exit_code=0 ok=True reason=None
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/fix-db-lock'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+0 errors, 0 warnings, 0 informations
+make[1]: Leaving directory '/workspace/ravel-worktrees/fix-db-lock'
+

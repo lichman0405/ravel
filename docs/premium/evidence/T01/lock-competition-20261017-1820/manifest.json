@@ -1,0 +1,65 @@
+{
+  "run_id": "lock-competition-20261017-1820",
+  "task_id": "T01",
+  "acceptance_map": {
+    "T01-AC2": [
+      "tests/premium/T01/test_lock.py",
+      "tests/premium/T01/test_lock_entrypoints.py",
+      "premium-task T04 child-lock gate",
+      "release-gate research-readback row",
+      "cross-WSL/container lock competition"
+    ]
+  },
+  "started_at": "2026-10-17 18:20 Asia/Shanghai",
+  "completed_at": "2026-10-17 18:25 Asia/Shanghai",
+  "source_commit": "0e8994bb2c689332c32345940921e506a4486b2a",
+  "source_digest": "ec07e0ba71235a4e8831e0a0484c0625b367c97240771f0c95e3d0ee6fe7a5ac",
+  "platform": "Ubuntu 24.04 canonical container + WSL host",
+  "dependencies": {
+    "python": "3.12.3",
+    "postgres": "16",
+    "docker": "29.1.3",
+    "compose": "2.40.3"
+  },
+  "commands": [
+    {
+      "command": "pytest tests/premium/T01 -q -rxXs",
+      "exit_code": 0,
+      "tests": 48,
+      "passed": 48
+    },
+    {
+      "command": "make premium-task TASK=T04",
+      "exit_code": 0,
+      "result": "PASS",
+      "run_id": "run-20261017-181911"
+    },
+    {
+      "command": "release_gate.py --only research-readback",
+      "exit_code": 0,
+      "tests": 10,
+      "result": "CERTIFIED (single row; full gate open under B03)"
+    },
+    {
+      "command": "WSL holder + canonical-container competitor",
+      "exit_code": 1,
+      "result": "second process refused after 1s; no TRUNCATE"
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/fix-db-lock",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs/premium/evidence/T01/lock-competition-20261017-1820/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T01/lock-competition-20261017-1820/commands.txt",
+      "sha256": "c7570e4a7c8810869203312fd0689768abb16a61807a7d000e6c308066a28158",
+      "size": 2067
+    }
+  ],
+  "data_mode": "REAL (PostgreSQL + real process/container locks)",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null
+}

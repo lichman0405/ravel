@@ -164,6 +164,7 @@ def normalize_command(spec: str | dict[str, Any]) -> dict[str, Any]:
             "shell": True,
             "allow_skips": False,
             "needs_database": False,
+            "needs_database_declared": False,
             "external": False,
             "env": {},
         }
@@ -174,6 +175,7 @@ def normalize_command(spec: str | dict[str, Any]) -> dict[str, Any]:
             "shell": bool(spec.get("shell", spec.get("command") is not None)),
             "allow_skips": bool(spec.get("allow_skips", False)),
             "needs_database": bool(spec.get("needs_database", False)),
+            "needs_database_declared": "needs_database" in spec,
             "external": bool(spec.get("external", False)),
             "env": dict(spec.get("env", {})),
         }
@@ -399,6 +401,15 @@ def run_command(
     env.update({str(key): str(value) for key, value in command.get("env", {}).items()})
     env["RAVEL_PREMIUM_TASK"] = task_id
     env["RAVEL_PREMIUM_RUN_ID"] = run_identifier
+    # Children must import this checkout's code, including db_lock, even when
+    # the shared virtualenv was created from another worktree.
+    env["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(REPO_ROOT / "src"),
+            str(REPO_ROOT / "scripts"),
+            env.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
 
     if command.get("argv") is not None:
         argv = [str(part) for part in command["argv"]]
@@ -618,10 +629,19 @@ def run_task(
     try:
         for index, command in enumerate(commands, start=1):
             print(f"{task_id}: running command {index}/{len(commands)}")
+            # The task-level default applies to an undeclared non-pytest
+            # command. An explicit needs_database:false (make lint) is an
+            # author declaration, not the default, and a pytest child takes
+            # the lock itself.
             database_command = (
                 force_database_lock
                 or command["needs_database"]
                 or command_uses_database(command)
+                or (
+                    task_needs_database
+                    and not command["needs_database_declared"]
+                    and not command_is_pytest(command)
+                )
             )
             # A pytest child owns the lock through its database fixture. Only a
             # non-pytest database command (a migration, a seeding script) needs
