@@ -53,9 +53,12 @@
     {
       "suite": "integration",
       "command": ".venv/bin/python -m pytest tests/integration -q -rxXs",
-      "result": "PENDING",
-      "exit_code": null,
-      "note": "Running against real PostgreSQL and Temporal in the canonical container with host networking. Real MinIO is unavailable (registry 401/410; official binary download 410), so MinIO-dependent tests cannot be PASS. This row must be updated with the actual exit code and skip/fail counts; it must not be called PASS."
+      "result": "FAIL",
+      "exit_code": 0,
+      "collected": 538,
+      "skipped": 63,
+      "failed": 0,
+      "note": "Real PostgreSQL and Temporal were reachable; real MinIO was not (registry 401/410; official binary download 410). pytest exited 0 because 63 MinIO-dependent tests called pytest.skip. Per GATES, an internal skip is not a PASS, so this row is FAIL and the 63 skipped tests remain internal environment gaps. The passed count is not asserted because JUnit was not captured for this run."
     },
     {
       "suite": "dsh",
@@ -81,7 +84,7 @@
   ],
   "summary": {
     "pass": ["static", "T01 gate tests", "unit"],
-    "pending": ["integration"],
+    "fail": ["integration"],
     "blocked_external": ["dsh", "live_research"],
     "not_run": ["release-gate"],
     "internal_environment_gaps": [
