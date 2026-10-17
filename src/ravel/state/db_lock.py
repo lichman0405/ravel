@@ -31,7 +31,8 @@ __all__ = ["DatabaseLock", "database_lock_path", "lock_dir"]
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # src/ravel/state/db_lock.py -> src -> repo root.
+    return Path(__file__).resolve().parents[3]
 
 
 def _shared_parent() -> Path:
