@@ -39,11 +39,18 @@ import argparse
 import os
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+
+# Run against this checkout's source even when the gate is invoked with an
+# interpreter whose editable install points at another worktree. The gate and
+# the suites it launches must agree on the database lock implementation.
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from ravel.state.db_lock import DatabaseLock  # noqa: E402
 
 GREEN = "\033[32m"
 RED = "\033[31m"
@@ -74,6 +81,10 @@ class Row:
     command: list[str]
     #: What this row is evidence *for*, in one line.
     covers: str
+    #: Whether this row can touch the test database. Database rows that run
+    #: pytest take the lock in the child's fixture; only a non-pytest database
+    #: command is wrapped by the gate itself.
+    database: bool = True
     #: Set for a row that must not skip. A gate that can pass by not running is
     #: not a gate, which is why `tests/dsh` is run with `RAVEL_REQUIRE_DSH=1`
     #: wherever it appears.
@@ -127,6 +138,15 @@ def a_pytest(expr: str) -> list[str]:
     ]
 
 
+def runs_pytest(command: list[str]) -> bool:
+    """Whether a row starts pytest, which takes the database lock itself."""
+    return any(Path(part).name in {"pytest", "py.test"} for part in command) or (
+        "-m" in command
+        and command.index("-m") + 1 < len(command)
+        and Path(command[command.index("-m") + 1]).name in {"pytest", "py.test"}
+    )
+
+
 def rows() -> list[Row]:
     """Every gate, in the order a reader would fix them if one failed.
 
@@ -143,16 +163,19 @@ def rows() -> list[Row]:
             name="ruff",
             command=["ruff", "check", "src", "tests"],
             covers="style and the mistakes a linter catches before a test does",
+            database=False,
         ),
         Row(
             name="pyright",
             command=["pyright", "src", "tests"],
             covers="types over the whole tree, src and tests alike",
+            database=False,
         ),
         Row(
             name="unit",
             command=a_pytest("tests/unit"),
             covers="every unit of logic, with no service running",
+            database=False,
         ),
         Row(
             name="integration",
@@ -309,6 +332,15 @@ def environment_for(row: Row) -> dict[str, str]:
             key, _, value = line.partition("=")
             environment.setdefault(key.strip(), value.strip().strip("'\""))
     environment.update(row.env)
+    # The child must import this checkout's db_lock, not whatever editable
+    # package the shared virtualenv happens to point at.
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(REPO_ROOT / "src"),
+            str(REPO_ROOT / "scripts"),
+            environment.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
     return environment
 
 
@@ -417,8 +449,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{row.name}: {' '.join(row.command)}")
         return 0
 
-    for row in selected:
-        run(row, environment_for(row))
+    # A pytest row owns the lock through the child's database fixture. Holding
+    # it here as well would deadlock the child against its parent. Only a
+    # database row that is not a pytest invocation needs the gate to hold it.
+    try:
+        for row in selected:
+            with (
+                DatabaseLock()
+                if row.database and not runs_pytest(row.command)
+                else nullcontext()
+            ):
+                run(row, environment_for(row))
+    except TimeoutError as error:
+        print(f"{RED}{error}{RESET}", file=sys.stderr)
+        return 1
     report(selected)
 
     # A gate that did not run is a non-zero exit, because the caller is a

@@ -67,6 +67,7 @@ from ravel.execution.backends import JobRequest
 from ravel.review import ReviewService
 from ravel.state import guards
 from ravel.state.database import Database, create_db_engine, install_utc_guard
+from ravel.state.db_lock import DatabaseLock
 from ravel.state.repositories.contracts import (
     AcceptanceContractRepository,
     ExecutionContractRepository,
@@ -142,7 +143,21 @@ def integration_settings() -> Settings:
 
 
 @pytest.fixture(scope="session")
-def database(integration_settings: Settings) -> Iterator[Database]:
+def _database_test_lock() -> Iterator[None]:
+    """Hold the one system-wide lock for every process that truncates the DB.
+
+    Direct ``pytest``, ``make premium-task`` and the legacy release gate all
+    acquire this same file. A second database suite waits here instead of
+    truncating under the first one.
+    """
+    with DatabaseLock():
+        yield
+
+
+@pytest.fixture(scope="session")
+def database(
+    integration_settings: Settings, _database_test_lock: None
+) -> Iterator[Database]:
     """The test database, with the schema and the guards installed."""
     engine = create_db_engine(integration_settings)
     install_utc_guard(engine)

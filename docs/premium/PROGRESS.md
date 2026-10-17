@@ -1,16 +1,16 @@
 # 开发进度（从PROGRESS.json生成）
 
-更新时间：2026-10-17 18:15 Asia/Shanghai；工程状态：IN_PROGRESS。
+更新时间：2026-10-17 19:40 Asia/Shanghai；工程状态：IN_PROGRESS。
 任务完成：5/30。真实认证单列；计划与交接文档检查不计开发完成。
 
 | Task | 标题 | 依赖 | 状态 | 作者 | 候选/合并 |
 |---|---|---|---|---|---|
 | [T00](TASKS/T00-takeover.md) | 接管本地仓库与建立开发记录 | 无 | DONE | SUPERVISOR | 5356394919/ace2b182a7 |
-| [T01](TASKS/T01-environment-gates.md) | Linux 环境、测试隔离及证据执行入口 | T00 | DONE | SUPERVISOR | 5495e06e51/7cae892cbe |
+| [T01](TASKS/T01-environment-gates.md) | Linux 环境、测试隔离及证据执行入口 | T00 | DONE | SUPERVISOR | acd9f1c525/31f08418fe |
 | [T02](TASKS/T02-phase11-adoption.md) | 审查并引入已存在的 Phase 11 | T00, T01 | DONE | SUPERVISOR | 54303ccf07/4ec87e11ae |
 | [T03](TASKS/T03-contracts.md) | 冻结高端版接口、范围与 AC 映射 | T02 | DONE | SUPERVISOR | f75529707b/dc3b6b9564 |
 | [T04](TASKS/T04-project-lease.md) | Supervisor 项目租约与过期进程隔离 | T03 | DONE | SUPERVISOR | a62eff4e0d/17d855d15b |
-| [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | TODO | 未派发 | — |
+| [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | RUNNING | SUPERVISOR | 9930db5 |
 | [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | TODO | 未派发 | — |
 | [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | TODO | 未派发 | — |
 | [T08](TASKS/T08-cos-backup.md) | COS 兼容存储与恢复演练 | T03 | TODO | 未派发 | — |
@@ -36,6 +36,6 @@
 | [T28](TASKS/T28-vm-live.md) | Docker 与真实专用 VM 可替换验证 | T23 | TODO | 未派发 | — |
 | [T29](TASKS/T29-certified-release.md) | 全真实科研闭环与最终交付 | T24, T25, T26, T27, T28 | TODO | 未派发 | — |
 
-当前可派发（仍需文件锁/环境）：T05, T06, T07, T08, T12, T22
+当前可派发（仍需文件锁/环境）：T06, T07, T08, T12, T22
 
 更新方法：Supervisor修改PROGRESS.json后执行 `python docs/premium/tools/tracker.py validate` 和 `render`。

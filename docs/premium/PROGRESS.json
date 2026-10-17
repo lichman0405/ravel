@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 18:15 Asia/Shanghai",
+  "updated_at": "2026-10-17 19:40 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "d07fe563464ca0f7f724b6d25b713d7a54eea9a7",
+  "integration_head_sha": "53771de139df62c144305163986e3020f7ea923f",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -30,16 +30,17 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T01",
       "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
-      "head_sha": "5495e06e51f49fb61ac4035cd0d01500231c6c01",
-      "source_digest": "84f769a0a093a98b6ee69e6fdee58ddc22fb84f2323ac2b0b6253cb3c1929d3a",
-      "review_ref": "reviews/T01/1.json",
+      "head_sha": "acd9f1c5256490ccef7af093e6ed9df50718c99f",
+      "source_digest": "f9e09f4d43d1dab24750b08f9a98c887b6c401f590e02205bde03b9ebd5e6522",
+      "review_ref": "reviews/T01/2.json",
       "gate_refs": [
-        "evidence/T01/run-20261017-150746/manifest.json"
+        "evidence/T01/lock-competition-20261017-1820/manifest.json",
+        "evidence/T01/run-20261017-183828/manifest.json"
       ],
-      "integration_merge_sha": "7cae892cbead7366def99e172f8355b1449f1a04",
+      "integration_merge_sha": "31f08418fee692ccb3be998a18b9dd4bc37880e8",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 15:12 Asia/Shanghai",
-      "note": "T01 DONE：独立AC1-AC4复核APPROVE；最终门禁run-20261017-150746 PASS；集成候选7cae892与任务tip f525ceb tree一致，Reviewer确认；ff-only合入cc/ravel-premium-v1。"
+      "last_updated": "2026-10-17 18:40 Asia/Shanghai",
+      "note": "T01 DONE（含用户纠偏1）：新增系统级数据库测试锁，premium-task/release-gate/direct pytest统一；pytest子进程持锁、runner只锁非pytest DB命令；锁身份用RAVEL_TEST_DB，共享目录由Git common dir推导；WSL/容器竞争拒绝。独立AC2复审reviews/T01/2.json APPROVE；T01 49 passed；T01/T04最终候选门禁run-183828/run-184042 PASS；ff-only合入31f0841。原T01 AC1/AC3/AC4证据保留在reviews/T01/1.json。"
     },
     "T02": {
       "status": "DONE",
@@ -92,18 +93,18 @@
       "note": "T04 重开修复后DONE：per-binding brief文件 + tool server启动快照，18个科研/执行副作用入口require_current_lease；独立复审AC1-AC4 PASS（P2 TOCTOU作为非阻塞hardening记录）；T04 12 passed、candidate gate run-20261017-180741 PASS；候选17d855d与tip tree一致，ff-only合入。历史0e75a91保留。"
     },
     "T05": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T05",
+      "base_sha": "b5ad0cad6fe787a4517b44875f6f5f79e0b22174",
+      "head_sha": "9930db5",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 19:40 Asia/Shanghai",
+      "note": "T05 RUNNING：持久 retry_episodes 表/迁移、RetryPolicy/Store、loop turn timeout/并发上限、supervisor operator_retry/pending_escalations；35 tests + migration gate PASS；等待独立 Review。"
     },
     "T06": {
       "status": "TODO",

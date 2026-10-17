@@ -13,7 +13,7 @@ import pytest
 TRY_LOCK = r"""
 import sys
 from pathlib import Path
-from premium_task import DatabaseLock
+from ravel.state.db_lock import DatabaseLock
 
 try:
     with DatabaseLock(Path(sys.argv[1]), timeout=0.5):
@@ -26,7 +26,8 @@ raise SystemExit(0)
 
 def _try_lock(lock: Path, scripts: Path) -> int:
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(scripts)
+    repo_root = scripts.parent
+    env["PYTHONPATH"] = os.pathsep.join([str(repo_root / "src"), str(scripts)])
     result = subprocess.run(
         [sys.executable, "-c", TRY_LOCK, str(lock)],
         capture_output=True,
@@ -42,9 +43,24 @@ def test_second_runner_cannot_enter_while_lock_held(tmp_path: Path) -> None:
     assert premium_task.__file__ is not None
     scripts = Path(premium_task.__file__).resolve().parent
 
-    with premium_task.DatabaseLock(lock, timeout=0.5):
+    from ravel.state.db_lock import DatabaseLock
+
+    with DatabaseLock(lock, timeout=0.5):
         assert _try_lock(lock, scripts) == 7
 
+    assert _try_lock(lock, scripts) == 0
+
+
+def test_two_locks_in_one_process_are_reentrant(tmp_path: Path) -> None:
+    """Composed session fixtures must not wait on their own process."""
+    from ravel.state.db_lock import DatabaseLock
+
+    lock = tmp_path / "database.lock"
+    scripts = Path(premium_task.__file__).resolve().parent
+    with DatabaseLock(lock, timeout=0.5):
+        with DatabaseLock(lock, timeout=0.5):
+            assert _try_lock(lock, scripts) == 7
+        assert _try_lock(lock, scripts) == 7
     assert _try_lock(lock, scripts) == 0
 
 
@@ -53,28 +69,35 @@ def test_lock_dir_honors_injected_environment(tmp_path: Path) -> None:
         "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
         "RAVEL_POSTGRES_HOST": "127.0.0.1",
         "RAVEL_POSTGRES_PORT": "55432",
-        "RAVEL_POSTGRES_DB": "ravel_test",
+        "RAVEL_TEST_DB": "ravel_test",
     }
-    assert premium_task.lock_dir(env) == tmp_path
-    assert premium_task.database_lock_path(env).parent == tmp_path
+    from ravel.state.db_lock import database_lock_path, lock_dir
+
+    assert lock_dir(env) == tmp_path
+    assert database_lock_path(env).parent == tmp_path
 
 
 def test_default_lock_dir_is_shared_on_posix() -> None:
     if os.name != "posix":
         pytest.skip("POSIX-only path")
-    assert premium_task.lock_dir({}) == Path("/tmp/ravel-premium-locks")
+    from ravel.state.db_lock import lock_dir
+
+    assert lock_dir({}).name == ".ravel-test-locks"
+    assert lock_dir({}).is_absolute()
 
 
 def test_lock_path_normalizes_localhost_alias(tmp_path: Path) -> None:
     base = {
         "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
         "RAVEL_POSTGRES_PORT": "55432",
-        "RAVEL_POSTGRES_DB": "ravel_test",
+        "RAVEL_TEST_DB": "ravel_test",
     }
-    via_name = premium_task.database_lock_path(
+    from ravel.state.db_lock import database_lock_path
+
+    via_name = database_lock_path(
         {**base, "RAVEL_POSTGRES_HOST": "localhost"}
     )
-    via_ip = premium_task.database_lock_path(
+    via_ip = database_lock_path(
         {**base, "RAVEL_POSTGRES_HOST": "127.0.0.1"}
     )
     assert via_name == via_ip
@@ -85,21 +108,21 @@ def test_lock_path_is_stable_and_database_specific() -> None:
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "ravel_test",
+            "RAVEL_TEST_DB": "ravel_test",
         }
     )
     second = premium_task.database_lock_path(
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "ravel_test",
+            "RAVEL_TEST_DB": "ravel_test",
         }
     )
     other = premium_task.database_lock_path(
         {
             "RAVEL_POSTGRES_HOST": "127.0.0.1",
             "RAVEL_POSTGRES_PORT": "55432",
-            "RAVEL_POSTGRES_DB": "other_test",
+            "RAVEL_TEST_DB": "other_test",
         }
     )
     assert first == second

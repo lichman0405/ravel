@@ -27,6 +27,11 @@
 | 2026-10-17 18:05 Asia/Shanghai | Reviewer | T03 | 独立AC3复审（替换此前上下文失败的Agent） | `reviews/T03/2.json` APPROVE；全表113=映射113；102=T03–T29，T04–T29=99；差集仅T00–AC1..3、T01–AC1..4、T02–AC1..4共11条；无删除/改名 | 修正记录措辞 |
 | 2026-10-17 18:05 Asia/Shanghai | Supervisor | T04 | 用户纠偏2：T04重开FIX_REQUIRED；分支cc/T04-binding-fence冻结启动brief、per-binding文件、所有科研/执行副作用入口fence；测试harness携带真实lease binding | T04 12 passed；integration/roles 88 passed；lint PASS；HEAD d2c8741；Phase10 agents单测通过，W14整文件曾出现一次既有时序flake | 独立复审+集成 |
 | 2026-10-17 18:05 Asia/Shanghai | Supervisor | STATE | 更新BLOCKERS/PROGRESS/ROADMAP_STATUS/DEVLOG；删除“尚未执行T00”过期文案；记录真实MinIO(B01)、容器systemd(B02)、完整release-gate(B03)、T04复审(B04)、T24–T29外部资源(B05) | tracker validate PASS；4/30 DONE；eligible T06/T07/T08/T12/T22 | 继续修复/复审 |
+| 2026-10-17 18:15 Asia/Shanghai | Reviewer | T04 | 独立复审修复后分支 d2c8741 | `reviews/T04/2.json` APPROVE；AC1–AC4 PASS；P2 check-to-write TOCTOU记录为非阻塞hardening；P3共享overlay/未持久化binding_id等记录 | 集成候选 |
+| 2026-10-17 18:15 Asia/Shanghai | Supervisor | T04 | 候选 candidate-T04-fence merge 17d855d；候选门禁 run-20261017-180741 PASS；ff-only推进integration | integration HEAD 17d855d；PROGRESS/T04=DONE；B04 RESOLVED；T05/T06/T07/T08/T12/T22 eligible | 继续T05/T06 |
+| 2026-10-17 18:40 Asia/Shanghai | Reviewer | T01 | 锁修复独立复审：首轮changes_requested（live_research re-export、task默认未生效）；修复后复审APPROVE，P3中断清理复测通过 | `reviews/T01/2.json` APPROVE；AC2 PASS；T01 49 passed；T04 6 passed；无阻塞findings | 集成候选 |
+| 2026-10-17 18:40 Asia/Shanghai | Supervisor | T01 | candidate-T01-lockfix合并最终fix + integration；T01/T04门禁run-183828/run-184042 PASS；release-gate readback CERTIFIED；ff-only推进integration | integration HEAD 31f0841；PROGRESS/T01 source_digest/evidence更新；5/30 DONE | 继续T05/T06 |
+| 2026-10-17 19:00 Asia/Shanghai | Supervisor | T04 | 修复T04后验收harness：ScriptedSeats接受brief、supervisor测试使用同一SCRIPTED_SEAT_OWNER、ScriptedWorker每次start刷新lease binding、brief断言检查binding字段 | 独立复审APPROVE（test-only，无fence绕过）；`test_phase10_supervisor.py`通过前13项，P10-W03时序flake单独重跑通过；ff-only合入integration 53771de | T05 review |
 
 
 

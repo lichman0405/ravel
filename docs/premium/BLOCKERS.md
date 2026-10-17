@@ -52,15 +52,15 @@
 - blocker_id: B04
 - opened_at: 2026-10-17
 - task_ids: [T04]
-- status: OPEN
+- status: RESOLVED
 - category: DESIGN_CORRECTION
-- observed_fact: 原 T04 只在 turn/轮次边界检查租约；in-flight turn 在租约失效后仍可写 DAG/启动执行。用户明确要求重开为 `FIX_REQUIRED`。修复分支 `cc/T04-binding-fence`（d2c8741）已冻结启动 binding、隔离 brief 文件，并把 fence 扩展到所有科研/执行副作用入口；待新的独立 Review。
-- missing_input: 独立 Reviewer 对 AC1–AC4 的复审结论；集成候选验证。
+- observed_fact: 原 T04 只在 turn/轮次边界检查租约；in-flight turn 在租约失效后仍可写 DAG/启动执行。用户明确要求重开为 `FIX_REQUIRED`。修复分支 `cc/T04-binding-fence` 冻结启动 binding、按 binding 隔离 brief 文件，并把 fence 扩展到所有科研/执行副作用入口。
+- missing_input: 无。
 - unblock_condition: Reviewer APPROVE，`make premium-task TASK=T04` PASS，候选验证后 ff-only 合入 integration。
 - owner: 独立 Reviewer / Supervisor。
-- independent_work: T05、T06 的接口准备可以继续，但在 T04 DONE 前不作为 READY 派发。
-- next_command: `make premium-task TASK=T04`（修复分支最终 HEAD）。
-- resolved_at/evidence: 未解决。历史 `reviews/T04/1.json` 的 P3 延期已被用户否决，不能作为当前批准。
+- independent_work: T05、T06。
+- next_command: `make premium-task TASK=T05`（下一任务）。
+- resolved_at/evidence: 2026-10-17 18:15。独立复审 `reviews/T04/2.json` APPROVE（AC1–AC4 PASS，P2 TOCTOU 作为非阻塞 hardening）；候选 17d855d 门禁 `run-20261017-180741` PASS；integration HEAD 已 ff-only 到 17d855d，PROGRESS/T04=DONE。
 
 ## B05 — T24–T29 的真实外部资源
 

@@ -124,6 +124,16 @@ class ScriptedWorker:
         self.started.append(node.node_id)
         if self.context is None:
             return
+        # A supervisor restarts a failed loop with a new lease epoch. The
+        # scripted seat is the test's stand-in for that supervisor's runtime,
+        # so refresh its launch binding from the current lease before acting;
+        # production gets the same new binding from a new brief file.
+        self.context = seat_scope(
+            self.context.database,
+            self.project_id,
+            self.role,
+            execution=self.context.execution,
+        )
         await seat_tool(self.BEGIN[self.role], self.context)(node_id=node.node_id)
 
     async def act(self, node: DagNode, situation: Situation) -> None:
@@ -253,9 +263,17 @@ class ScriptedSeats:
 
     # ── What the supervisor constructs ─────────────────────────────────────
 
-    def harness_agent(self, *, pool: Any, project_id: str, role: AgentRole) -> Any:
+    def harness_agent(
+        self,
+        *,
+        pool: Any,
+        project_id: str,
+        role: AgentRole,
+        brief: dict[str, object] | None = None,
+    ) -> Any:
         """Master's or Review's seat, as the supervisor builds it."""
         _ = pool
+        _ = brief
         override = self.overrides.get((project_id, role))
         if override is not None:
             return override
@@ -265,15 +283,30 @@ class ScriptedSeats:
         assert role is AgentRole.REVIEW, f"the loop does not call {role.value}"
         return _Closable(plan.review)
 
-    def worker_agent(self, *, pool: Any, project_id: str, role: AgentRole) -> ScriptedWorker:
+    def worker_agent(
+        self,
+        *,
+        pool: Any,
+        project_id: str,
+        role: AgentRole,
+        brief: dict[str, object] | None = None,
+    ) -> ScriptedWorker:
         """A Worker's seat, as the supervisor builds it."""
         _ = pool
+        _ = brief
         override = self.overrides.get((project_id, role))
         if override is not None:
             return override
         return self.worker(project_id, role)
 
-    def research_agent(self, *, pool: Any, project_id: str, role: AgentRole) -> ScriptedWorker:
+    def research_agent(
+        self,
+        *,
+        pool: Any,
+        project_id: str,
+        role: AgentRole,
+        brief: dict[str, object] | None = None,
+    ) -> ScriptedWorker:
         """Research's seat, as the supervisor builds it.
 
         The same scripted seat as a Worker's, because the loop dispatches to
