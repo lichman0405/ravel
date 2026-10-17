@@ -235,6 +235,15 @@ def test_undeclared_task_locks_by_default(tmp_path: Path) -> None:
     assert _manifest(repo)["database_lock"] is True
 
 
+def test_an_explicit_non_database_declaration_is_distinct_from_the_default() -> None:
+    declared = premium_task.normalize_command(
+        {"argv": ["make", "lint"], "needs_database": False}
+    )
+    defaulted = premium_task.normalize_command({"argv": ["make", "lint"]})
+    assert declared["needs_database_declared"] is True
+    assert defaulted["needs_database_declared"] is False
+
+
 def test_non_database_task_can_opt_out(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _task(

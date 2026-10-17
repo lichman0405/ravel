@@ -1,0 +1,3 @@
+$ .venv/bin/python -m pytest tests/premium/T04 -q -rxXs --junitxml=/workspace/ravel-worktrees/fix-db-lock/docs/premium/evidence/T04/run-20261017-183435/cmd-01-junit.xml
+
+......                                                                   [100%]

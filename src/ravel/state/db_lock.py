@@ -184,14 +184,14 @@ class DatabaseLock:
         }
 
     def __enter__(self) -> DatabaseLock:
-        with _PROCESS_LOCKS_GUARD:
-            if self.path in _PROCESS_LOCKS:
-                self._entered = True
-                _PROCESS_LOCKS[self.path] += 1
-                return self
-
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            with _PROCESS_LOCKS_GUARD:
+                if self.path in _PROCESS_LOCKS:
+                    self._entered = True
+                    _PROCESS_LOCKS[self.path] += 1
+                    return self
+
+            self.path.parent.mkdir(parents=True, exist_ok=True)
             self._handle = open(self.path, "a+", encoding="utf-8")
             deadline = time.monotonic() + self.timeout
             while True:
@@ -209,6 +209,16 @@ class DatabaseLock:
                         _PROCESS_LOCKS[self.path] = 1
                     return self
         except BaseException:
+            # __exit__ never runs when __enter__ raises. Undo the process-local
+            # depth this attempt owns, or a later lock would treat itself as a
+            # reentrant holder without an OS lock.
+            with _PROCESS_LOCKS_GUARD:
+                if self._entered:
+                    depth = _PROCESS_LOCKS.get(self.path, 0)
+                    if depth > 1:
+                        _PROCESS_LOCKS[self.path] = depth - 1
+                    else:
+                        _PROCESS_LOCKS.pop(self.path, None)
             self._close()
             raise
 
