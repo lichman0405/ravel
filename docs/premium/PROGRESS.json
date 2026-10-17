@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 13:21 Asia/Shanghai",
+  "updated_at": "2026-10-17 13:24 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
+  "integration_head_sha": "ace2b182a7ab9326b24e4e8309d8049c2cd646c1",
   "tasks": {
     "T00": {
-      "status": "INTEGRATING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T00",
       "base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
@@ -20,10 +20,10 @@
       "gate_refs": [
         "evidence/T00/run-20261017-1306/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "ace2b182a7ab9326b24e4e8309d8049c2cd646c1",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 13:21 Asia/Shanghai",
-      "note": "独立Reviewer APPROVE（T00-AC1/2/3 PASS）；等待集成候选复核与ff-only合并。"
+      "last_updated": "2026-10-17 13:24 Asia/Shanghai",
+      "note": "T00 DONE：独立Reviewer APPROVE（候选5356394，集成候选ace2b18复核对齐source_digest），ff-only合入cc/ravel-premium-v1。"
     },
     "T01": {
       "status": "TODO",
