@@ -1,0 +1,6 @@
+===== command 1: .venv/bin/python -m pytest tests/premium/T05 -q -rxXs --junitxml=/workspace/ravel-worktrees/T05/docs/premium/evidence/T05/run-20261017-191056/cmd-01-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T05 -q -rxXs --junitxml=/workspace/ravel-worktrees/T05/docs/premium/evidence/T05/run-20261017-191056/cmd-01-junit.xml
+
+...................................                                      [100%]
+
