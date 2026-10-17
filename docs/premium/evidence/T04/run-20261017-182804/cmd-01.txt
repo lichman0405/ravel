@@ -1,0 +1,3 @@
+$ .venv/bin/python -m pytest tests/premium/T04 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T01-lockfix/docs/premium/evidence/T04/run-20261017-182804/cmd-01-junit.xml
+
+............                                                             [100%]
