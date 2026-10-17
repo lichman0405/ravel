@@ -35,4 +35,4 @@ Rakazo、Pi、DSH源码调查是选型证据，不是项目的新依赖授权。
 
 ## T03 接口冻结（2026-10-17）
 
-T03 将本文件的产品范围冻结为 v1 接口基线：`docs/premium/CONTRACTS.md` 增加字段映射、API/Event 示例和错误码；`schemas/premium/**` 定义 Lease、Action、Approval、BudgetReservation、Mailbox、MailMessage、SandboxHandle、ProjectEvent、HpcTarget、CalculationManifest、HumanLabEvent、ScientificReport；`docs/premium/acceptance-map.json` 为 T04–T29 的 102 个 AC 写入唯一 ID、类型和预期证据；`docs/premium/ADR-001.md` 记录范围、权限和实现边界。T03 不改变五类产品角色、DSH-only、真实研究证据、Master 唯一 DAG/Contract 决策权或 PostgreSQL 权威状态。
+T03 将本文件的产品范围冻结为 v1 接口基线：`docs/premium/CONTRACTS.md` 增加字段映射、API/Event 示例和错误码；`schemas/premium/**` 定义 Lease、Action、Approval、BudgetReservation、Mailbox、MailMessage、SandboxHandle、ProjectEvent、HpcTarget、CalculationManifest、HumanLabEvent、ScientificReport；`docs/premium/acceptance-map.json` 为 T03–T29 的 102 个 AC 写入唯一 ID、类型和预期证据（T00–T02 另有 11 个 AC，全表 113，见 T03 复审）；`docs/premium/ADR-001.md` 记录范围、权限和实现边界。T03 不改变五类产品角色、DSH-only、真实研究证据、Master 唯一 DAG/Contract 决策权或 PostgreSQL 权威状态。

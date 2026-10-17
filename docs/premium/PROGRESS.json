@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 17:45 Asia/Shanghai",
+  "updated_at": "2026-10-17 18:05 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "0e75a91628412855c72761a91308df30421c40ed",
+  "integration_head_sha": "066fe498cef90809a597d84157ad2fae830c7097",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -65,31 +65,33 @@
       "base_sha": "355fcf9d94e3930a7c6be2037acc73490a3d0937",
       "head_sha": "f75529707be1e77365a39287f9ec229ffb288170",
       "source_digest": "4df97caa68dff1a2ea4a654762227f58a8fdf3eedfab5ae79291b6c0199569e7",
-      "review_ref": "reviews/T03/1.json",
+      "review_ref": "reviews/T03/2.json",
       "gate_refs": [
         "evidence/T03/contracts-20261017-1610/manifest.json"
       ],
       "integration_merge_sha": "dc3b6b9564d8604f3008579a83d69d4c80502dd2",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 16:15 Asia/Shanghai",
-      "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS；候选dc3b6b9与tip tree一致，ff-only合入。"
+      "last_updated": "2026-10-17 18:05 Asia/Shanghai",
+      "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001；全表113个唯一AC，其中T03-T29 102、T04-T29 99，T00-T02 11；独立AC3复审reviews/T03/2.json PASS，确认差集仅为T00-T02的11条且无遗漏；候选dc3b6b9已ff-only合入。"
     },
     "T04": {
-      "status": "DONE",
+      "status": "FIX_REQUIRED",
       "owner": "SUPERVISOR",
-      "worktree": "C:/Users/lishi/code/ravel-worktrees/T04",
-      "base_sha": "80b261c69e0522fd5ce0b32d1f115a663a9ab868",
-      "head_sha": "68390f21a2150732fb061248469246ec1d8a7279",
-      "source_digest": "d460d3d325a0e513f177e60c12bea6ea96ff95118eed314d154ba0b9ef3b1c71",
-      "review_ref": "reviews/T04/1.json",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T04-fence",
+      "base_sha": "066fe498cef90809a597d84157ad2fae830c7097",
+      "head_sha": "d2c87418afa1d7851d09838439fb8cdddaa9d43d",
+      "source_digest": null,
+      "review_ref": "reviews/T04/2.json",
       "gate_refs": [
         "evidence/T04/run-20261017-160705/manifest.json",
         "evidence/T04/migration-20261017-1730/manifest.json"
       ],
       "integration_merge_sha": "0e75a91628412855c72761a91308df30421c40ed",
-      "blocker_refs": [],
-      "last_updated": "2026-10-17 17:45 Asia/Shanghai",
-      "note": "T04 DONE：project_leases表/迁移、LeaseService/LeaseGuard、supervisor抢租约与turn fence；6项测试+lint+空库迁移PASS；AC1-AC4独立复核APPROVE；候选0e75a91与tip tree一致并ff-only合入。"
+      "blocker_refs": [
+        "B05"
+      ],
+      "last_updated": "2026-10-17 18:05 Asia/Shanghai",
+      "note": "T04 重开 FIX_REQUIRED：原实现仅在turn/轮次边界检查租约，in-flight turn可在失效后写DAG/启动执行；独立评审要求把owner_instance_id/epoch绑定冻结在启动时，并在所有科研/执行副作用入口fence。修复分支cc/T04-binding-fence已加per-binding brief、启动快照、DAG/Research/Review/Worker/Contract/Conclusion入口检查及回归；待独立复审和集成。历史0e75a91保留，不回退。"
     },
     "T05": {
       "status": "TODO",

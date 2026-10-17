@@ -8,8 +8,13 @@
 
 - src/ravel/execution/supervisor.py
 - src/ravel/execution/leases.py（新）
+- src/ravel/mcp/**（可信 binding 与确定性副作用入口 fence）
+- src/ravel/dsh/runtime.py（启动 brief 的 instance 隔离）
 - tests/premium/T04/**
+- tests/integration/roles/conftest.py、tests/acceptance/phase10_support.py、tests/e2e/conftest.py（测试树按生产路径携带 binding）
 - 租约表/migration、config：共享锁
+
+边界扩展记录：2026-10-17 用户纠偏要求把租约检查放到 Agent turn、DAG mutation 与 execution start 的确定性入口；这些入口在 `src/ravel/mcp/**`，启动 brief 在 `src/ravel/dsh/runtime.py`，测试 harness 必须按生产路径携带 binding。扩展仅限上述路径。
 
 未列路径默认只读；共享文件必须取得FILE_LOCKS中的独占授权。发现必要额外路径先由Supervisor扩充本task白名单并记录，不得悄悄跨界。
 

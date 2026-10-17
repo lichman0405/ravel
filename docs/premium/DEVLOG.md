@@ -19,10 +19,14 @@
 | 2026-10-17 15:20 Asia/Shanghai | Supervisor | T02 | `merge --no-ff c9815f1`；唯一冲突Makefile保留T01+Phase11全部targets；lint/unit 1106/0/2；空库与Phase10快照迁移到单head d1f7a40、marker保留 | merge 7cca83e；inventory 2069项/39 external；worktree LF规范化 | 运行integration/e2e |
 | 2026-10-17 15:45 Asia/Shanghai | Supervisor | T02 | integration 709 exit 0（LocalStack SIMULATED_S3）；e2e 27 exit 0；phase11 acceptance 11/11 demonstrated；修复两处acceptance竞态 | `reviews/T02/1.json` APPROVE；P3：真实MinIO/systemd/live/release-gate PATH | 集成候选 |
 | 2026-10-17 15:55 Asia/Shanghai | Supervisor | T02 | 候选4ec87e1 tree与tip c75d054一致、无删除文件；独立确认APPROVE；ff-only推进integration | integration HEAD 4ec87e1；PROGRESS/T02=DONE；T03 eligible | 派发T03 |
-| 2026-10-17 16:10 Asia/Shanghai | Supervisor | T03 | 12个premium schema、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；schema check/tracker/diff-check PASS | `reviews/T03/1.json` APPROVE（AC1/AC2独立PASS，AC3确定性审计PASS） | 集成候选 |
+| 2026-10-17 16:10 Asia/Shanghai | Supervisor | T03 | 12个premium schema、CONTRACTS v1 addendum、ADR-001、T03–T29 102个唯一AC映射（全表113）；schema check/tracker/diff-check PASS | `reviews/T03/1.json` APPROVE（AC1/AC2独立PASS，AC3确定性审计PASS） | 集成候选 |
 | 2026-10-17 16:15 Asia/Shanghai | Supervisor | T03 | 候选dc3b6b9 tree与tip一致；ff-only推进integration | integration HEAD dc3b6b9；PROGRESS/T03=DONE；T04/T06/T07/T08/T12/T22 eligible | 派发T04 |
 | 2026-10-17 17:35 Asia/Shanghai | Supervisor | T04 | project_leases表/迁移、LeaseService/LeaseGuard、supervisor抢租约+每轮fence；6项测试+lint+空库迁移 | lease tests 6 passed；head b7e4c2a1d9f3；AC1-AC4独立复核APPROVE；P3 advisory已记录 | 集成候选 |
 | 2026-10-17 17:45 Asia/Shanghai | Supervisor | T04 | 候选0e75a91 tree与tip 0a8c57a一致；ff-only推进integration | integration HEAD 0e75a91；PROGRESS/T04=DONE；T05/T06/T07/T08/T12/T22 eligible | 下一波（T05/T06） |
+| 2026-10-17 18:05 Asia/Shanghai | Supervisor | T01 | 纠偏1：共享DB锁统一到 `ravel.state.db_lock`；premium-task/release-gate改为只对非pytest DB命令持锁，pytest子进程由fixture持锁；加同进程重入；锁身份改用RAVEL_TEST_DB；Git common dir解析共享目录；补backends/e2e/acceptance fixture re-export | 分支cc/fix-db-lock 63b8ff6；T01 48 passed；`make premium-task TASK=T04` PASS；`release_gate --only research-readback` 10 passed CERTIFIED；WSL持有/容器竞争1秒拒绝；证据 `evidence/T01/lock-competition-20261017-1650` | 独立复审 |
+| 2026-10-17 18:05 Asia/Shanghai | Reviewer | T03 | 独立AC3复审（替换此前上下文失败的Agent） | `reviews/T03/2.json` APPROVE；全表113=映射113；102=T03–T29，T04–T29=99；差集仅T00–AC1..3、T01–AC1..4、T02–AC1..4共11条；无删除/改名 | 修正记录措辞 |
+| 2026-10-17 18:05 Asia/Shanghai | Supervisor | T04 | 用户纠偏2：T04重开FIX_REQUIRED；分支cc/T04-binding-fence冻结启动brief、per-binding文件、所有科研/执行副作用入口fence；测试harness携带真实lease binding | T04 12 passed；integration/roles 88 passed；lint PASS；HEAD d2c8741；Phase10 agents单测通过，W14整文件曾出现一次既有时序flake | 独立复审+集成 |
+| 2026-10-17 18:05 Asia/Shanghai | Supervisor | STATE | 更新BLOCKERS/PROGRESS/ROADMAP_STATUS/DEVLOG；删除“尚未执行T00”过期文案；记录真实MinIO(B01)、容器systemd(B02)、完整release-gate(B03)、T04复审(B04)、T24–T29外部资源(B05) | tracker validate PASS；4/30 DONE；eligible T06/T07/T08/T12/T22 | 继续修复/复审 |
 
 
 

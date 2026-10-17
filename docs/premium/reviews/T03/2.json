@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "task_id": "T03",
+  "attempt": 2,
+  "reviewer_id": "independent-AC3-rereview",
+  "base_sha": "355fcf9d94e3930a7c6be2037acc73490a3d0937",
+  "candidate_sha": "f75529707be1e77365a39287f9ec229ffb288170",
+  "source_digest": "4df97caa68dff1a2ea4a654762227f58a8fdf3eedfab5ae79291b6c0199569e7",
+  "reviewed_at": "2026-10-17 17:00 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T03-AC3",
+      "result": "PASS",
+      "evidence": "Independent re-review: the full taskbook has 113 unique AC IDs and the acceptance map has the same 113 (empty symmetric difference). 102 is the T03-T29 subset; T04-T29 is 99; the 11 IDs outside T03-T29 are exactly T00-AC1..3, T01-AC1..4 and T02-AC1..4, all present with evidence. No task or AC was dropped or renamed."
+    }
+  ],
+  "counts": {
+    "book_unique": 113,
+    "map_unique": 113,
+    "t03_to_t29_unique": 102,
+    "t04_to_t29_unique": 99,
+    "difference": 11
+  },
+  "difference_set": [
+    "T00-AC1",
+    "T00-AC2",
+    "T00-AC3",
+    "T01-AC1",
+    "T01-AC2",
+    "T01-AC3",
+    "T01-AC4",
+    "T02-AC1",
+    "T02-AC2",
+    "T02-AC3",
+    "T02-AC4"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "docs/premium/reviews/T03/1.json",
+      "line": null,
+      "trigger": "102-AC audit scope was described as T04-T29",
+      "impact": "documentation count error; coverage itself complete",
+      "acceptance_id": "T03-AC3",
+      "required_fix": "Corrected in T03 review 2, task log, SPEC and DEVLOG to T03-T29=102, T04-T29=99, full table=113.",
+      "advisory": false
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": null,
+      "trigger": "T14/T22 are typed MANUAL but have no manual evidence refs",
+      "impact": "UI evidence must be reconciled by T22 before those tasks can pass",
+      "acceptance_id": "T03-AC3",
+      "required_fix": "T22 must map UI checks to JS/Electron commands or provide manual evidence.",
+      "advisory": true
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T03/contracts-20261017-1610/manifest.json"
+  ],
+  "integration_candidate": false
+}
