@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import premium_task
+import pytest
 
 TRY_LOCK = r"""
 import sys
@@ -56,6 +57,27 @@ def test_lock_dir_honors_injected_environment(tmp_path: Path) -> None:
     }
     assert premium_task.lock_dir(env) == tmp_path
     assert premium_task.database_lock_path(env).parent == tmp_path
+
+
+def test_default_lock_dir_is_shared_on_posix() -> None:
+    if os.name != "posix":
+        pytest.skip("POSIX-only path")
+    assert premium_task.lock_dir({}) == Path("/tmp/ravel-premium-locks")
+
+
+def test_lock_path_normalizes_localhost_alias(tmp_path: Path) -> None:
+    base = {
+        "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
+        "RAVEL_POSTGRES_PORT": "55432",
+        "RAVEL_POSTGRES_DB": "ravel_test",
+    }
+    via_name = premium_task.database_lock_path(
+        {**base, "RAVEL_POSTGRES_HOST": "localhost"}
+    )
+    via_ip = premium_task.database_lock_path(
+        {**base, "RAVEL_POSTGRES_HOST": "127.0.0.1"}
+    )
+    assert via_name == via_ip
 
 
 def test_lock_path_is_stable_and_database_specific() -> None:

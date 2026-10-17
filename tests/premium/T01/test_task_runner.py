@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import premium_task
+import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 RUNNER = SCRIPTS / "premium_task.py"
@@ -28,24 +29,24 @@ def _task(
     acceptance_ids: list[str] | None = None,
     test_nodeids: list[str] | None = None,
     manual_evidence_refs: list[str] | None = None,
+    database_suite: bool | None = None,
 ) -> None:
+    task = {
+        "acceptance_ids": acceptance_ids if acceptance_ids is not None else ["T99-AC1"],
+        "gate_entrypoints": ["python scripts/premium_task.py T99"],
+        "classification": "internal",
+        "status": "NOT_RUN",
+        "test_nodeids": (
+            test_nodeids if test_nodeids is not None else ["tests/x.py::test_x"]
+        ),
+        "manual_evidence_refs": manual_evidence_refs or [],
+        "execution_commands": commands,
+    }
+    if database_suite is not None:
+        task["database_suite"] = database_suite
     spec = {
         "schema_version": 1,
-        "tasks": {
-            "T99": {
-                "acceptance_ids": acceptance_ids if acceptance_ids is not None else ["T99-AC1"],
-                "gate_entrypoints": ["python scripts/premium_task.py T99"],
-                "classification": "internal",
-                "status": "NOT_RUN",
-                "test_nodeids": (
-                    test_nodeids
-                    if test_nodeids is not None
-                    else ["tests/x.py::test_x"]
-                ),
-                "manual_evidence_refs": manual_evidence_refs or [],
-                "execution_commands": commands,
-            }
-        },
+        "tasks": {"T99": task},
     }
     (repo / "docs" / "premium").mkdir(parents=True, exist_ok=True)
     (repo / "docs" / "premium" / "acceptance-map.json").write_text(
@@ -223,6 +224,84 @@ def test_database_suite_is_auto_locked(tmp_path: Path) -> None:
     assert manifest["database_lock"] is True
 
 
+def test_undeclared_task_locks_by_default(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[{"argv": [sys.executable, "-c", "print('unit')"]}],
+    )
+    result = _run(repo, "T99", "--skip-preflight")
+    assert result.returncode == 0, result.stderr
+    assert _manifest(repo)["database_lock"] is True
+
+
+def test_non_database_task_can_opt_out(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[{"argv": [sys.executable, "-c", "print('unit')"]}],
+        database_suite=False,
+    )
+    result = _run(repo, "T99", "--skip-preflight")
+    assert result.returncode == 0, result.stderr
+    assert _manifest(repo)["database_lock"] is False
+
+
+def test_backslash_marker_overrides_false_declaration(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[
+            {
+                "argv": [
+                    sys.executable,
+                    "-c",
+                    "print('tests\\integration\\probe')",
+                ]
+            }
+        ],
+        database_suite=False,
+    )
+    result = _run(repo, "T99", "--skip-preflight")
+    assert result.returncode == 0, result.stderr
+    assert _manifest(repo)["database_lock"] is True
+
+
+def test_no_trailing_slash_marker_overrides_false_declaration(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[{"argv": [sys.executable, "-c", "print('pytest tests/integration')"]}],
+        database_suite=False,
+    )
+    result = _run(repo, "T99", "--skip-preflight")
+    assert result.returncode == 0, result.stderr
+    assert _manifest(repo)["database_lock"] is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pytest -q tests",
+        "python -m pytest -q tests",
+        "pytest -x tests",
+        "pytest --maxfail=1 tests",
+        "pytest tests/unit tests",
+    ],
+)
+def test_parent_pytest_selection_overrides_false_declaration(
+    tmp_path: Path, command: str
+) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[{"command": command, "shell": True}],
+        database_suite=False,
+    )
+    _run(repo, "T99", "--skip-preflight")
+    assert _manifest(repo)["database_lock"] is True
+
+
 def test_preflight_failure_is_not_pass(tmp_path: Path, monkeypatch) -> None:
     repo = _repo(tmp_path)
     _task(
@@ -249,6 +328,18 @@ def test_digest_subcommand_prints_sha256(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert len(result.stdout.strip()) == 64
     int(result.stdout.strip(), 16)
+
+
+def test_t01_declared_commands_are_not_database_suites() -> None:
+    root = Path(__file__).resolve().parents[3]
+    mapping = json.loads(
+        (root / "docs" / "premium" / "acceptance-map.json").read_text(encoding="utf-8")
+    )
+    task = mapping["tasks"]["T01"]
+    assert task["database_suite"] is False
+    for spec in task["execution_commands"]:
+        command = premium_task.normalize_command(spec)
+        assert not premium_task.command_uses_database(command), command
 
 
 def test_unknown_task_fails(tmp_path: Path) -> None:

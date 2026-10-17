@@ -33,6 +33,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -228,29 +229,144 @@ def _empty_selection(log: str, exit_code: int) -> bool:
 #: A command naming one of these trees can truncate the shared test database.
 #: The runner takes the system-wide lock even if the command author forgot
 #: ``needs_database``; a declaration is a hint, not the safety mechanism.
-DATABASE_PATH_MARKERS = ("tests/integration/", "tests/e2e/", "tests/acceptance/")
+DATABASE_PATH_MARKERS = ("tests/integration", "tests/e2e", "tests/acceptance")
+
+
+#: pytest options that consume the following token. If an option is not here,
+#: it is treated as a flag and only its own token is skipped.
+PYTEST_VALUE_OPTIONS = {
+    "-c",
+    "-k",
+    "-m",
+    "-o",
+    "-p",
+    "--basetemp",
+    "--capture",
+    "--color",
+    "--confcutdir",
+    "--cov",
+    "--cov-config",
+    "--cov-fail-under",
+    "--cov-report",
+    "--deselect",
+    "--ignore",
+    "--ignore-glob",
+    "--import-mode",
+    "--junitxml",
+    "--log-date-format",
+    "--log-file",
+    "--log-format",
+    "--log-level",
+    "--maxfail",
+    "--rootdir",
+    "--tb",
+    "--timeout",
+}
+
+
+def _command_tokens(command: dict[str, Any]) -> list[str]:
+    if command.get("argv"):
+        return [str(part) for part in command["argv"]]
+    text = str(command.get("command") or "")
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+
+def _pytest_positionals(tokens: list[str]) -> list[str]:
+    start: int | None = None
+    for index, token in enumerate(tokens):
+        if Path(token).name in {"pytest", "py.test"}:
+            start = index + 1
+            break
+        if (
+            token == "-m"
+            and index + 1 < len(tokens)
+            and Path(tokens[index + 1]).name in {"pytest", "py.test"}
+        ):
+            start = index + 2
+            break
+    if start is None:
+        return []
+
+    positionals: list[str] = []
+    index = start
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--":
+            positionals.extend(tokens[index + 1 :])
+            break
+        if token.startswith("-"):
+            option = token.split("=", 1)[0]
+            index += 2 if "=" not in token and option in PYTEST_VALUE_OPTIONS else 1
+            continue
+        positionals.append(token)
+        index += 1
+    return positionals
+
+
+def _database_target(target: str) -> bool:
+    path = target.replace("\\", "/").strip().strip("'\"").rstrip("/")
+    path = path.split("::", 1)[0]
+    parts = [part for part in path.split("/") if part not in {"", "."}]
+    if not parts:
+        return False
+    if parts == ["tests"]:
+        return True
+    normalized = "/".join(parts)
+    for marker in DATABASE_PATH_MARKERS:
+        if normalized == marker or normalized.startswith(marker + "/"):
+            return True
+        if marker.startswith(normalized + "/"):
+            return True
+    return False
 
 
 def command_uses_database(command: dict[str, Any]) -> bool:
-    parts = [str(part) for part in command.get("argv") or []]
-    text = " ".join(parts) + " " + str(command.get("command") or "")
-    return any(marker in text for marker in DATABASE_PATH_MARKERS)
+    tokens = _command_tokens(command)
+    if any(_database_target(target) for target in _pytest_positionals(tokens)):
+        return True
+    # A path marker may also appear inside a shell string or a `python -c`
+    # argument; the structural parser above only sees real argv tokens.
+    text = " ".join(tokens).replace("\\", "/").lower()
+    return any(
+        re.search(rf"(^|[\s'\"=/]){re.escape(marker)}(/|[\s'\"]|$)", text)
+        for marker in DATABASE_PATH_MARKERS
+    )
+
+
+#: A fixed shared directory, not per-user TMPDIR: two runners launched with
+#: different environments must still meet at the same lock file. Override it
+#: explicitly for a non-default deployment.
+DEFAULT_LOCK_DIR = (
+    Path("/tmp/ravel-premium-locks")
+    if os.name == "posix"
+    else Path(tempfile.gettempdir()).resolve() / "ravel-premium-locks"
+)
 
 
 def lock_dir(env: dict[str, str] | None = None) -> Path:
     env = os.environ if env is None else env
     configured = env.get("RAVEL_PREMIUM_LOCK_DIR")
     if configured:
-        return Path(configured)
-    return Path(tempfile.gettempdir()) / "ravel-premium-locks"
+        return Path(configured).expanduser().resolve()
+    return DEFAULT_LOCK_DIR
+
+
+def _canonical_host(value: str) -> str:
+    host = value.strip().lower().strip("[]")
+    if host in {"localhost", "::1"}:
+        return "127.0.0.1"
+    return host
 
 
 def database_lock_path(env: dict[str, str] | None = None) -> Path:
     env = os.environ if env is None else env
     identity = "{host}:{port}/{db}".format(
-        host=env.get("RAVEL_POSTGRES_HOST", "127.0.0.1"),
-        port=env.get("RAVEL_POSTGRES_PORT", "55432"),
-        db=env.get("RAVEL_POSTGRES_DB", "ravel_test"),
+        host=_canonical_host(env.get("RAVEL_POSTGRES_HOST", "127.0.0.1")),
+        port=int(env.get("RAVEL_POSTGRES_PORT", "55432")),
+        db=env.get("RAVEL_POSTGRES_DB", "ravel_test").strip().lower(),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
     return lock_dir(env) / f"database-{digest}.lock"
@@ -280,6 +396,10 @@ class DatabaseLock:
                         f"timed out waiting for database test lock {self.path}"
                     ) from None
                 time.sleep(0.25)
+            except BaseException:
+                self._handle.close()
+                self._handle = None
+                raise
 
     @staticmethod
     def _contention(error: OSError) -> bool:
@@ -574,7 +694,11 @@ def run_task(
             print(f"{task_id}: preflight failed; manifest {manifest}", file=sys.stderr)
             return 2
 
-    needs_database = force_database_lock or any(
+    # Fail safe: an undeclared task is treated as database-touching. A task
+    # must explicitly declare database_suite=false in acceptance-map.json to
+    # opt out, and marker detection still overrides that declaration.
+    task_needs_database = task.get("database_suite", True) is not False
+    needs_database = force_database_lock or task_needs_database or any(
         c["needs_database"] or command_uses_database(c) for c in commands
     )
     lock_context: Iterator[None] = (
