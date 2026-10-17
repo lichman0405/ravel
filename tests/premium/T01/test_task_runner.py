@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import premium_task
+
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 RUNNER = SCRIPTS / "premium_task.py"
 
@@ -202,6 +204,43 @@ def test_manifest_binds_commit_digest_and_artifacts(tmp_path: Path) -> None:
     assert manifest["result"] == "PASS"
     assert manifest["artifacts"]
     assert manifest["log_path"].endswith("commands.txt")
+
+
+def test_database_suite_is_auto_locked(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[
+            {
+                "argv": [sys.executable, "-c", "print('tests/integration/probe')"],
+                "needs_database": False,
+            }
+        ],
+    )
+    result = _run(repo, "T99", "--skip-preflight")
+    assert result.returncode == 0, result.stderr
+    manifest = _manifest(repo)
+    assert manifest["database_lock"] is True
+
+
+def test_preflight_failure_is_not_pass(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    _task(
+        repo,
+        commands=[{"argv": [sys.executable, "-c", "print('must not run')"]}],
+    )
+    premium_root = repo / "docs" / "premium"
+    monkeypatch.setattr(premium_task, "REPO_ROOT", repo)
+    monkeypatch.setattr(premium_task, "PREMIUM_ROOT", premium_root)
+    monkeypatch.setattr(premium_task, "ACCEPTANCE_MAP", premium_root / "acceptance-map.json")
+    monkeypatch.setattr(premium_task, "EVIDENCE_ROOT", premium_root / "evidence")
+    monkeypatch.setattr(premium_task, "run_preflight", lambda: 1)
+
+    assert premium_task.run_task("T99") == 2
+    manifest = _manifest(repo)
+    assert manifest["result"] == "FAIL"
+    assert manifest["blocked_reason"] == "preflight failed"
+    assert manifest["source_commit"] == _git(repo, "rev-parse", "HEAD")
 
 
 def test_digest_subcommand_prints_sha256(tmp_path: Path) -> None:

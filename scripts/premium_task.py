@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -224,8 +225,21 @@ def _empty_selection(log: str, exit_code: int) -> bool:
     return any(re.search(pattern, log, re.IGNORECASE) for pattern in patterns)
 
 
-def lock_dir() -> Path:
-    configured = os.environ.get("RAVEL_PREMIUM_LOCK_DIR")
+#: A command naming one of these trees can truncate the shared test database.
+#: The runner takes the system-wide lock even if the command author forgot
+#: ``needs_database``; a declaration is a hint, not the safety mechanism.
+DATABASE_PATH_MARKERS = ("tests/integration/", "tests/e2e/", "tests/acceptance/")
+
+
+def command_uses_database(command: dict[str, Any]) -> bool:
+    parts = [str(part) for part in command.get("argv") or []]
+    text = " ".join(parts) + " " + str(command.get("command") or "")
+    return any(marker in text for marker in DATABASE_PATH_MARKERS)
+
+
+def lock_dir(env: dict[str, str] | None = None) -> Path:
+    env = os.environ if env is None else env
+    configured = env.get("RAVEL_PREMIUM_LOCK_DIR")
     if configured:
         return Path(configured)
     return Path(tempfile.gettempdir()) / "ravel-premium-locks"
@@ -238,8 +252,8 @@ def database_lock_path(env: dict[str, str] | None = None) -> Path:
         port=env.get("RAVEL_POSTGRES_PORT", "55432"),
         db=env.get("RAVEL_POSTGRES_DB", "ravel_test"),
     )
-    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-    return lock_dir() / f"database-{digest}.lock"
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
+    return lock_dir(env) / f"database-{digest}.lock"
 
 
 class DatabaseLock:
@@ -267,6 +281,15 @@ class DatabaseLock:
                     ) from None
                 time.sleep(0.25)
 
+    @staticmethod
+    def _contention(error: OSError) -> bool:
+        return error.errno in {
+            errno.EACCES,
+            errno.EAGAIN,
+            errno.EWOULDBLOCK,
+            errno.EDEADLK,
+        }
+
     def _acquire(self) -> None:
         try:
             import fcntl
@@ -278,15 +301,18 @@ class DatabaseLock:
             try:
                 msvcrt.locking(self._handle.fileno(), msvcrt.LK_NBLCK, 1)
             except OSError as error:
-                raise BlockingIOError(str(error)) from error
+                if self._contention(error):
+                    raise BlockingIOError(str(error)) from error
+                raise
             return
-        import fcntl
 
         assert self._handle is not None
         try:
             fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
-            raise BlockingIOError(str(error)) from error
+            if self._contention(error):
+                raise BlockingIOError(str(error)) from error
+            raise
 
     def __exit__(self, *exc: object) -> None:
         if self._handle is None:
@@ -306,17 +332,11 @@ class DatabaseLock:
         self._handle = None
 
 
-def run_preflight(*, allow_noncanonical: bool = False) -> int:
+def run_preflight() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import premium_preflight
 
-    return premium_preflight.main(
-        [
-            "--repo-root",
-            str(REPO_ROOT),
-            *(["--allow-noncanonical"] if allow_noncanonical else []),
-        ]
-    )
+    return premium_preflight.main(["--repo-root", str(REPO_ROOT)])
 
 
 @dataclass
@@ -506,7 +526,6 @@ def run_task(
     task_id: str,
     *,
     skip_preflight: bool = False,
-    allow_noncanonical: bool = False,
     allow_dirty: bool = False,
     force_database_lock: bool = False,
     profile: str = "internal",
@@ -538,7 +557,7 @@ def run_task(
 
     preflight_exit: int | None = None
     if not skip_preflight:
-        preflight_exit = run_preflight(allow_noncanonical=allow_noncanonical)
+        preflight_exit = run_preflight()
         if preflight_exit != 0:
             _write_combined_log(run_dir, [])
             manifest = write_manifest(
@@ -555,7 +574,9 @@ def run_task(
             print(f"{task_id}: preflight failed; manifest {manifest}", file=sys.stderr)
             return 2
 
-    needs_database = force_database_lock or any(c["needs_database"] for c in commands)
+    needs_database = force_database_lock or any(
+        c["needs_database"] or command_uses_database(c) for c in commands
+    )
     lock_context: Iterator[None] = (
         DatabaseLock() if needs_database else contextlib.nullcontext()
     )
@@ -719,7 +740,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("task", nargs="?", help="T00..T29, or 'digest'/'inventory'")
     parser.add_argument("--profile", default="internal", choices=["internal", "certified"])
     parser.add_argument("--skip-preflight", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--allow-noncanonical", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--allow-dirty", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--database-lock", action="store_true")
     parser.add_argument("--json", action="store_true")
@@ -739,7 +759,6 @@ def main(argv: list[str] | None = None) -> int:
     return run_task(
         args.task,
         skip_preflight=args.skip_preflight,
-        allow_noncanonical=args.allow_noncanonical,
         allow_dirty=args.allow_dirty,
         force_database_lock=args.database_lock,
         profile=args.profile,

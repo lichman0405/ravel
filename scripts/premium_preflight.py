@@ -67,8 +67,6 @@ def _os_release(path: Path = Path("/etc/os-release")) -> dict[str, str]:
 def check_os(
     release: dict[str, str] | None = None,
     machine: str | None = None,
-    *,
-    allow_noncanonical: bool = False,
 ) -> Check:
     release = _os_release() if release is None else release
     machine = platform.machine() if machine is None else machine
@@ -76,13 +74,6 @@ def check_os(
     version = release.get("VERSION_ID", "unknown")
     ok = distro == "ubuntu" and version == EXPECTED_OS and machine == EXPECTED_ARCH
     detail = f"{distro} {version} {machine}"
-    if not ok and allow_noncanonical:
-        return Check(
-            "Ubuntu 24.04 x86_64",
-            False,
-            detail + " (noncanonical allowed)",
-            required=False,
-        )
     return Check("Ubuntu 24.04 x86_64", ok, detail)
 
 
@@ -95,14 +86,14 @@ def check_python(version_info: tuple[int, int] | None = None) -> Check:
     )
 
 
-def check_git() -> Check:
-    binary = shutil.which("git")
+def check_git(*, which=shutil.which, runner=subprocess.run) -> Check:
+    binary = which("git")
     if binary is None:
         return Check("git", False, "git not found")
-    result = subprocess.run(
-        [binary, "--version"], capture_output=True, text=True, check=False
+    result = runner([binary, "--version"], capture_output=True, text=True, check=False)
+    return Check(
+        "git", result.returncode == 0, result.stdout.strip() or result.stderr.strip()
     )
-    return Check("git", result.returncode == 0, result.stdout.strip() or result.stderr.strip())
 
 
 def check_docker(
@@ -186,7 +177,6 @@ def run_checks(
     *,
     repo_root: Path,
     services: bool = False,
-    allow_noncanonical: bool = False,
     release: dict[str, str] | None = None,
     machine: str | None = None,
     python_version: tuple[int, int] | None = None,
@@ -194,9 +184,9 @@ def run_checks(
     runner=subprocess.run,
 ) -> list[Check]:
     checks = [
-        check_os(release, machine, allow_noncanonical=allow_noncanonical),
+        check_os(release, machine),
         check_python(python_version),
-        check_git(),
+        check_git(which=which, runner=runner),
         check_docker(which=which, runner=runner),
         check_compose(which=which, runner=runner),
         check_repo(repo_root),
@@ -211,11 +201,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument("--services", action="store_true", help="also check service ports")
     parser.add_argument(
-        "--allow-noncanonical",
-        action="store_true",
-        help="downgrade a non-24.04 host to a warning (development only)",
-    )
-    parser.add_argument(
         "--repo-root",
         type=Path,
         default=Path(__file__).resolve().parents[1],
@@ -223,11 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    checks = run_checks(
-        repo_root=args.repo_root,
-        services=args.services,
-        allow_noncanonical=args.allow_noncanonical,
-    )
+    checks = run_checks(repo_root=args.repo_root, services=args.services)
     required_failed = [check for check in checks if check.required and not check.ok]
 
     if args.json:

@@ -33,20 +33,16 @@ def test_noncanonical_os_fails(release: dict[str, str], machine: str) -> None:
     assert check.required is True
 
 
-def test_noncanonical_os_can_be_explicitly_downgraded() -> None:
-    check = premium_preflight.check_os(
-        {"ID": "ubuntu", "VERSION_ID": "26.04"},
-        "x86_64",
-        allow_noncanonical=True,
-    )
-    assert check.ok is False
-    assert check.required is False
-
-
 def test_python_312_is_required() -> None:
     assert premium_preflight.check_python((3, 12)).ok is True
     assert premium_preflight.check_python((3, 11)).ok is False
     assert premium_preflight.check_python((3, 14)).ok is False
+
+
+def test_missing_git_fails() -> None:
+    check = premium_preflight.check_git(which=lambda _name: None, runner=None)
+    assert check.ok is False
+    assert "not found" in check.detail
 
 
 def test_missing_docker_fails() -> None:
@@ -65,12 +61,7 @@ def test_cli_is_nonzero_when_docker_and_git_are_absent(tmp_path) -> None:
     env = os.environ.copy()
     env["PATH"] = str(tmp_path)
     result = subprocess.run(
-        [
-            sys.executable,
-            str(premium_preflight.__file__),
-            "--json",
-            "--allow-noncanonical",
-        ],
+        [sys.executable, str(premium_preflight.__file__), "--json"],
         capture_output=True,
         text=True,
         env=env,
@@ -82,3 +73,27 @@ def test_cli_is_nonzero_when_docker_and_git_are_absent(tmp_path) -> None:
     names = {check["name"] for check in payload["checks"] if not check["ok"]}
     assert "Docker CLI" in names
     assert "git" in names or "Docker daemon" in names
+
+
+def test_main_returns_nonzero_for_failed_os(monkeypatch) -> None:
+    monkeypatch.setattr(
+        premium_preflight,
+        "run_checks",
+        lambda **_kwargs: [
+            premium_preflight.Check(
+                "Ubuntu 24.04 x86_64", False, "ubuntu 26.04 x86_64", required=True
+            )
+        ],
+    )
+    assert premium_preflight.main(["--json"]) == 1
+
+
+def test_main_returns_nonzero_for_failed_python(monkeypatch) -> None:
+    monkeypatch.setattr(
+        premium_preflight,
+        "run_checks",
+        lambda **_kwargs: [
+            premium_preflight.Check("Python 3.12", False, "3.11", required=True)
+        ],
+    )
+    assert premium_preflight.main(["--json"]) == 1

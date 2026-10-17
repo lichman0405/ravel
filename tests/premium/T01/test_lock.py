@@ -47,6 +47,17 @@ def test_second_runner_cannot_enter_while_lock_held(tmp_path: Path) -> None:
     assert _try_lock(lock, scripts) == 0
 
 
+def test_lock_dir_honors_injected_environment(tmp_path: Path) -> None:
+    env = {
+        "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),
+        "RAVEL_POSTGRES_HOST": "127.0.0.1",
+        "RAVEL_POSTGRES_PORT": "55432",
+        "RAVEL_POSTGRES_DB": "ravel_test",
+    }
+    assert premium_task.lock_dir(env) == tmp_path
+    assert premium_task.database_lock_path(env).parent == tmp_path
+
+
 def test_lock_path_is_stable_and_database_specific() -> None:
     first = premium_task.database_lock_path(
         {
