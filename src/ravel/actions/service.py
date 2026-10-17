@@ -730,11 +730,19 @@ class ActionService:
                 "cancelled"
             )
         self._require_actor(cancelled_by)
-        if cancelled_by in _AGENT_ACTORS and cancelled_by != action.actor:
-            raise PermissionError(
-                f"{cancelled_by!r} did not request Action {action_id} and may not "
-                "cancel it"
-            )
+        if cancelled_by != action.actor:
+            membership = MembershipRepository(
+                self.session, self.project_id
+            ).for_user(cancelled_by)
+            if (
+                membership is None
+                or not membership.is_active
+                or membership.role not in (UserRole.PROJECT_OWNER, UserRole.ADMIN)
+            ):
+                raise PermissionError(
+                    f"{cancelled_by!r} did not request Action {action_id} and is not "
+                    "a live owner/admin who may cancel it"
+                )
         self.budgets.release(action_id, reason="cancelled")
         if action.required_approval_ref:
             self.approvals.expire(
