@@ -56,6 +56,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import uuid
 from dataclasses import dataclass, field
 
 from ravel.config import Settings
@@ -66,6 +67,13 @@ from ravel.domain.services import SUPERVISOR
 from ravel.domain.state_machines import TERMINAL_PROJECT_STATUSES
 from ravel.dsh.agents import HarnessAgent, ResearchAgent, WorkerAgent
 from ravel.dsh.pool import DshRuntimePool, create_pool
+from ravel.execution.leases import (
+    LeaseGuard,
+    LeaseHeld,
+    LeaseLost,
+    LeaseService,
+    ProjectLease,
+)
 from ravel.execution.loop import ProjectLoop
 from ravel.execution.reconcile import ExecutionReconciler
 from ravel.service import Heartbeat
@@ -84,6 +92,12 @@ class ProjectSupervisor:
     poll_seconds: float = 5.0
     loop_poll_seconds: float = 0.5
     loop_max_rounds: int = 200
+    #: Stable identity of this runtime in the project lease. Generated once;
+    #: two supervisors constructed separately never collide by accident.
+    instance_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    #: The project ids this process currently owns, with the epoch it holds.
+    #: Read by the heartbeat's operations projection.
+    _leases: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     _tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict, init=False, repr=False)
     _pool: DshRuntimePool | None = field(default=None, init=False, repr=False)
     _stop_event: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
@@ -100,11 +114,28 @@ class ProjectSupervisor:
     #: still pointed at the other. `probe` stays overridable after the fact —
     #: that is the seam a test uses to answer for Temporal without a cluster.
     reconciler: ExecutionReconciler = field(init=False, repr=False)
+    lease_service: LeaseService = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.reconciler = ExecutionReconciler(
             database=self.database, settings=self.settings
         )
+        self.lease_service = LeaseService(database=self.database)
+
+    def _claim_project(self, project_id: str) -> ProjectLease | None:
+        """Acquire or renew this project's lease, or return None if another owns it.
+
+        Called before any DSH seat is constructed, so a losing supervisor never
+        creates the agents that would otherwise be able to dispatch a turn or
+        start a run.
+        """
+        try:
+            lease = self.lease_service.acquire(project_id, self.instance_id)
+        except (LeaseHeld, LeaseLost) as error:
+            logger.info("supervisor does not own project=%s: %s", project_id, error)
+            return None
+        self._leases[project_id] = lease.epoch
+        return lease
 
     @property
     def pool(self) -> DshRuntimePool | None:
@@ -207,7 +238,10 @@ class ProjectSupervisor:
         exists, which is the state of a supervisor that has been constructed
         and not started — and `_beat` does not run then either.
         """
-        detail: dict[str, object] = {"projects": sorted(self._tasks)}
+        detail: dict[str, object] = {
+            "projects": sorted(self._tasks),
+            "leases": dict(sorted(self._leases.items())),
+        }
         pool = self._pool
         if pool is not None:
             stats = pool.stats()
@@ -288,8 +322,15 @@ class ProjectSupervisor:
         }
 
     async def _drive_project(self, project_id: str) -> None:
-        """One project's loop, from active to ended."""
+        """One project's loop, from active to ended, under a database lease."""
         assert self._pool is not None
+        lease = self._claim_project(project_id)
+        if lease is None:
+            # Another live supervisor owns this project. Do not construct the
+            # DSH seats at all: no turn and no execution start can come from a
+            # process that does not own the lease.
+            return
+        self._leases[project_id] = lease.epoch
         pool = self._pool
         master = HarnessAgent(
             pool=pool, project_id=project_id, role=AgentRole.MASTER
@@ -306,6 +347,12 @@ class ProjectSupervisor:
         research = ResearchAgent(
             pool=pool, project_id=project_id, role=AgentRole.RESEARCH
         )
+        guard = LeaseGuard(
+            service=self.lease_service,
+            project_id=project_id,
+            owner_instance_id=self.instance_id,
+            epoch=lease.epoch,
+        )
         try:
             run = await ProjectLoop(
                 database=self.database,
@@ -317,6 +364,7 @@ class ProjectSupervisor:
                 research=research,
                 poll_seconds=self.loop_poll_seconds,
                 max_rounds=self.loop_max_rounds,
+                lease_guard=guard.ensure,
             ).run()
             logger.info(
                 "supervisor project loop finished: project=%s status=%s rounds=%d halted=%s",
@@ -326,6 +374,15 @@ class ProjectSupervisor:
                 run.halted,
             )
         finally:
+            self._leases.pop(project_id, None)
+            if not self.lease_service.release(
+                project_id, self.instance_id, lease.epoch
+            ):
+                logger.info(
+                    "supervisor lease was already superseded: project=%s epoch=%d",
+                    project_id,
+                    lease.epoch,
+                )
             master.close()
             review.close()
             compute_worker.close()

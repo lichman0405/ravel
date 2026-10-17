@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 16:15 Asia/Shanghai",
+  "updated_at": "2026-10-17 17:30 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -75,18 +75,18 @@
       "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS；候选dc3b6b9与tip tree一致，ff-only合入。"
     },
     "T04": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T04",
+      "base_sha": "80b261c69e0522fd5ce0b32d1f115a663a9ab868",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 17:30 Asia/Shanghai",
+      "note": "T04实现中：project_leases表/迁移、LeaseService/LeaseGuard、supervisor抢租约与turn fence、6项本地测试；等待门禁与Review。"
     },
     "T05": {
       "status": "TODO",
