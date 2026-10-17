@@ -114,14 +114,17 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T06-actions",
       "base_sha": "61d7594",
-      "head_sha": null,
+      "head_sha": "cfc93fe",
       "source_digest": null,
       "review_ref": null,
-      "gate_refs": [],
+      "gate_refs": [
+        "evidence/T06/run-20261017-204533/manifest.json",
+        "evidence/T06/run-20261017-204258/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": "2026-10-17 19:50 Asia/Shanghai",
-      "note": "T06 RUNNING：基于 T05 tip 的独立工作树实现 Action/审批版本绑定/预算预留；待提交与门禁。"
+      "last_updated": "2026-10-17 20:47 Asia/Shanghai",
+      "note": "T06 RUNNING：Action/审批版本绑定/预算预留/start_execution入口/迁移；45 tests + migration + lint PASS；已合入integration；等待独立AC1-AC4复审。"
     },
     "T07": {
       "status": "TODO",
