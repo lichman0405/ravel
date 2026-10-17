@@ -180,6 +180,55 @@ async def test_stale_binding_cannot_start_execution(
     assert len(fake.calls) == 1
 
 
+def test_a_new_brief_does_not_upgrade_an_existing_scope(
+    tmp_path: Path,
+) -> None:
+    """A tool server keeps the grant it launched with, not the file's new owner."""
+    path = _brief(
+        tmp_path / "shared.json",
+        "project-a",
+        AgentRole.MASTER,
+        owner="supervisor-a",
+        epoch=1,
+        binding_id="binding-a",
+    )
+    scope = ToolScope(project_id="project-a", role=AgentRole.MASTER, brief_path=path)
+    _brief(
+        path,
+        "project-a",
+        AgentRole.MASTER,
+        owner="supervisor-b",
+        epoch=2,
+        binding_id="binding-b",
+    )
+    brief = scope.brief()
+    assert brief.owner_instance_id == "supervisor-a"
+    assert brief.lease_epoch == 1
+    assert brief.binding_id == "binding-a"
+
+
+def test_role_runtime_writes_a_binding_scoped_brief(tmp_path: Path) -> None:
+    """The production runtime path does not share one mutable brief file."""
+    from ravel.config import Settings
+    from ravel.dsh.runtime import RoleRuntime
+
+    settings = Settings(runtime_dir=tmp_path / "runtime")
+    runtime = RoleRuntime.create(
+        settings,
+        "project-a",
+        AgentRole.MASTER,
+        brief={
+            "binding_id": "supervisor-a:project-a:master:1",
+            "owner_instance_id": "supervisor-a",
+            "lease_epoch": 1,
+        },
+    )
+    runtime.close()
+    work_dir = settings.dsh_runtime_cwd("project-a", AgentRole.MASTER.slug)
+    assert (work_dir / "brief-supervisor-a-project-a-master-1.json").is_file()
+    assert not (work_dir / "brief.json").exists()
+
+
 async def test_takeover_recovers_the_submitted_job_without_resubmitting(
     database: Database, project, prepare, tmp_path: Path
 ) -> None:

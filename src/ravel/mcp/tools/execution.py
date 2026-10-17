@@ -394,6 +394,7 @@ def request_action(context: ToolContext) -> Any:
         not permitted every value of it.
         """
         require_worker(context, "request_action")
+        require_current_lease(context, "request_action")
         report = DeviationReport(
             requested_action=requested_action,
             description=description,
@@ -613,6 +614,7 @@ def send_message(context: ToolContext) -> Any:
         decision, and that belongs to Master.
         """
         require_worker(context, "send_message")
+        require_current_lease(context, "send_message")
         parsed = _kind(kind)
         with context.write() as session:
             node = DagRepository(session, context.project_id).node(node_id)

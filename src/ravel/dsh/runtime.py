@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from collections.abc import Callable
@@ -167,7 +168,19 @@ class RoleRuntime:
             raise HarnessRuntimeError(f"role prompt is missing: {definition.prompt_file}")
 
         work_dir = settings.dsh_runtime_cwd(project_id, role.slug)
-        brief_path = work_dir / "brief.json"
+        # A brief is a launch-time grant. A new owner must not overwrite the
+        # file a still-running tool server reads, so the binding gets its own
+        # file; the unbound fallback keeps the historical name for compositions
+        # that predate the lease.
+        binding_id = str((brief or {}).get("binding_id") or "")
+        brief_name = (
+            "brief-"
+            + re.sub(r"[^A-Za-z0-9_.-]", "-", binding_id)
+            + ".json"
+            if binding_id
+            else "brief.json"
+        )
+        brief_path = work_dir / brief_name
         brief_path.write_text(
             json.dumps({"project_id": project_id, "role": role.value, **(brief or {})}, indent=2),
             encoding="utf-8",

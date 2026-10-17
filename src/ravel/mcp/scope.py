@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ravel.domain.roles import AgentRole
@@ -117,6 +117,30 @@ class ToolScope:
     project_id: str
     role: AgentRole
     brief_path: Path | None = None
+    #: An in-process seat (a scripted acceptance seat) can hand the launch
+    #: grant directly instead of writing a file for a separate server process.
+    launch_brief: RuntimeBrief | None = None
+    #: Read once, when the tool server starts. A brief is a launch-time grant;
+    #: re-reading it on every call would let a new owner's write upgrade a
+    #: stale server to the new epoch.
+    _brief_snapshot: RuntimeBrief | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        if self.launch_brief is not None:
+            snapshot = self.launch_brief
+        elif self.brief_path is None:
+            snapshot = RuntimeBrief(
+                project_id=self.project_id,
+                project_title=self.project_id,
+                role=self.role,
+            )
+        else:
+            snapshot = RuntimeBrief.from_file(
+                self.brief_path, self.role, self.project_id
+            )
+        object.__setattr__(self, "_brief_snapshot", snapshot)
 
     @classmethod
     def from_environment(cls, environ: dict[str, str] | None = None) -> ToolScope:
@@ -155,9 +179,6 @@ class ToolScope:
         return self.role.mutates_dag
 
     def brief(self) -> RuntimeBrief:
-        """The launch brief, or an empty one when none was written."""
-        if self.brief_path is None:
-            return RuntimeBrief(
-                project_id=self.project_id, project_title=self.project_id, role=self.role
-            )
-        return RuntimeBrief.from_file(self.brief_path, self.role, self.project_id)
+        """The launch brief, fixed when this scope was constructed."""
+        assert self._brief_snapshot is not None
+        return self._brief_snapshot
