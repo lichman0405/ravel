@@ -38,7 +38,12 @@ from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import ACTIVE_NODE_STATUSES, can_transition_node
 from ravel.execution.backends import DeviationReport
 from ravel.execution.worker_rules import adjudicate
-from ravel.mcp.context import ToolContext, as_json, require_worker
+from ravel.mcp.context import (
+    ToolContext,
+    as_json,
+    require_current_lease,
+    require_worker,
+)
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.preparations import PreparationRepository
@@ -85,6 +90,7 @@ def start_execution(context: ToolContext) -> Any:
         stop. Widening what may run is Master's decision, not yours.
         """
         require_worker(context, "start_execution")
+        require_current_lease(context, "start_execution")
         if context.execution is None:
             raise RuntimeError(
                 "this tool server holds no Execution Service; a Worker that can "
@@ -388,6 +394,7 @@ def request_action(context: ToolContext) -> Any:
         not permitted every value of it.
         """
         require_worker(context, "request_action")
+        require_current_lease(context, "request_action")
         report = DeviationReport(
             requested_action=requested_action,
             description=description,
@@ -607,6 +614,7 @@ def send_message(context: ToolContext) -> Any:
         decision, and that belongs to Master.
         """
         require_worker(context, "send_message")
+        require_current_lease(context, "send_message")
         parsed = _kind(kind)
         with context.write() as session:
             node = DagRepository(session, context.project_id).node(node_id)

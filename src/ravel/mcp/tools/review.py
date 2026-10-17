@@ -31,7 +31,12 @@ from ravel.domain.contracts import AcceptanceContract, ExecutionContract
 from ravel.domain.dag import DagNode
 from ravel.domain.decisions import CriterionResult, ReviewRecord
 from ravel.domain.enums import ReviewCheckpoint, ReviewOutcome
-from ravel.mcp.context import ToolContext, as_json, require_review
+from ravel.mcp.context import (
+    ToolContext,
+    as_json,
+    require_current_lease,
+    require_review,
+)
 from ravel.review.checkpoints import (
     admissible_checkpoints,
     latest_at,
@@ -311,6 +316,7 @@ def submit_review(context: ToolContext) -> Any:
         acting on a recommendation is Master's, through a Decision Record.
         """
         require_review(context, "submit_review")
+        require_current_lease(context, "submit_review")
         parsed_checkpoint = _checkpoint(checkpoint)
         parsed_outcome = _outcome(outcome)
         with context.write() as session:

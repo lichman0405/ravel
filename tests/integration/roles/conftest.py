@@ -25,6 +25,8 @@ import pytest
 from ravel.config import Settings
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
+from ravel.execution.leases import LeaseService
+from ravel.state.database import Database, create_db_engine
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +35,8 @@ class RoleEnvironment:
 
     settings: Settings
     brief_dir: Path
+    database: Database | None = None
+    owner: str = "integration-role-environment"
 
     def for_role(self, role: AgentRole, project_id: str, *, title: str = "") -> dict[str, str]:
         """The environment a `(project, role)` server is launched with.
@@ -43,6 +47,9 @@ class RoleEnvironment:
         composition, and the drift would read as a passing test of a server
         launched differently from the one a deployment runs.
         """
+        database = self.database or Database(create_db_engine(self.settings))
+        lease = LeaseService(database).acquire(project_id, self.owner)
+        binding_id = f"{self.owner}:{project_id}:{role.value}:{lease.epoch}"
         brief = self.brief_dir / f"{role.value}.brief.json"
         brief.parent.mkdir(parents=True, exist_ok=True)
         brief.write_text(
@@ -51,6 +58,9 @@ class RoleEnvironment:
                     "project_id": project_id,
                     "project_title": title or project_id,
                     "role": role.value,
+                    "binding_id": binding_id,
+                    "owner_instance_id": self.owner,
+                    "lease_epoch": lease.epoch,
                 }
             ),
             encoding="utf-8",
@@ -68,5 +78,11 @@ class RoleEnvironment:
 
 
 @pytest.fixture
-def role_environment(integration_settings: Settings, tmp_path: Path) -> RoleEnvironment:
-    return RoleEnvironment(settings=integration_settings, brief_dir=tmp_path / "briefs")
+def role_environment(
+    integration_settings: Settings, tmp_path: Path, database: Database
+) -> RoleEnvironment:
+    return RoleEnvironment(
+        settings=integration_settings,
+        brief_dir=tmp_path / "briefs",
+        database=database,
+    )

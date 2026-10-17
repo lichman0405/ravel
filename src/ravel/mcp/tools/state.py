@@ -27,7 +27,12 @@ from ravel.domain.reconciliation import RunReconciliation
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
 from ravel.master.service import ENDING_DECISION, MasterService
-from ravel.mcp.context import ToolContext, as_json, require_master
+from ravel.mcp.context import (
+    ToolContext,
+    as_json,
+    require_current_lease,
+    require_master,
+)
 from ravel.mcp.registry import tools_for
 from ravel.mcp.tools.research_results import completed_research
 from ravel.state.outbox import last_event_seq
@@ -436,6 +441,7 @@ def commit_research_contract(context: ToolContext) -> Any:
         `commit_roadmap_phase` and `expand_dag_phase`.
         """
         require_master(context, "commit_research_contract")
+        require_current_lease(context, "commit_research_contract")
         goal = original_user_goal.strip()
         if not goal:
             raise ValueError(
@@ -522,6 +528,7 @@ def write_master_checkpoint(context: ToolContext) -> Any:
         stamped on it for the recovery to replay from.
         """
         require_master(context, "write_master_checkpoint")
+        require_current_lease(context, "write_master_checkpoint")
         with context.write() as session:
             identity = AgentIdentityRepository(session, context.project_id).ensure(
                 AgentRole.MASTER
@@ -605,6 +612,7 @@ def commit_success_contract(context: ToolContext) -> Any:
         It changes no node and commits no stage, so it is not a DAG mutation.
         """
         require_master(context, "commit_success_contract")
+        require_current_lease(context, "commit_success_contract")
         criteria = _stated(success_criteria)
         if not criteria:
             raise ValueError(
@@ -699,6 +707,7 @@ def conclude_project(context: ToolContext) -> Any:
         ended.
         """
         require_master(context, "conclude_project")
+        require_current_lease(context, "conclude_project")
         try:
             ending = ProjectOutcome(outcome.strip().upper())
         except ValueError as error:

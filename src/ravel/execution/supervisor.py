@@ -331,21 +331,47 @@ class ProjectSupervisor:
             # process that does not own the lease.
             return
         self._leases[project_id] = lease.epoch
+
+        def brief_for(role: AgentRole) -> dict[str, object]:
+            """The trusted lease binding this role's tool server carries."""
+            return {
+                "binding_id": (
+                    f"{self.instance_id}:{project_id}:{role.value}:{lease.epoch}"
+                ),
+                "owner_instance_id": self.instance_id,
+                "lease_epoch": lease.epoch,
+            }
+
         pool = self._pool
         master = HarnessAgent(
-            pool=pool, project_id=project_id, role=AgentRole.MASTER
+            pool=pool,
+            project_id=project_id,
+            role=AgentRole.MASTER,
+            brief=brief_for(AgentRole.MASTER),
         )
         review = HarnessAgent(
-            pool=pool, project_id=project_id, role=AgentRole.REVIEW
+            pool=pool,
+            project_id=project_id,
+            role=AgentRole.REVIEW,
+            brief=brief_for(AgentRole.REVIEW),
         )
         compute_worker = WorkerAgent(
-            pool=pool, project_id=project_id, role=AgentRole.COMPUTE_WORKER
+            pool=pool,
+            project_id=project_id,
+            role=AgentRole.COMPUTE_WORKER,
+            brief=brief_for(AgentRole.COMPUTE_WORKER),
         )
         experimental_worker = WorkerAgent(
-            pool=pool, project_id=project_id, role=AgentRole.EXPERIMENTAL_WORKER
+            pool=pool,
+            project_id=project_id,
+            role=AgentRole.EXPERIMENTAL_WORKER,
+            brief=brief_for(AgentRole.EXPERIMENTAL_WORKER),
         )
         research = ResearchAgent(
-            pool=pool, project_id=project_id, role=AgentRole.RESEARCH
+            pool=pool,
+            project_id=project_id,
+            role=AgentRole.RESEARCH,
+            brief=brief_for(AgentRole.RESEARCH),
         )
         guard = LeaseGuard(
             service=self.lease_service,

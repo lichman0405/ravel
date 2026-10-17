@@ -91,6 +91,7 @@ from ravel.domain.enums import (
 from ravel.domain.project import Project, RoadmapPhase
 from ravel.domain.roles import AgentRole
 from ravel.execution.backends import BackendRegistry
+from ravel.execution.leases import LeaseService
 from ravel.execution.loop import ProjectLoop, ProjectRun, Situation
 from ravel.execution.node_runs import ExecutionService
 from ravel.execution.temporal.client import NodeRunClient
@@ -101,7 +102,7 @@ from ravel.gateway.conversation import Answer
 from ravel.gateway.stream import Cadence
 from ravel.master import ENDING_DECISION, MasterService, ReviseContract
 from ravel.mcp.context import ToolContext
-from ravel.mcp.scope import ToolScope
+from ravel.mcp.scope import RuntimeBrief, ToolScope
 from ravel.mcp.tools import IMPLEMENTATIONS
 from ravel.review import ReviewService
 from ravel.state.database import Database
@@ -657,11 +658,29 @@ class Headless:
         """
         seat = self.seats.get(role)
         if seat is None:
+            owner = "headless-e2e-seat"
+            lease = LeaseService(self.database).acquire(
+                self.project.project_id, owner
+            )
+            binding = RuntimeBrief(
+                project_id=self.project.project_id,
+                project_title=self.project.project_id,
+                role=role,
+                binding_id=(
+                    f"{owner}:{self.project.project_id}:{role.value}:{lease.epoch}"
+                ),
+                owner_instance_id=owner,
+                lease_epoch=lease.epoch,
+            )
             seat = ScriptedWorker(
                 project_id=self.project.project_id,
                 role=role,
                 context=ToolContext(
-                    scope=ToolScope(project_id=self.project.project_id, role=role),
+                    scope=ToolScope(
+                        project_id=self.project.project_id,
+                        role=role,
+                        launch_brief=binding,
+                    ),
                     database=self.database,
                     execution=ExecutionService(
                         database=self.database, settings=self.settings

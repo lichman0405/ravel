@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ravel.domain.roles import AgentRole
@@ -43,6 +43,12 @@ class RuntimeBrief:
     objective: str | None = None
     phase: str | None = None
     bindings: tuple[dict[str, object], ...] = ()
+    #: The lease binding this runtime was launched under. Trusted because the
+    #: brief is written by the supervisor into RAVEL's own runtime directory;
+    #: the server still re-reads the current lease row for every side effect.
+    binding_id: str | None = None
+    owner_instance_id: str | None = None
+    lease_epoch: int | None = None
 
     @classmethod
     def from_file(cls, path: Path, role: AgentRole, project_id: str) -> RuntimeBrief:
@@ -83,6 +89,8 @@ class RuntimeBrief:
         if not isinstance(bindings, list):
             raise ScopeError(f"runtime brief at {path} has a non-list 'bindings'")
 
+        raw_epoch = payload.get("lease_epoch")
+        lease_epoch = raw_epoch if isinstance(raw_epoch, int) else None
         return cls(
             project_id=project_id,
             project_title=str(payload.get("project_title") or project_id),
@@ -90,6 +98,15 @@ class RuntimeBrief:
             objective=payload.get("objective"),
             phase=payload.get("phase"),
             bindings=tuple(bindings),
+            binding_id=(
+                str(payload["binding_id"]) if payload.get("binding_id") else None
+            ),
+            owner_instance_id=(
+                str(payload["owner_instance_id"])
+                if payload.get("owner_instance_id")
+                else None
+            ),
+            lease_epoch=lease_epoch,
         )
 
 
@@ -100,6 +117,30 @@ class ToolScope:
     project_id: str
     role: AgentRole
     brief_path: Path | None = None
+    #: An in-process seat (a scripted acceptance seat) can hand the launch
+    #: grant directly instead of writing a file for a separate server process.
+    launch_brief: RuntimeBrief | None = None
+    #: Read once, when the tool server starts. A brief is a launch-time grant;
+    #: re-reading it on every call would let a new owner's write upgrade a
+    #: stale server to the new epoch.
+    _brief_snapshot: RuntimeBrief | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        if self.launch_brief is not None:
+            snapshot = self.launch_brief
+        elif self.brief_path is None:
+            snapshot = RuntimeBrief(
+                project_id=self.project_id,
+                project_title=self.project_id,
+                role=self.role,
+            )
+        else:
+            snapshot = RuntimeBrief.from_file(
+                self.brief_path, self.role, self.project_id
+            )
+        object.__setattr__(self, "_brief_snapshot", snapshot)
 
     @classmethod
     def from_environment(cls, environ: dict[str, str] | None = None) -> ToolScope:
@@ -138,9 +179,6 @@ class ToolScope:
         return self.role.mutates_dag
 
     def brief(self) -> RuntimeBrief:
-        """The launch brief, or an empty one when none was written."""
-        if self.brief_path is None:
-            return RuntimeBrief(
-                project_id=self.project_id, project_title=self.project_id, role=self.role
-            )
-        return RuntimeBrief.from_file(self.brief_path, self.role, self.project_id)
+        """The launch brief, fixed when this scope was constructed."""
+        assert self._brief_snapshot is not None
+        return self._brief_snapshot

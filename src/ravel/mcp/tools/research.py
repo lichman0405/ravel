@@ -63,7 +63,12 @@ from ravel.domain.evidence import (
     claim_tier,
 )
 from ravel.domain.state_machines import ACTIVE_NODE_STATUSES
-from ravel.mcp.context import ToolContext, as_json, require_research
+from ravel.mcp.context import (
+    ToolContext,
+    as_json,
+    require_current_lease,
+    require_research,
+)
 from ravel.research import completion, deepread, sufficiency
 from ravel.research.deepread import (
     DEFAULT_CONTEXT_CHARS,
@@ -259,6 +264,7 @@ def begin_research(context: ToolContext) -> Any:
         hands the result over.
         """
         require_research(context, "begin_research")
+        require_current_lease(context, "begin_research")
         with context.write() as session:
             dag = DagRepository(session, context.project_id)
             node = _research_node(session, context.project_id, node_id)
@@ -520,6 +526,7 @@ def register_source(context: ToolContext) -> Any:
         and the result says whether it happened.
         """
         require_research(context, "register_source")
+        require_current_lease(context, "register_source")
         retrieval = OPENED.recall(retrieval_ref)
         if retrieval is None:
             raise ValueError(
@@ -1269,6 +1276,7 @@ def record_evidence(context: ToolContext) -> Any:
         conflict records, not your intent.
         """
         require_research(context, "record_evidence")
+        require_current_lease(context, "record_evidence")
         parsed = _claim_class(claim_class)
         with context.write() as session:
             _research_node(session, context.project_id, node_id)
@@ -1325,6 +1333,7 @@ def record_conflict(context: ToolContext) -> Any:
         unresolved conflicts against the evidence on purpose.
         """
         require_research(context, "record_conflict")
+        require_current_lease(context, "record_conflict")
         refs = tuple(dict.fromkeys(evidence_refs))
         if len(refs) < 2:
             raise ValueError(
@@ -1371,6 +1380,7 @@ def assess_evidence(context: ToolContext) -> Any:
         which is stored with it when the record is submitted.
         """
         require_research(context, "assess_evidence")
+        require_current_lease(context, "assess_evidence")
         with context.read() as session:
             _research_node(session, context.project_id, node_id)
             ledger = task_ledger(session, context.project_id, node_id)
@@ -1456,6 +1466,7 @@ def submit_research_record(context: ToolContext) -> Any:
         felt finished would be holding its own finish line.
         """
         require_research(context, "submit_research_record")
+        require_current_lease(context, "submit_research_record")
         with context.write() as session:
             dag = DagRepository(session, context.project_id)
             node = _research_node(session, context.project_id, node_id)

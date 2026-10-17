@@ -19,6 +19,7 @@ import asyncio
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
@@ -29,13 +30,18 @@ from ravel.domain.dag import DagNode
 from ravel.domain.enums import ProjectOutcome, ProjectStatus, ReviewOutcome
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
+from ravel.execution.leases import LeaseHeld, LeaseService, ProjectLease
 from ravel.execution.loop import Situation
 from ravel.execution.node_runs import ExecutionService
 from ravel.mcp.context import ToolContext
-from ravel.mcp.scope import ToolScope
+from ravel.mcp.scope import RuntimeBrief, ToolScope
 from ravel.mcp.tools import IMPLEMENTATIONS
 from ravel.state.database import Database
 from ravel.state.repositories.projects import ProjectRegistry
+
+#: The identity a scripted seat uses when it has to take the lease itself.
+#: When a supervisor already holds it, the seat joins that owner/epoch.
+SCRIPTED_SEAT_OWNER = "scripted-acceptance-seat"
 
 
 class FakeHarness:
@@ -319,9 +325,37 @@ def seat_scope(
     reads it from the environment: it is the deployment's settings that name
     the task queue a run has to land on, and a test whose run landed on the
     deployment's queue would be picked up by a worker that is not listening.
+
+    The launch binding is real: the seat either holds the project lease or
+    joins the lease a supervisor already holds, which is exactly the authority
+    a live runtime receives from its supervisor.
     """
+    service = LeaseService(database)
+    try:
+        lease = service.acquire(project_id, SCRIPTED_SEAT_OWNER)
+    except LeaseHeld:
+        current = service.current(project_id)
+        if (
+            current is None
+            or current.released_at is not None
+            or current.expires_at <= datetime.now(UTC)
+        ):
+            raise
+        lease = current
+    assert isinstance(lease, ProjectLease)
+    binding_id = (
+        f"{lease.owner_instance_id}:{project_id}:{role.value}:{lease.epoch}"
+    )
+    brief = RuntimeBrief(
+        project_id=project_id,
+        project_title=project_id,
+        role=role,
+        binding_id=binding_id,
+        owner_instance_id=lease.owner_instance_id,
+        lease_epoch=lease.epoch,
+    )
     return ToolContext(
-        scope=ToolScope(project_id=project_id, role=role),
+        scope=ToolScope(project_id=project_id, role=role, launch_brief=brief),
         database=database,
         execution=execution or ExecutionService(database=database, settings=settings),
     )
