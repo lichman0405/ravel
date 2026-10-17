@@ -51,6 +51,19 @@ def test_second_runner_cannot_enter_while_lock_held(tmp_path: Path) -> None:
     assert _try_lock(lock, scripts) == 0
 
 
+def test_two_locks_in_one_process_are_reentrant(tmp_path: Path) -> None:
+    """Composed session fixtures must not wait on their own process."""
+    from ravel.state.db_lock import DatabaseLock
+
+    lock = tmp_path / "database.lock"
+    scripts = Path(premium_task.__file__).resolve().parent
+    with DatabaseLock(lock, timeout=0.5):
+        with DatabaseLock(lock, timeout=0.5):
+            assert _try_lock(lock, scripts) == 7
+        assert _try_lock(lock, scripts) == 7
+    assert _try_lock(lock, scripts) == 0
+
+
 def test_lock_dir_honors_injected_environment(tmp_path: Path) -> None:
     env = {
         "RAVEL_PREMIUM_LOCK_DIR": str(tmp_path),

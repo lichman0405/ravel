@@ -21,11 +21,20 @@ import contextlib
 import errno
 import hashlib
 import os
+import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
 
 __all__ = ["DatabaseLock", "database_lock_path", "lock_dir"]
+
+#: A process that composes several session fixtures may construct two
+#: ``DatabaseLock`` objects for the same path. The OS lock is not reentrant, so
+#: without this table the second one waits on its own process forever. The
+#: table only makes the lock reentrant *within one process*; the file lock
+#: still excludes every other process.
+_PROCESS_LOCKS: dict[Path, int] = {}
+_PROCESS_LOCKS_GUARD = threading.Lock()
 
 
 def _repo_root() -> Path:
@@ -136,6 +145,7 @@ class DatabaseLock:
             )
         self.timeout = timeout
         self._handle: object | None = None
+        self._entered = False
 
     @staticmethod
     def _contention(error: OSError) -> bool:
@@ -147,23 +157,33 @@ class DatabaseLock:
         }
 
     def __enter__(self) -> DatabaseLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._handle = open(self.path, "a+", encoding="utf-8")
-        deadline = time.monotonic() + self.timeout
-        while True:
-            try:
-                self._acquire()
+        with _PROCESS_LOCKS_GUARD:
+            if self.path in _PROCESS_LOCKS:
+                _PROCESS_LOCKS[self.path] += 1
+                self._entered = True
                 return self
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    self._close()
-                    raise TimeoutError(
-                        f"timed out waiting for database test lock {self.path}"
-                    ) from None
-                time.sleep(0.25)
-            except BaseException:
-                self._close()
-                raise
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._handle = open(self.path, "a+", encoding="utf-8")
+            deadline = time.monotonic() + self.timeout
+            while True:
+                try:
+                    self._acquire()
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"timed out waiting for database test lock {self.path}"
+                        ) from None
+                    time.sleep(0.25)
+                else:
+                    with _PROCESS_LOCKS_GUARD:
+                        _PROCESS_LOCKS[self.path] = 1
+                    self._entered = True
+                    return self
+        except BaseException:
+            self._close()
+            raise
 
     def _acquire(self) -> None:
         try:
@@ -208,4 +228,13 @@ class DatabaseLock:
         handle.close()  # type: ignore[union-attr]
 
     def __exit__(self, *exc: object) -> None:
+        if not self._entered:
+            return
+        self._entered = False
+        with _PROCESS_LOCKS_GUARD:
+            depth = _PROCESS_LOCKS.get(self.path, 0)
+            if depth > 1:
+                _PROCESS_LOCKS[self.path] = depth - 1
+                return
+            _PROCESS_LOCKS.pop(self.path, None)
         self._close()
