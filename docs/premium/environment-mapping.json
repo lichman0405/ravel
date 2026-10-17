@@ -40,9 +40,11 @@
   },
   "database_test_lock": {
     "mode": "SYSTEM_WIDE_EXCLUSIVE",
-    "default_dir": "/tmp/ravel-premium-locks",
-    "path": "database-<sha256(host:port/database)[:16]>.lock",
-    "env_override": "RAVEL_PREMIUM_LOCK_DIR"
+    "default_dir": "<repo-parent>/.ravel-test-locks (Git common dir parent; /workspace/.ravel-test-locks in the canonical container)",
+    "path": "database-<sha256(host:port/RAVEL_TEST_DB)[:32]>.lock",
+    "env_override": "RAVEL_PREMIUM_LOCK_DIR",
+    "entrypoints": "premium-task, release-gate and direct pytest share it; pytest child owns the lock, runners lock only non-pytest database commands; process-local reentrancy prevents fixture self-deadlock",
+    "evidence": "evidence/T01/lock-competition-20261017-1650/ and evidence/T01/lock-competition-20261017-1820/"
   },
   "source_binding": {
     "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
