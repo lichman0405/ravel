@@ -1,0 +1,214 @@
+{
+  "run_id": "run-20261017-203522",
+  "task_id": "T06",
+  "acceptance_map": {
+    "T06-AC1": {
+      "test_nodeids": [
+        "tests/premium/T06/test_binding.py::test_an_untampered_approval_still_claims",
+        "tests/premium/T06/test_binding.py::test_a_changed_approval_snapshot_blocks_execution",
+        "tests/premium/T06/test_binding.py::test_action_content_cannot_be_rewritten_after_insert",
+        "tests/premium/T06/test_binding.py::test_a_new_envelope_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_new_execution_contract_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_lowered_budget_after_approval_blocks_the_claim",
+        "tests/premium/T06/test_binding.py::test_a_revoked_approver_can_no_longer_authorize_execution",
+        "tests/premium/T06/test_binding.py::test_an_elapsed_window_expires_the_action_and_releases_its_budget",
+        "tests/premium/T06/test_budget.py::test_two_concurrent_reservations_cannot_break_the_remaining_limit",
+        "tests/premium/T06/test_budget.py::test_unknown_cost_is_refused_against_a_zero_limit",
+        "tests/premium/T06/test_budget.py::test_known_outcomes_release_the_reservation_and_unknown_keeps_it",
+        "tests/premium/T06/test_budget.py::test_outcome_reports_require_the_claimant_or_a_live_owner",
+        "tests/premium/T06/test_budget.py::test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work",
+        "tests/premium/T06/test_execution_gate.py::test_a_cleared_node_starts_through_one_claimed_action",
+        "tests/premium/T06/test_execution_gate.py::test_a_repeated_start_is_the_same_run",
+        "tests/premium/T06/test_execution_gate.py::test_a_required_approval_blocks_the_start_until_a_human_answers",
+        "tests/premium/T06/test_execution_gate.py::test_a_resource_cap_blocks_the_start_before_any_submission",
+        "tests/premium/T06/test_execution_gate.py::test_an_envelope_can_tighten_the_deployment_resource_default",
+        "tests/premium/T06/test_execution_gate.py::test_an_unknown_external_result_blocks_a_second_submission",
+        "tests/premium/T06/test_execution_gate.py::test_a_stale_binding_is_refused_before_the_action_layer_is_reached",
+        "tests/premium/T06/test_execution_gate.py::test_the_start_leaves_the_node_where_the_dag_put_it",
+        "tests/premium/T06/test_idempotency.py::test_a_repeated_mail_message_id_returns_the_original_action",
+        "tests/premium/T06/test_idempotency.py::test_a_held_action_is_claimed_once_even_when_claimed_twice",
+        "tests/premium/T06/test_idempotency.py::test_the_hpc_submission_key_is_the_attempt_identity",
+        "tests/premium/T06/test_idempotency.py::test_a_hand_written_hpc_submission_key_is_refused",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_add_a_dag_node",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_cancel_a_node",
+        "tests/premium/T06/test_separation.py::test_a_compute_action_lifecycle_leaves_the_dag_and_frozen_criteria_alone",
+        "tests/premium/T06/test_separation.py::test_frozen_criteria_cannot_be_edited_even_directly"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T06-AC2": {
+      "test_nodeids": [
+        "tests/premium/T06/test_binding.py::test_an_untampered_approval_still_claims",
+        "tests/premium/T06/test_binding.py::test_a_changed_approval_snapshot_blocks_execution",
+        "tests/premium/T06/test_binding.py::test_action_content_cannot_be_rewritten_after_insert",
+        "tests/premium/T06/test_binding.py::test_a_new_envelope_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_new_execution_contract_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_lowered_budget_after_approval_blocks_the_claim",
+        "tests/premium/T06/test_binding.py::test_a_revoked_approver_can_no_longer_authorize_execution",
+        "tests/premium/T06/test_binding.py::test_an_elapsed_window_expires_the_action_and_releases_its_budget",
+        "tests/premium/T06/test_budget.py::test_two_concurrent_reservations_cannot_break_the_remaining_limit",
+        "tests/premium/T06/test_budget.py::test_unknown_cost_is_refused_against_a_zero_limit",
+        "tests/premium/T06/test_budget.py::test_known_outcomes_release_the_reservation_and_unknown_keeps_it",
+        "tests/premium/T06/test_budget.py::test_outcome_reports_require_the_claimant_or_a_live_owner",
+        "tests/premium/T06/test_budget.py::test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work",
+        "tests/premium/T06/test_execution_gate.py::test_a_cleared_node_starts_through_one_claimed_action",
+        "tests/premium/T06/test_execution_gate.py::test_a_repeated_start_is_the_same_run",
+        "tests/premium/T06/test_execution_gate.py::test_a_required_approval_blocks_the_start_until_a_human_answers",
+        "tests/premium/T06/test_execution_gate.py::test_a_resource_cap_blocks_the_start_before_any_submission",
+        "tests/premium/T06/test_execution_gate.py::test_an_envelope_can_tighten_the_deployment_resource_default",
+        "tests/premium/T06/test_execution_gate.py::test_an_unknown_external_result_blocks_a_second_submission",
+        "tests/premium/T06/test_execution_gate.py::test_a_stale_binding_is_refused_before_the_action_layer_is_reached",
+        "tests/premium/T06/test_execution_gate.py::test_the_start_leaves_the_node_where_the_dag_put_it",
+        "tests/premium/T06/test_idempotency.py::test_a_repeated_mail_message_id_returns_the_original_action",
+        "tests/premium/T06/test_idempotency.py::test_a_held_action_is_claimed_once_even_when_claimed_twice",
+        "tests/premium/T06/test_idempotency.py::test_the_hpc_submission_key_is_the_attempt_identity",
+        "tests/premium/T06/test_idempotency.py::test_a_hand_written_hpc_submission_key_is_refused",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_add_a_dag_node",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_cancel_a_node",
+        "tests/premium/T06/test_separation.py::test_a_compute_action_lifecycle_leaves_the_dag_and_frozen_criteria_alone",
+        "tests/premium/T06/test_separation.py::test_frozen_criteria_cannot_be_edited_even_directly"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T06-AC3": {
+      "test_nodeids": [
+        "tests/premium/T06/test_binding.py::test_an_untampered_approval_still_claims",
+        "tests/premium/T06/test_binding.py::test_a_changed_approval_snapshot_blocks_execution",
+        "tests/premium/T06/test_binding.py::test_action_content_cannot_be_rewritten_after_insert",
+        "tests/premium/T06/test_binding.py::test_a_new_envelope_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_new_execution_contract_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_lowered_budget_after_approval_blocks_the_claim",
+        "tests/premium/T06/test_binding.py::test_a_revoked_approver_can_no_longer_authorize_execution",
+        "tests/premium/T06/test_binding.py::test_an_elapsed_window_expires_the_action_and_releases_its_budget",
+        "tests/premium/T06/test_budget.py::test_two_concurrent_reservations_cannot_break_the_remaining_limit",
+        "tests/premium/T06/test_budget.py::test_unknown_cost_is_refused_against_a_zero_limit",
+        "tests/premium/T06/test_budget.py::test_known_outcomes_release_the_reservation_and_unknown_keeps_it",
+        "tests/premium/T06/test_budget.py::test_outcome_reports_require_the_claimant_or_a_live_owner",
+        "tests/premium/T06/test_budget.py::test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work",
+        "tests/premium/T06/test_execution_gate.py::test_a_cleared_node_starts_through_one_claimed_action",
+        "tests/premium/T06/test_execution_gate.py::test_a_repeated_start_is_the_same_run",
+        "tests/premium/T06/test_execution_gate.py::test_a_required_approval_blocks_the_start_until_a_human_answers",
+        "tests/premium/T06/test_execution_gate.py::test_a_resource_cap_blocks_the_start_before_any_submission",
+        "tests/premium/T06/test_execution_gate.py::test_an_envelope_can_tighten_the_deployment_resource_default",
+        "tests/premium/T06/test_execution_gate.py::test_an_unknown_external_result_blocks_a_second_submission",
+        "tests/premium/T06/test_execution_gate.py::test_a_stale_binding_is_refused_before_the_action_layer_is_reached",
+        "tests/premium/T06/test_execution_gate.py::test_the_start_leaves_the_node_where_the_dag_put_it",
+        "tests/premium/T06/test_idempotency.py::test_a_repeated_mail_message_id_returns_the_original_action",
+        "tests/premium/T06/test_idempotency.py::test_a_held_action_is_claimed_once_even_when_claimed_twice",
+        "tests/premium/T06/test_idempotency.py::test_the_hpc_submission_key_is_the_attempt_identity",
+        "tests/premium/T06/test_idempotency.py::test_a_hand_written_hpc_submission_key_is_refused",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_add_a_dag_node",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_cancel_a_node",
+        "tests/premium/T06/test_separation.py::test_a_compute_action_lifecycle_leaves_the_dag_and_frozen_criteria_alone",
+        "tests/premium/T06/test_separation.py::test_frozen_criteria_cannot_be_edited_even_directly"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T06-AC4": {
+      "test_nodeids": [
+        "tests/premium/T06/test_binding.py::test_an_untampered_approval_still_claims",
+        "tests/premium/T06/test_binding.py::test_a_changed_approval_snapshot_blocks_execution",
+        "tests/premium/T06/test_binding.py::test_action_content_cannot_be_rewritten_after_insert",
+        "tests/premium/T06/test_binding.py::test_a_new_envelope_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_new_execution_contract_version_invalidates_the_approval",
+        "tests/premium/T06/test_binding.py::test_a_lowered_budget_after_approval_blocks_the_claim",
+        "tests/premium/T06/test_binding.py::test_a_revoked_approver_can_no_longer_authorize_execution",
+        "tests/premium/T06/test_binding.py::test_an_elapsed_window_expires_the_action_and_releases_its_budget",
+        "tests/premium/T06/test_budget.py::test_two_concurrent_reservations_cannot_break_the_remaining_limit",
+        "tests/premium/T06/test_budget.py::test_unknown_cost_is_refused_against_a_zero_limit",
+        "tests/premium/T06/test_budget.py::test_known_outcomes_release_the_reservation_and_unknown_keeps_it",
+        "tests/premium/T06/test_budget.py::test_outcome_reports_require_the_claimant_or_a_live_owner",
+        "tests/premium/T06/test_budget.py::test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work",
+        "tests/premium/T06/test_execution_gate.py::test_a_cleared_node_starts_through_one_claimed_action",
+        "tests/premium/T06/test_execution_gate.py::test_a_repeated_start_is_the_same_run",
+        "tests/premium/T06/test_execution_gate.py::test_a_required_approval_blocks_the_start_until_a_human_answers",
+        "tests/premium/T06/test_execution_gate.py::test_a_resource_cap_blocks_the_start_before_any_submission",
+        "tests/premium/T06/test_execution_gate.py::test_an_envelope_can_tighten_the_deployment_resource_default",
+        "tests/premium/T06/test_execution_gate.py::test_an_unknown_external_result_blocks_a_second_submission",
+        "tests/premium/T06/test_execution_gate.py::test_a_stale_binding_is_refused_before_the_action_layer_is_reached",
+        "tests/premium/T06/test_execution_gate.py::test_the_start_leaves_the_node_where_the_dag_put_it",
+        "tests/premium/T06/test_idempotency.py::test_a_repeated_mail_message_id_returns_the_original_action",
+        "tests/premium/T06/test_idempotency.py::test_a_held_action_is_claimed_once_even_when_claimed_twice",
+        "tests/premium/T06/test_idempotency.py::test_the_hpc_submission_key_is_the_attempt_identity",
+        "tests/premium/T06/test_idempotency.py::test_a_hand_written_hpc_submission_key_is_refused",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_add_a_dag_node",
+        "tests/premium/T06/test_separation.py::test_a_non_master_role_cannot_cancel_a_node",
+        "tests/premium/T06/test_separation.py::test_a_compute_action_lifecycle_leaves_the_dag_and_frozen_criteria_alone",
+        "tests/premium/T06/test_separation.py::test_frozen_criteria_cannot_be_edited_even_directly"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-17 20:35:18 +0800",
+  "completed_at": "2026-10-17 20:36:34 +0800",
+  "source_commit": "4fa6ee382994e602e435b71bf6bcb3dbd72cc440",
+  "source_digest": "2d6a9e1c365993ccf483c1165b5bf85ad72074a276f3a321e7995715766cf707",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T06 -q -rxXs --junitxml=/workspace/ravel-worktrees/T06-actions/docs/premium/evidence/T06/run-20261017-203522/cmd-02-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T06-actions",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T06/run-20261017-203522/cmd-02-junit.xml",
+  "log_path": "docs/premium/evidence/T06/run-20261017-203522/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T06/run-20261017-203522/cmd-01.txt",
+      "sha256": "146cb86d0a1ba565449caa286341785ca71e5efd10eb9090c0ef0210c76011f3",
+      "size": 3002
+    },
+    {
+      "ref": "docs/premium/evidence/T06/run-20261017-203522/cmd-02-junit.xml",
+      "sha256": "f7ea2368c9848136a2e4a2d42846eeb128feda45123d63987f158e96d40e64b4",
+      "size": 6326
+    },
+    {
+      "ref": "docs/premium/evidence/T06/run-20261017-203522/cmd-02.txt",
+      "sha256": "5a3f444731094a439653a4603eef11e61bf5857e0f007d03943ff486b92bee8f",
+      "size": 250
+    },
+    {
+      "ref": "docs/premium/evidence/T06/run-20261017-203522/cmd-03.txt",
+      "sha256": "d564128595740d9eb1b53dfe526072e1e11be7a0c1ce20d5084fb2be03bf3955",
+      "size": 255
+    },
+    {
+      "ref": "docs/premium/evidence/T06/run-20261017-203522/commands.txt",
+      "sha256": "74fbe8e439c9bc27d77a60cc009ca1914bec3f0acc367dd18d312a62cb61017f",
+      "size": 3893
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}
