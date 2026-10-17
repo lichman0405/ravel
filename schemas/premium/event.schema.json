@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/event.schema.json",
+  "title": "ProjectEvent",
+  "description": "An event in a project's ordered stream. seq is monotonic per project and is the snapshot anchor; reconnect may repeat but never skip, and a cursor outside retention returns RESYNC_REQUIRED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "project_id",
+    "seq",
+    "type",
+    "aggregate_id",
+    "aggregate_version",
+    "occurred_at",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "seq": {"type": "integer", "minimum": 1},
+    "type": {"type": "string", "minLength": 1, "maxLength": 128},
+    "aggregate_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "aggregate_version": {"type": "integer", "minimum": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"}
+  }
+}

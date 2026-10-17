@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/lease.schema.json",
+  "title": "ProjectLease",
+  "description": "The single owner of a project's runtime at one fencing epoch. The database holds the authoritative row; this schema is the API/contract projection.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_id", "owner_instance_id", "epoch", "expires_at", "renewed_at"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Stable RAVEL project id; never supplied by a model as trusted identity."
+    },
+    "owner_instance_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Runtime instance that owns the lease. A new owner must atomically increment epoch."
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Fencing token. Starts at 1; takeover increments it; old bindings never upgrade."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC RFC3339 expiry. Database time is authoritative."
+    },
+    "renewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC RFC3339 last successful renewal."
+    }
+  }
+}

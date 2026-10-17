@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/approval.schema.json",
+  "title": "ActionApproval",
+  "description": "A human Owner's approval of one exact Action payload. Re-authorization happens before every execution; a revoked member cannot execute an old approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "approval_id",
+    "action_id",
+    "payload_hash",
+    "envelope_version",
+    "principal_user_id",
+    "expires_at",
+    "created_at"
+  ],
+  "properties": {
+    "approval_id": {"type": "string", "format": "uuid"},
+    "action_id": {"type": "string", "format": "uuid"},
+    "payload_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "contract_id": {"type": ["string", "null"], "maxLength": 64},
+    "contract_version": {"type": ["integer", "null"], "minimum": 1},
+    "envelope_version": {"type": "integer", "minimum": 1},
+    "to": {"type": "array", "items": {"type": "string", "format": "email"}},
+    "cc": {"type": "array", "items": {"type": "string", "format": "email"}},
+    "bcc": {"type": "array", "items": {"type": "string", "format": "email"}},
+    "attachment_hashes": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+    },
+    "cost_upper_bound_cny": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "principal_user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "Human Owner principal from membership; never a product Agent lease."
+    },
+    "expires_at": {"type": "string", "format": "date-time"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "REVOKED", "EXPIRED", "CONSUMED"]
+    }
+  }
+}

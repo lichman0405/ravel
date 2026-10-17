@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/calculation_manifest.schema.json",
+  "title": "CalculationManifest",
+  "description": "The frozen, reviewable inputs of one calculation. Scientific parameters are chosen by Research and frozen in the contract, not hard-coded by a developer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_id",
+    "contract_version",
+    "source_refs",
+    "inputs",
+    "software",
+    "parameters",
+    "resource_request",
+    "required_outputs",
+    "stop_conditions",
+    "materializer_version"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string", "format": "uuid"},
+    "contract_version": {"type": "integer", "minimum": 1},
+    "source_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "artifact_ref", "sha256"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 256},
+          "artifact_ref": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "environment_digest"],
+      "properties": {
+        "name": {"type": "string", "const": "RASPA"},
+        "version": {"type": "string", "minLength": 1},
+        "environment_digest": {"type": "string", "minLength": 1},
+        "modules": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Scientific parameters with units; the exact set is determined by the frozen contract.",
+      "additionalProperties": true
+    },
+    "resource_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpus", "walltime_seconds"],
+      "properties": {
+        "cpus": {"type": "integer", "minimum": 1},
+        "gpus": {"type": "integer", "minimum": 0},
+        "memory_mb": {"type": ["integer", "null"], "minimum": 1},
+        "walltime_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "required_outputs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "stop_conditions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "materializer_version": {"type": "string", "minLength": 1},
+    "seed": {"type": ["integer", "null"]}
+  }
+}

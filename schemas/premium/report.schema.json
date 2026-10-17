@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/report.schema.json",
+  "title": "ScientificReport",
+  "description": "A report assembled from typed records. Simulated results are visibly labelled and can never be presented as a real measurement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "project_id",
+    "title",
+    "generated_at",
+    "data_mode",
+    "evidence_refs",
+    "claims",
+    "limitations"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "data_mode": {"type": "string", "enum": ["REAL", "SIMULATED", "MIXED"]},
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "execution_type"],
+        "properties": {
+          "evidence_id": {"type": "string", "minLength": 1},
+          "execution_type": {
+            "type": "string",
+            "enum": ["RESEARCH_SOURCE", "COMPUTATION", "HUMAN_LAB", "SIMULATED"]
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "claim_type", "statement", "evidence_ids"],
+        "properties": {
+          "claim_id": {"type": "string", "minLength": 1},
+          "claim_type": {"type": "string", "enum": ["FACT", "INFERENCE", "HYPOTHESIS"]},
+          "statement": {"type": "string", "minLength": 1},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

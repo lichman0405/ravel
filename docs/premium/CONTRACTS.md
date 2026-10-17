@@ -84,3 +84,119 @@ Event：id、project_id、seq、type、aggregate_id/version、occurred_at、payl
 gate row只用PASS/FAIL/BLOCKED_EXTERNAL/MISSING。pytest SKIP/XFAIL必须转FAIL，唯一例外是明确缺少外部资源且该行预先分类external，转BLOCKED_EXTERNAL。内部必须的Linux/Docker环境缺失即internal gate不通过。
 
 项目工程状态：IN_PROGRESS、INTERNAL_READY_EXTERNAL_PENDING、INTERNAL_READY_EXTERNAL_BLOCKED、PARTIALLY_CERTIFIED、FULLY_CERTIFIED。旧 `make release-gate` 保留CERTIFIED/PARTIALLY_CERTIFIED/NOT_CERTIFIED和非零规则；仅全部旧新行PASS才能映射FULLY_CERTIFIED。
+# CONTRACTS v1 — frozen examples and mappings
+
+This addendum makes the T03 contract concrete. It does not replace `CONTRACTS.md`; it names the persistent mapping, the API projections, and the evidence expected for each task.
+
+## 1. Identity and lease mapping
+
+| Contract field | Source of truth | Adapter / column |
+|---|---|---|
+| `project_id` | trusted runtime binding or Gateway Principal | existing project FK; never a model tool argument |
+| `agent_role` | binding / principal | existing role enum |
+| `binding_id` | issued by the runtime on session start | `runtime_bindings.binding_id` |
+| `owner_instance_id` | binding row + current lease | `project_leases.owner_instance_id` |
+| `lease_epoch` | current lease row | `project_leases.epoch` |
+| `expires_at`/`renewed_at` | database UTC clock | `project_leases` |
+
+A binding is valid only while the lease owner and epoch in the binding row match the current lease. Takeover increments the epoch and revokes old bindings; no old binding is promoted.
+
+## 2. Action examples
+
+Request (server adds `project_id` and `requesting_binding`; the client cannot set them):
+
+```json
+{
+  "kind": "MAIL_SEND",
+  "payload_hash": "sha256:...",
+  "payload_artifact_ref": "artifacts/mail/...",
+  "target_ref": "mailbox:...",
+  "envelope_version": 3,
+  "expires_at": "2026-10-18T12:00:00Z"
+}
+```
+
+Response:
+
+```json
+{
+  "action_id": "3f0c...",
+  "status": "AWAITING_APPROVAL",
+  "required_approval_ref": null,
+  "created_at": "2026-10-17T12:00:00Z"
+}
+```
+
+Approve:
+
+```http
+POST /v1/projects/{project_id}/actions/{action_id}/approve
+Content-Type: application/json
+
+{"payload_hash": "sha256:..."}
+```
+
+The server re-reads the human membership, compares the payload hash and envelope version, and rejects a revoked member, stale hash, expired approval, or exceeded budget. `ACCEPTED` means the external system accepted the work; it is not scientific success and not delivery to a human recipient.
+
+## 3. Event stream
+
+- Snapshot: `GET /v1/projects/{id}/snapshot` returns the aggregate plus `anchor_seq`.
+- Stream: `GET /v1/projects/{id}/events?after_seq=N` upgrades to WebSocket.
+- `seq` is monotonic per project; replay may duplicate but never skip.
+- A cursor outside retention returns `RESYNC_REQUIRED`; the client must re-snapshot.
+- Permission is rechecked at least every 5 seconds; a lost membership closes the stream.
+
+## 4. Error envelope
+
+```json
+{
+  "code": "FORBIDDEN",
+  "message": "human membership required",
+  "request_id": "req-...",
+  "details": {"action_id": "..."}
+}
+```
+
+Typical codes: `FORBIDDEN`, `STALE_VERSION`, `APPROVAL_REQUIRED`, `BUDGET_EXCEEDED`, `RESYNC_REQUIRED`, `UNKNOWN_EXTERNAL_RESULT`, `UNSUPPORTED`.
+
+## 5. AC evidence map (T04–T29)
+
+| Task | Primary evidence | External? |
+|---|---|---|
+| T04 | lease/fencing unit + integration tests; takeover/old-binding tests | no |
+| T05 | retry/cooldown/stagnation state-machine tests | no |
+| T06 | Action state, approval binding, budget reservation/overrun tests | no |
+| T07 | Gateway auth/source-upload/CSRF/principal tests | no |
+| T08 | COS-compatible store + restore drill evidence | no (real COS is T24) |
+| T09 | HPC target config + submission-key/idempotent recovery tests | no (real HPC is T25) |
+| T10 | RASPA manifest/materializer/Review tests | no (real run is T25) |
+| T11 | HumanLab handover/event/person-reported tests | no (real lab is T26) |
+| T12 | evidence type/report/claim tests | no |
+| T13 | v1 API + event reconnect + generated client tests | no |
+| T14 | Electron shell/security/Windows build and launch tests | no |
+| T15 | desktop project/DAG/evidence/computation views against real Gateway | no |
+| T16 | protocol-level IMAP isolated service tests | no (real mailbox is T27) |
+| T17 | SMTP draft/approval/UNKNOWN_DELIVERY tests | no (real send is T27) |
+| T18 | desktop approval/budget/lab/mail UI tests | no |
+| T19 | real Docker isolation and supervisor tests | no |
+| T20 | SSH VM provider contract tests with a fake provider | no (real VM is T28) |
+| T21 | deployment/monitoring/backup/rollback package checks | no (real CVM is T24) |
+| T22 | full gate matrix, live entrypoints, dry-run and non-fake status | no |
+| T23 | full internal gate + Reviewer + local main merge | no |
+| T24 | real CVM/COS evidence | yes |
+| T25 | real Slurm JobID/accounting + RASPA evidence | yes |
+| T26 | real human operator/SOP/raw data evidence | yes |
+| T27 | real IMAP/SMTP loop with authorized recipients | yes |
+| T28 | real dedicated SSH VM evidence | yes |
+| T29 | same-project real closed loop + final gate | yes |
+
+The authoritative machine-readable mapping is `docs/premium/acceptance-map.json`; every AC has one task ID, one evidence type, and one command or manual-evidence reference. External rows are never merged into internal PASS.
+
+## 6. Non-negotiable state rules
+
+- `UNKNOWN` is a state, not zero, empty PASS, or scientific failure.
+- A human approval is bound to the exact payload hash/version and is revalidated before execution.
+- A revoked membership prevents an already-approved Action from executing.
+- SMTP uncertainty becomes `UNKNOWN_DELIVERY`; no automatic resend.
+- A simulated result is `SIMULATED`, never `COMPUTATION` or `HUMAN_LAB`.
+- The desktop user cannot mutate the DAG; only Master can.

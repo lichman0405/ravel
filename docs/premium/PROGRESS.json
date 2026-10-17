@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 15:55 Asia/Shanghai",
+  "updated_at": "2026-10-17 16:05 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -59,18 +59,18 @@
       "note": "T02 DONE：固定Phase11 c9815f1已merge；lint/unit/integration/e2e/phase11 acceptance通过；AC1-AC4独立复核APPROVE；集成候选4ec87e1与任务tip tree一致；ff-only合入。真实MinIO/systemd/live行为P3缺口保留。"
     },
     "T03": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T03",
+      "base_sha": "355fcf9d94e3930a7c6be2037acc73490a3d0937",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 16:05 Asia/Shanghai",
+      "note": "T03实现中：12个premium schema、CONTRACTS v1 addendum、ADR-001、102个唯一AC映射；schema check PASS；等待独立Review。"
     },
     "T04": {
       "status": "TODO",
