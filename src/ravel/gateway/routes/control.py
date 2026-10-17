@@ -36,6 +36,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ravel.actions.service import ActionService
 from ravel.domain.contracts import ApprovalRequirement, AuthorityEnvelope, BudgetLimits
 from ravel.domain.enums import ApprovalStatus, ProjectStatus, UserRole
 from ravel.domain.events import ActorType
@@ -237,6 +238,14 @@ def resolve_approval(
             resolved_by=standing.user_id,
             note=request.note,
         )
+        # An Action approval is also the Action's release. Resolving only the
+        # approval row would leave the work AWAITING_APPROVAL forever after a
+        # human answered, which is the exact failure the binding exists to
+        # prevent. The service re-checks the snapshot and reserves budget in
+        # this same transaction.
+        ActionService(
+            session, standing.project_id
+        ).sync_after_resolution(approval_id)
     return resolved.model_dump(mode="json")
 
 

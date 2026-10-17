@@ -30,7 +30,11 @@ from typing import Any
 
 from sqlalchemy import text
 
-from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
+from ravel.domain.state_machines import (
+    ACTION_TRANSITIONS,
+    NODE_TRANSITIONS,
+    PROJECT_TRANSITIONS,
+)
 
 #: The tables where `UPDATE` is a legitimate operation. Everything else in
 #: RAVEL is append-only.
@@ -98,6 +102,14 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         # the project's science is, which is why it is mutable and why the
         # identity columns below are exactly the episode's identity.
         "retry_episodes",
+        # An Action moves through DRAFT .. COMPLETED; its approved content is
+        # immutable. `budget_accounts` is an operator configuration row whose
+        # limit may be raised or lowered. `budget_reservations` move through
+        # RESERVED/SETTLED/UNKNOWN/RELEASED, and what was reserved never
+        # changes — only the outcome and the recorded actual amount.
+        "actions",
+        "budget_accounts",
+        "budget_reservations",
     }
 )
 
@@ -257,6 +269,70 @@ RETRY_EPISODE_IDENTITY_COLUMNS: tuple[str, ...] = (
     "created_at",
 )
 
+#: Columns on `actions` that no update may touch. `action_id` is first because
+#: it is what the trigger names the row by.
+#:
+#: Everything absent may move with the Action's life: its status, the attempts
+#: list, the approval and reservation references, the claim and outcome
+#: timestamps, the external reference and the uncertainty note. What is here is
+#: the approved content — payload and its hash, target, contract, actor,
+#: envelope version, expiry, resource request, cost estimate and idempotency
+#: key. A row whose recipient or cost could be rewritten after approval would
+#: make every binding check in the service meaningless, because the record the
+#: check reads would be the rewritten one.
+ACTION_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "action_id",
+    "project_id",
+    "kind",
+    "payload_hash",
+    "payload",
+    "payload_artifact_ref",
+    "contract_id",
+    "contract_version",
+    "node_id",
+    "actor",
+    "requesting_binding",
+    "target_ref",
+    "required_approval_ref",
+    "envelope_version",
+    "expires_at",
+    "created_at",
+    "cluster",
+    "prior_action_id",
+    "resource_request",
+    "estimated_cny",
+    "cost_known",
+    "idempotency_key",
+)
+
+#: Columns on `budget_accounts` that a configuration change may not touch.
+#: The limit is deliberately mutable — an owner may raise or lower it — while
+#: who configured the account and when it was opened are history.
+BUDGET_ACCOUNT_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "account_id",
+    "project_id",
+    "cluster",
+    "currency",
+    "configured_by",
+    "configured_at",
+    "created_at",
+)
+
+#: Columns on `budget_reservations` fixed at reservation time. The estimate,
+#: upper bound and resource hours are what the approval covered, so they
+#: cannot be revised to fit the actual. Only the outcome columns move.
+BUDGET_RESERVATION_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "reservation_id",
+    "project_id",
+    "action_id",
+    "cluster",
+    "estimated_cost_cny",
+    "cost_upper_bound_cny",
+    "resource_hours",
+    "resource_hours_upper_bound",
+    "reserved_at",
+)
+
 _TRANSITION_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS ravel_node_transitions (
     from_status text NOT NULL,
@@ -267,6 +343,14 @@ CREATE TABLE IF NOT EXISTS ravel_node_transitions (
 
 _PROJECT_TRANSITION_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS ravel_project_transitions (
+    from_status text NOT NULL,
+    to_status   text NOT NULL,
+    PRIMARY KEY (from_status, to_status)
+)
+"""
+
+_ACTION_TRANSITION_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS ravel_action_transitions (
     from_status text NOT NULL,
     to_status   text NOT NULL,
     PRIMARY KEY (from_status, to_status)
@@ -305,6 +389,25 @@ BEGIN
         RAISE EXCEPTION
             'illegal project transition % -> % on project %',
             OLD.status, NEW.status, OLD.project_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END $$;
+"""
+
+_ACTION_TRIGGER_FUNCTION = """
+CREATE OR REPLACE FUNCTION ravel_enforce_action_transition() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.status IS DISTINCT FROM OLD.status
+       AND NOT EXISTS (
+           SELECT 1 FROM ravel_action_transitions t
+           WHERE t.from_status = OLD.status AND t.to_status = NEW.status
+       )
+    THEN
+        RAISE EXCEPTION
+            'illegal Action transition % -> % on Action %',
+            OLD.status, NEW.status, OLD.action_id
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -365,6 +468,7 @@ END $$;
 #: Trigger names, so `install` can drop before creating and stay idempotent.
 _NODE_TRANSITION_TRIGGER = "ravel_dag_nodes_transition"
 _PROJECT_TRANSITION_TRIGGER = "ravel_projects_transition"
+_ACTION_TRANSITION_TRIGGER = "ravel_actions_transition"
 _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
 _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
 _LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
@@ -372,6 +476,9 @@ _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
 _MEMBERSHIP_IDENTITY_TRIGGER = "ravel_project_memberships_identity"
 _RUNTIME_SERVICE_IDENTITY_TRIGGER = "ravel_runtime_services_identity"
 _RETRY_EPISODE_IDENTITY_TRIGGER = "ravel_retry_episodes_identity"
+_ACTION_IDENTITY_TRIGGER = "ravel_actions_identity"
+_BUDGET_ACCOUNT_IDENTITY_TRIGGER = "ravel_budget_accounts_identity"
+_BUDGET_RESERVATION_IDENTITY_TRIGGER = "ravel_budget_reservations_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -390,6 +497,10 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _MEMBERSHIP_IDENTITY_TRIGGER,
     _RUNTIME_SERVICE_IDENTITY_TRIGGER,
     _RETRY_EPISODE_IDENTITY_TRIGGER,
+    _ACTION_TRANSITION_TRIGGER,
+    _ACTION_IDENTITY_TRIGGER,
+    _BUDGET_ACCOUNT_IDENTITY_TRIGGER,
+    _BUDGET_RESERVATION_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -398,6 +509,7 @@ GUARD_TRIGGERS: tuple[str, ...] = (
 GUARD_FUNCTIONS: tuple[str, ...] = (
     "ravel_enforce_node_transition",
     "ravel_enforce_project_transition",
+    "ravel_enforce_action_transition",
     "ravel_protect_identity",
     "ravel_protect_contract_freeze",
     "ravel_reject_write",
@@ -412,7 +524,11 @@ GUARD_FUNCTIONS: tuple[str, ...] = (
 _SUPERSEDED_FUNCTIONS: tuple[str, ...] = ("ravel_protect_dag_node_identity",)
 
 #: Lookup tables holding the transition rules, created outside the metadata.
-GUARD_TABLES: tuple[str, ...] = ("ravel_node_transitions", "ravel_project_transitions")
+GUARD_TABLES: tuple[str, ...] = (
+    "ravel_node_transitions",
+    "ravel_project_transitions",
+    "ravel_action_transitions",
+)
 
 
 def _trigger_ddl(
@@ -479,8 +595,10 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
     statements: list[str] = [
         _TRANSITION_TABLE_DDL,
         _PROJECT_TRANSITION_TABLE_DDL,
+        _ACTION_TRANSITION_TABLE_DDL,
         _NODE_TRIGGER_FUNCTION,
         _PROJECT_TRIGGER_FUNCTION,
+        _ACTION_TRIGGER_FUNCTION,
         _IDENTITY_FUNCTION,
         _REJECT_WRITE_FUNCTION,
         _REJECT_DELETE_FUNCTION,
@@ -579,6 +697,47 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
             )
         )
 
+    if "actions" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_ACTION_TRANSITION_TRIGGER,
+                table="actions",
+                function="ravel_enforce_action_transition",
+                events="UPDATE",
+            )
+        )
+        statements.append(
+            _trigger_ddl(
+                name=_ACTION_IDENTITY_TRIGGER,
+                table="actions",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=ACTION_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "budget_accounts" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_BUDGET_ACCOUNT_IDENTITY_TRIGGER,
+                table="budget_accounts",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=BUDGET_ACCOUNT_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "budget_reservations" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_BUDGET_RESERVATION_IDENTITY_TRIGGER,
+                table="budget_reservations",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=BUDGET_RESERVATION_IDENTITY_COLUMNS,
+            )
+        )
+
     if "projects" in existing:
         statements.append(
             _trigger_ddl(
@@ -653,6 +812,7 @@ def _sync_transition_tables(bind: Any) -> None:
     for table, transitions in (
         ("ravel_node_transitions", NODE_TRANSITIONS),
         ("ravel_project_transitions", PROJECT_TRANSITIONS),
+        ("ravel_action_transitions", ACTION_TRANSITIONS),
     ):
         bind.execute(text(f"DELETE FROM {table}"))  # type: ignore[attr-defined]
         rows = _transition_rows(transitions)
@@ -726,4 +886,5 @@ def expected_transition_rows() -> dict[str, set[tuple[str, str]]]:
     return {
         "ravel_node_transitions": set(_transition_rows(NODE_TRANSITIONS)),
         "ravel_project_transitions": set(_transition_rows(PROJECT_TRANSITIONS)),
+        "ravel_action_transitions": set(_transition_rows(ACTION_TRANSITIONS)),
     }

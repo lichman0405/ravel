@@ -27,12 +27,22 @@ backend did not report, asking the contract about it, and saying what it found.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
+from ravel.actions.service import ActionService
+from ravel.domain.actions import ActionError, ResourceRequest
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus, NodeType, ReviewOutcome, WorkerMessageKind
+from ravel.domain.enums import (
+    ActionKind,
+    ActionStatus,
+    NodeStatus,
+    NodeType,
+    ReviewOutcome,
+    WorkerMessageKind,
+)
 from ravel.domain.execution import DeviationRecord, WorkerMessage
 from ravel.domain.roles import AgentRole
 from ravel.domain.state_machines import ACTIVE_NODE_STATUSES, can_transition_node
@@ -55,6 +65,23 @@ from ravel.state.repositories.records import RecordRepositories
 #: about nothing.
 LIVE_STATUSES = (NodeStatus.READY, NodeStatus.RUNNING)
 
+#: How a Worker's own kind of work is recorded at the Action layer. A compute run
+#: is an HPC submission; an experimental run is work handed to the lab. Which
+#: backend carries it out — Slurm, a mock, the eventual human lab — is the
+#: Execution Service's business, not the Action's.
+_ACTION_KIND = {
+    AgentRole.COMPUTE_WORKER: ActionKind.COMPUTE_SUBMIT,
+    AgentRole.EXPERIMENTAL_WORKER: ActionKind.LAB_HANDOVER,
+}
+
+#: Action states in which a run for this task already exists. A second start
+#: reports the same run rather than causing a second external submission.
+_UNDER_WAY_STATUSES = (
+    ActionStatus.CLAIMED,
+    ActionStatus.ACCEPTED,
+    ActionStatus.COMPLETED,
+)
+
 #: The kinds a Worker may say without naming something in the contract.
 #: ESCALATE is the one: it is how a Worker asks for authority it does not have,
 #: and refusing it would be refusing the request for permission — which is the
@@ -74,6 +101,15 @@ def start_execution(context: ToolContext) -> Any:
         What the Execution Service does with the request is start a durable
         workflow; that is why this returns immediately and why an answer here
         means "the run exists", not "the run has finished".
+
+        **The start is an Action before it is a run.** This tool is the existing
+        compute/experiment entrance, and a task card is explicit that it must
+        not become the way round an approval, a budget, or a lease. So the call
+        records an Action, lets the same AuthorityEnvelope/Approval/Budget gate
+        everything else uses decide whether it may execute, claims it once, and
+        only then reaches the Execution Service. If the project's envelope
+        requires a human approval, this refuses until that approval exists; the
+        refusal is an answer, not an error.
 
         **You are starting the contract's task, not choosing one.** The node,
         its type and its frozen terms are all facts RAVEL holds; there is no
@@ -97,48 +133,172 @@ def start_execution(context: ToolContext) -> Any:
                 "start work needs one, and starting without it would be the "
                 "bypass the Worker exists to close"
             )
-        with context.read() as session:
-            dag = DagRepository(session, context.project_id)
-            node = dag.node(node_id)
-            # The same three preconditions `_apply_transition` checks on the way
-            # into RUNNING, read from the same place. A start that got past this
-            # and was then refused by the transition would be a Worker's turn
-            # ending in an exception rather than in an answer.
-            refusal = _may_this_worker_start(
-                context,
-                node,
-                has_frozen_acceptance=dag.has_frozen_acceptance(node_id),
-                has_execution_contract=dag.has_execution_contract(node_id),
-                pre_run_outcome=dag.latest_pre_run_outcome(node_id),
-            )
-            contract_version = ExecutionContractRepository(
-                session, context.project_id
-            ).for_node(node_id).version
-        if refusal is not None:
-            return {
-                "node_id": node.node_id,
-                "started": False,
-                "refused": True,
-                "reason": refusal,
-                "node_status": node.status.value,
-            }
+        binding_id = context.scope.brief().binding_id or ""
+        node: DagNode | None = None
 
-        started = await context.execution.start(node, actor_id=context.role.value)
-        return {
-            "node_id": node.node_id,
-            "node_status": node.status.value,
-            "contract_version": contract_version,
-            "started": started,
-            "refused": False,
-            "already_under_way": not started,
-            "what_happens_next": (
-                "RAVEL's Execution Service is running this task durably. The node "
-                "moves to RUNNING when the run's own activity writes it, which is "
-                "a moment later; until then a second start is the same one run."
-            ),
-        }
+        try:
+            with context.write() as session:
+                dag = DagRepository(session, context.project_id)
+                node = dag.node(node_id)
+                # The same three preconditions `_apply_transition` checks on the
+                # way into RUNNING, read from the same place. A start that got
+                # past this and was then refused by the transition would be a
+                # Worker's turn ending in an exception rather than in an answer.
+                refusal = _may_this_worker_start(
+                    context,
+                    node,
+                    has_frozen_acceptance=dag.has_frozen_acceptance(node_id),
+                    has_execution_contract=dag.has_execution_contract(node_id),
+                    pre_run_outcome=dag.latest_pre_run_outcome(node_id),
+                )
+                if refusal is not None:
+                    return _refused(node, refusal)
+                contract = ExecutionContractRepository(
+                    session, context.project_id
+                ).for_node(node_id)
+                service = ActionService(session, context.project_id)
+                kind = _ACTION_KIND[context.role]
+                action = service.create(
+                    kind=kind,
+                    payload={"attempt": 1},
+                    actor=context.role.value,
+                    requesting_binding=binding_id,
+                    target_ref=f"node:{node_id}",
+                    node_id=node_id,
+                    contract_id=contract.contract_id,
+                    contract_version=contract.version,
+                    resource_request=_resource_request(contract),
+                    # The run's paid cost is not known here; the resource-hours
+                    # ceiling is the bound V0 enforces. A site that prices work
+                    # records its own estimate (T09/T25), and a later Action
+                    # carries that number.
+                    estimated_cny="0",
+                    cost_known=True,
+                    idempotency_key=(
+                        None
+                        if kind is ActionKind.COMPUTE_SUBMIT
+                        else f"lab:{node_id}:{contract.version}:1"
+                    ),
+                )
+                # The claim's refusals are answers about this Action, and the
+                # Action must survive them: an approval pending is a question a
+                # human can answer, and an expiry records the release. So the
+                # exception is caught here, inside the transaction, and the
+                # transaction is allowed to commit what the refusal wrote.
+                reason: str | None = None
+                try:
+                    action, claimed = service.claim(
+                        action.action_id, claimed_by=context.role.value
+                    )
+                except (ActionError, PermissionError) as error:
+                    claimed = False
+                    reason = str(error)
+        except (ActionError, PermissionError) as error:
+            # The proposal itself was refused, so the transaction rolled back
+            # and no half-written Action is left behind.
+            if node is None:
+                raise
+            return _refused(node, str(error))
+
+        assert node is not None
+        if reason is not None:
+            return _refused(node, reason)
+        if not claimed:
+            if action.status in _UNDER_WAY_STATUSES:
+                return _under_way(node, contract.version)
+            return _refused(
+                node,
+                f"Action {action.action_id} is {action.status.value} and cannot "
+                "execute again; report its outcome rather than starting a second "
+                "attempt",
+            )
+
+        try:
+            started = await context.execution.start(node, actor_id=context.role.value)
+        except BaseException as error:
+            # The claim is committed and the external call failed at an unknown
+            # point. Calling that a failure would invite a resubmission of work
+            # that may exist; the Action stays UNKNOWN until it is reconciled.
+            with context.write() as session:
+                ActionService(session, context.project_id).record_unknown(
+                    action.action_id,
+                    reason=(
+                        f"the Execution Service raised {type(error).__name__}: "
+                        f"{error}; whether the run exists is unknown"
+                    ),
+                )
+            raise
+
+        with context.write() as session:
+            ActionService(session, context.project_id).record_accepted(
+                action.action_id
+            )
+        return _started(node, contract.version, started)
 
     return start_execution
+
+
+def _refused(node: DagNode, reason: str) -> dict[str, Any]:
+    """The answer to a start the project has not cleared."""
+    return {
+        "node_id": node.node_id,
+        "started": False,
+        "refused": True,
+        "reason": reason,
+        "node_status": node.status.value,
+    }
+
+
+def _under_way(node: DagNode, contract_version: int) -> dict[str, Any]:
+    """The answer to a start whose run already exists."""
+    return {
+        "node_id": node.node_id,
+        "node_status": node.status.value,
+        "contract_version": contract_version,
+        "started": False,
+        "refused": False,
+        "already_under_way": True,
+        "what_happens_next": (
+            "RAVEL's Execution Service is already running this task durably; a "
+            "second start is the same one run. Read its status rather than "
+            "starting it again."
+        ),
+    }
+
+
+def _started(
+    node: DagNode, contract_version: int, started: bool
+) -> dict[str, Any]:
+    """The answer to a start the Action gate admitted."""
+    return {
+        "node_id": node.node_id,
+        "node_status": node.status.value,
+        "contract_version": contract_version,
+        "started": started,
+        "refused": False,
+        "already_under_way": not started,
+        "what_happens_next": (
+            "RAVEL's Execution Service is running this task durably. The node "
+            "moves to RUNNING when the run's own activity writes it, which is "
+            "a moment later; until then a second start is the same one run."
+        ),
+    }
+
+
+def _resource_request(contract: ExecutionContract) -> ResourceRequest:
+    """The contract's resource ceiling, in the Action's own units.
+
+    Only the three quantities the Action model knows are read; a contract that
+    names a lab instrument or a node count still executes, because those are
+    preparation facts rather than the V0 budget's currency. A missing quantity
+    is zero: the contract asked for none of it.
+    """
+    limits = contract.resource_limits
+    return ResourceRequest(
+        cpu_hours=Decimal(str(limits.get("cpu_hours", 0))),
+        gpu_hours=Decimal(str(limits.get("gpu_hours", 0))),
+        wall_clock_hours=Decimal(str(limits.get("wall_clock_hours", 0))),
+    )
 
 
 def _may_this_worker_start(

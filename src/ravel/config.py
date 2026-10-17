@@ -219,6 +219,25 @@ class Settings(BaseSettings):
     search_provider: str | None = None
     playwright_headless: bool = True
 
+    # ── Actions and budgets ────────────────────────────────────────────────
+    # Defaults, not grants. An AuthorityEnvelope may be stricter and the
+    # stricter bound wins. Money has no default at all: a project's paid limit
+    # is zero until an Owner explicitly configures an account, so a missing
+    # configuration refuses spending rather than permitting it.
+    #
+    # Quantities are strings because they are fixed-point decimals. Parsing
+    # happens once, in `ravel.domain.actions`, where a malformed value is
+    # refused loudly rather than becoming a float.
+    action_compute_per_project: int = 2
+    action_compute_global: int = 8
+    action_max_cpu_hours: str = "1"
+    action_max_gpu_hours: str = "0"
+    action_max_wall_clock_hours: str = "24"
+    #: The life of an Action and of the approval that authorizes it. A shorter
+    #: value is allowed; a longer one would weaken the contract's 24-hour
+    #: default, so the service caps whatever is configured at this bound.
+    action_approval_ttl_hours: float = 24.0
+
     # ── Gateway ────────────────────────────────────────────────────────────
     gateway_host: str = "127.0.0.1"
     gateway_port: int = 8000

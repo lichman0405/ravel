@@ -46,7 +46,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from ravel.domain.enums import (
     AccessStatus,
+    ActionKind,
+    ActionStatus,
     ApprovalStatus,
+    BudgetReservationStatus,
     ClaimClass,
     CompletionStatus,
     Confidence,
@@ -1568,6 +1571,213 @@ class RuntimeServiceRow(Base):
         DateTime(timezone=True), nullable=True
     )
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class ActionRow(Base):
+    """The only record through which RAVEL may cause an external effect.
+
+    `payload_hash` is not advisory. It is the hash of every fact an approval
+    covers, and the guard trigger makes it immutable along with the payload,
+    target, contract, actor, envelope version, expiry and budget reference, so
+    a process cannot approve one thing and submit another. The unique
+    `(project_id, idempotency_key)` is the other half: a retried create
+    resolves to the Action that already exists instead of minting a second
+    effect for the same logical work.
+
+    `attempts` is JSONB because an attempt is a value inside the aggregate and
+    is never queried on its own. Each attempt is an `ActionAttempt` validated
+    by the domain model on the way out.
+    """
+
+    __tablename__ = "actions"
+    __table_args__ = (
+        _enum_constraint("kind", ActionKind),
+        _enum_constraint("status", ActionStatus),
+        UniqueConstraint(
+            "project_id", "idempotency_key", name="one_action_per_idempotency_key"
+        ),
+        CheckConstraint(
+            "payload_hash ~ '^sha256:[0-9a-f]{64}$'", name="payload_hash_is_sha256"
+        ),
+        CheckConstraint(
+            "contract_version IS NULL OR contract_version >= 1",
+            name="contract_version_positive_when_present",
+        ),
+        CheckConstraint("envelope_version >= 1", name="envelope_version_positive"),
+        CheckConstraint(
+            "estimated_cny IS NULL OR estimated_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
+            name="estimated_cny_is_fixed_point",
+        ),
+        CheckConstraint("expires_at > created_at", name="expiry_follows_creation"),
+        Index("ix_actions_project_status", "project_id", "status"),
+        Index("ix_actions_project_kind_status", "project_id", "kind", "status"),
+        Index("ix_actions_expires_at", "expires_at"),
+        # The external system's own idempotency key is enforced here, not only
+        # in the service. HPC receives `submission_key`, which is a hash of the
+        # project, node, contract version and attempt; a second live Action
+        # carrying the same key would be a second submission of the same work.
+        # Mail is the same rule with the Message-ID it promises to reuse.
+        # Terminal *failures* are excluded so a genuinely failed submission can
+        # be redone, which is why the predicate names the statuses rather than
+        # saying "live": a partial index must be a fixed expression.
+        Index(
+            "one_live_compute_per_submission_key",
+            "project_id",
+            text("(payload->>'submission_key')"),
+            unique=True,
+            postgresql_where=text(
+                "kind = 'COMPUTE_SUBMIT' AND status NOT IN "
+                "('FAILED_CONFIRMED', 'REJECTED', 'EXPIRED', 'CANCELLED')"
+            ),
+        ),
+        Index(
+            "one_live_mail_per_message_id",
+            "project_id",
+            text("(payload->>'message_id')"),
+            unique=True,
+            postgresql_where=text(
+                "kind = 'MAIL_SEND' AND status NOT IN "
+                "('FAILED_CONFIRMED', 'REJECTED', 'EXPIRED', 'CANCELLED')"
+            ),
+        ),
+    )
+
+    action_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    payload_artifact_ref: Mapped[str | None] = mapped_column(REF)
+    contract_id: Mapped[str | None] = mapped_column(REF)
+    contract_version: Mapped[int | None] = mapped_column(Integer)
+    node_id: Mapped[str | None] = mapped_column(REF)
+    actor: Mapped[str] = mapped_column(String(128), nullable=False)
+    requesting_binding: Mapped[str] = mapped_column(REF, nullable=False)
+    target_ref: Mapped[str | None] = mapped_column(String(256))
+    required_approval_ref: Mapped[str | None] = mapped_column(REF)
+    envelope_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    budget_reservation_ref: Mapped[str | None] = mapped_column(REF)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    cluster: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    prior_action_id: Mapped[str | None] = mapped_column(REF)
+    resource_request: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    estimated_cny: Mapped[str | None] = mapped_column(String(64))
+    cost_known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    claimed_by: Mapped[str | None] = mapped_column(String(128))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    external_ref: Mapped[str | None] = mapped_column(String(256))
+    external_state: Mapped[str | None] = mapped_column(String(64))
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    uncertainty: Mapped[str | None] = mapped_column(Text)
+    overrun_event_ref: Mapped[str | None] = mapped_column(REF)
+
+
+class BudgetAccountRow(Base):
+    """The paid budget an Owner has explicitly configured for project+cluster.
+
+    The uniqueness of `(project_id, cluster)` is what makes the row a ledger
+    key rather than one opinion among several. There is deliberately no row
+    created by default: absence means a paid limit of zero, so spending cannot
+    begin because a caller assumed an account existed.
+    """
+
+    __tablename__ = "budget_accounts"
+    __table_args__ = (
+        UniqueConstraint("project_id", "cluster", name="one_account_per_project_cluster"),
+        CheckConstraint("currency = 'CNY'", name="currency_is_cny"),
+        CheckConstraint(
+            "limit_cny ~ '^[0-9]+(\\.[0-9]+)?$'", name="limit_is_fixed_point"
+        ),
+        CheckConstraint(
+            "(paused_at IS NULL) = (pause_reason IS NULL)", name="pause_has_a_reason"
+        ),
+        Index("ix_budget_accounts_project", "project_id"),
+    )
+
+    account_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    cluster: Mapped[str] = mapped_column(String(64), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="CNY")
+    limit_cny: Mapped[str] = mapped_column(String(64), nullable=False, default="0")
+    configured_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    configured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pause_reason: Mapped[str | None] = mapped_column(Text)
+    overrun_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BudgetReservationRow(Base):
+    """The promise of budget made before an external submission.
+
+    One reservation per Action — a second effect from one approval would be the
+    duplicate submission the Action claim exists to prevent — and the status is
+    the schema's vocabulary (`RESERVED`, `SETTLED`, `UNKNOWN`, `RELEASED`).
+    `SETTLED` and `settled_at` move together, and a settlement always records
+    an actual amount: an unknown cost is `UNKNOWN`, never a zero settlement.
+    """
+
+    __tablename__ = "budget_reservations"
+    __table_args__ = (
+        _enum_constraint("status", BudgetReservationStatus),
+        UniqueConstraint("action_id", name="one_reservation_per_action"),
+        CheckConstraint(
+            "(status = 'SETTLED') = (settled_at IS NOT NULL)",
+            name="settled_timestamp_matches_status",
+        ),
+        CheckConstraint(
+            "status <> 'SETTLED' OR actual_cost_cny IS NOT NULL",
+            name="settled_has_actual_cost",
+        ),
+        CheckConstraint(
+            "(status = 'RELEASED') = (released_at IS NOT NULL)",
+            name="released_timestamp_matches_status",
+        ),
+        CheckConstraint(
+            "estimated_cost_cny IS NULL OR estimated_cost_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
+            name="estimated_cost_is_fixed_point",
+        ),
+        CheckConstraint(
+            "actual_cost_cny IS NULL OR actual_cost_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
+            name="actual_cost_is_fixed_point",
+        ),
+        Index("ix_budget_reservations_project_status", "project_id", "status"),
+        Index("ix_budget_reservations_project_cluster", "project_id", "cluster"),
+    )
+
+    reservation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    action_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("actions.action_id", ondelete="CASCADE"), nullable=False
+    )
+    cluster: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    cost_known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    estimated_cost_cny: Mapped[str | None] = mapped_column(String(64))
+    cost_upper_bound_cny: Mapped[str | None] = mapped_column(String(64))
+    actual_cost_cny: Mapped[str | None] = mapped_column(String(64))
+    resource_hours: Mapped[str | None] = mapped_column(String(64))
+    resource_hours_upper_bound: Mapped[str | None] = mapped_column(String(64))
+    overrun_event_ref: Mapped[str | None] = mapped_column(REF)
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 def _install_guards(_target: Any, connection: Any, **_: Any) -> None:

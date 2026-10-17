@@ -1,0 +1,3 @@
+$ .venv/bin/python -m pytest tests/premium/T06 -q -rxXs --junitxml=/workspace/ravel-worktrees/T06-actions/docs/premium/evidence/T06/run-20261017-205353/cmd-02-junit.xml
+
+..............................................                           [100%]

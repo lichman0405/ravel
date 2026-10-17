@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "task_id": "T06",
+  "attempt": 1,
+  "reviewer_id": "independent-T06-AC1-AC4",
+  "base_sha": "61d7594",
+  "candidate_sha": "3b3724b",
+  "source_digest": "00c830f71d152477cafd1b047a1188bc3f78f2554c7a1061c1232dd9205d78ea",
+  "reviewed_at": "2026-10-17 20:53 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T06-AC1",
+      "result": "PASS",
+      "evidence": "Two real sessions/threads with a 1.00 CNY account: exactly one 0.60 reservation wins, one Action remains, committed=0.60, one BudgetExceeded. Cancellation/known rejection release; UNKNOWN keeps 1.50 reserved and projects UNKNOWN_DELIVERY; overrun records actual and pauses. Independent review PASS."
+    },
+    {
+      "id": "T06-AC2",
+      "result": "PASS",
+      "evidence": "Tamper matrix (action_id/payload_hash/recipients/attachment hashes/target/contract/envelope/cost bound/expiry) raises StaleApproval; new envelope/contract versions invalidate; lowered budget blocks claim; revoked approver raises PermissionError; elapsed window expires and releases. Gateway resolve now calls sync_after_resolution in the same transaction. Independent review PASS."
+    },
+    {
+      "id": "T06-AC3",
+      "result": "PASS",
+      "evidence": "Repeated MAIL Message-ID returns original Action; double claim True then False with one attempt; HPC submission_key = sha256(project,node,contract_version,attempt), attempt 2 distinct; hand-written key refused; start_execution creates/claims one Action before ExecutionService and cannot double-submit. Independent review PASS."
+    },
+    {
+      "id": "T06-AC4",
+      "result": "PASS",
+      "evidence": "Research/Review/Workers cannot add or cancel DAG nodes; full COMPUTE lifecycle leaves node READY and frozen acceptance/execution contract unchanged; direct frozen-criteria UPDATE refused by trigger. Independent review PASS."
+    }
+  ],
+  "security_fixes": [
+    "Approval bound to exact Action kind/payload/action_id; verified.",
+    "Unknown cost cannot reserve zero; positive upper bound required; verified.",
+    "Outcome reports require claimant or live owner; verified.",
+    "Contract version checked for all contract-bound Actions; verified.",
+    "start_execution creates/claims one Action before ExecutionService; verified."
+  ],
+  "findings": [
+    {
+      "severity": "P3",
+      "file": "src/ravel/gateway/routes/control.py",
+      "line": 248,
+      "issue": "Route-level sync call has no direct regression test; the service sync test covers the behavior.",
+      "evidence": "tests/premium/T06/test_budget.py::test_an_approval_resolved_outside_the_service_releases_its_action",
+      "required_fix": "Add a TestClient-level test in a later gateway task.",
+      "advisory": true
+    },
+    {
+      "severity": "P3",
+      "file": "src/ravel/gateway/errors.py",
+      "line": 1,
+      "issue": "ActionError/BudgetExceeded/StaleApproval have no structured handler; route returns 500 and rolls back the approval if sync refuses.",
+      "evidence": "control.py:248 can raise these; errors.py covers other domain errors only.",
+      "required_fix": "Map to structured refusals in T07/T22.",
+      "advisory": true
+    },
+    {
+      "severity": "P3",
+      "file": "src/ravel/actions/service.py",
+      "line": 1095,
+      "issue": "Claimant fence and cancel negative path lack dedicated tests.",
+      "evidence": "3b3724b adds code only; owner path covered.",
+      "required_fix": "Add non-owner DENY / owner ALLOW cases.",
+      "advisory": true
+    },
+    {
+      "severity": "P3",
+      "file": "src/ravel/actions/service.py",
+      "line": 421,
+      "issue": "Claim expiry reorder has no in-flight-expired test.",
+      "evidence": "duplicate-claim tests do not set elapsed expiry.",
+      "required_fix": "Add regression.",
+      "advisory": true
+    },
+    {
+      "severity": "P3",
+      "file": "src/ravel/actions/service.py",
+      "line": 654,
+      "issue": "reconcile does not update the ActionAttempt outcome from UNKNOWN.",
+      "evidence": "reconcile never calls _finish_attempt.",
+      "required_fix": "Fix in the outcome-callback wiring task.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "P2: no production callers for complete/record_failed_confirmed/reconcile/cancel/expire_due; ACCEPTED holds 2/8 compute slots until T09/T11/T17/T19 wire real results.",
+    "P2: start_execution attempt is fixed at 1; same-node terminal-failure retry needs a new Action/attempt path.",
+    "No live Slurm/SMTP/sandbox; HPC reuses the existing Slurm key/ref.",
+    "start_execution uses estimated_cny=0/cost_known=True; money pricing deferred to T09/T25.",
+    "Fresh-DB evidence is run-204258 at df30493; schema unchanged since, but no fresh-DB run at final HEAD.",
+    "claim authorizes principal_user_id or claimed_by but records claimed_by; production callers pass one identity.",
+    "T06 gate runs tests/premium/T06 plus lint; full integration/gateway suite is an integration-candidate check."
+  ],
+  "gate_evidence_refs": [
+    "evidence/T06/run-20261017-205353/manifest.json",
+    "evidence/T06/run-20261017-204258/manifest.json"
+  ],
+  "integration_candidate": false
+}

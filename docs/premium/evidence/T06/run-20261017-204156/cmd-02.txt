@@ -1,0 +1,2093 @@
+$ .venv/bin/python -m pytest tests/premium/T06 -q -rxXs --junitxml=/workspace/ravel-worktrees/T06-actions/docs/premium/evidence/T06/run-20261017-204156/cmd-02-junit.xml
+
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE                            [100%]
+==================================== ERRORS ====================================
+__________ ERROR at setup of test_an_untampered_approval_still_claims __________
+
+fixturedef = <FixtureDef argname='integration_settings' scope='session' baseid='tests/premium/T06'>
+request = <SubRequest 'integration_settings' for <Function test_an_untampered_approval_still_claims>>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:926: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[action-id] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[payload-hash] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[to] ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[cc] ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[bcc] ___
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[attachments] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[target] __
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[contract] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[envelope] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+__ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[cost] ___
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_changed_approval_snapshot_blocks_execution[expiry] __
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_action_content_cannot_be_rewritten_after_insert ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_a_new_envelope_version_invalidates_the_approval ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_new_execution_contract_version_invalidates_the_approval _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_lowered_budget_after_approval_blocks_the_claim ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_revoked_approver_can_no_longer_authorize_execution __
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_an_elapsed_window_expires_the_action_and_releases_its_budget _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_two_concurrent_reservations_cannot_break_the_remaining_limit _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_____ ERROR at setup of test_unknown_cost_is_refused_against_a_zero_limit ______
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_known_outcomes_release_the_reservation_and_unknown_keeps_it _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_outcome_reports_require_the_claimant_or_a_live_owner __
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_cleared_node_starts_through_one_claimed_action ____
+
+self = <Coroutine test_a_cleared_node_starts_through_one_claimed_action>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___________ ERROR at setup of test_a_repeated_start_is_the_same_run ____________
+
+self = <Coroutine test_a_repeated_start_is_the_same_run>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_required_approval_blocks_the_start_until_a_human_answers _
+
+self = <Coroutine test_a_required_approval_blocks_the_start_until_a_human_answers>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_resource_cap_blocks_the_start_before_any_submission _
+
+self = <Coroutine test_a_resource_cap_blocks_the_start_before_any_submission>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_an_envelope_can_tighten_the_deployment_resource_default _
+
+self = <Coroutine test_an_envelope_can_tighten_the_deployment_resource_default>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_an_unknown_external_result_blocks_a_second_submission _
+
+self = <Coroutine test_an_unknown_external_result_blocks_a_second_submission>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_stale_binding_is_refused_before_the_action_layer_is_reached _
+
+self = <Coroutine test_a_stale_binding_is_refused_before_the_action_layer_is_reached>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_the_start_leaves_the_node_where_the_dag_put_it _____
+
+self = <Coroutine test_the_start_leaves_the_node_where_the_dag_put_it>
+
+>   ???
+
+/workspace/ravel-worktrees/T04/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_repeated_mail_message_id_returns_the_original_action _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_held_action_is_claimed_once_even_when_claimed_twice _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_the_hpc_submission_key_is_the_attempt_identity _____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_____ ERROR at setup of test_a_hand_written_hpc_submission_key_is_refused ______
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_non_master_role_cannot_add_a_dag_node[research] ___
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_a_non_master_role_cannot_add_a_dag_node[review] ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_non_master_role_cannot_add_a_dag_node[compute-worker] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_non_master_role_cannot_add_a_dag_node[experimental-worker] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+___ ERROR at setup of test_a_non_master_role_cannot_cancel_a_node[research] ____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_a_non_master_role_cannot_cancel_a_node[review] _____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_non_master_role_cannot_cancel_a_node[compute-worker] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_non_master_role_cannot_cancel_a_node[experimental-worker] _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+_ ERROR at setup of test_a_compute_action_lifecycle_leaves_the_dag_and_frozen_criteria_alone _
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
+____ ERROR at setup of test_frozen_criteria_cannot_be_edited_even_directly _____
+
+    @pytest.fixture(scope="session")
+    def integration_settings() -> Settings:
+        """Settings pointed at the dedicated test database.
+    
+        **The name comes from the environment when it is set**, because every test
+        in this suite truncates on the way in and two suites therefore cannot share
+        one database: a second run — a live acceptance suite, say — would empty the
+        tables under the first, and the symptom is a `NotFound` for a row the other
+        run had just written. `RAVEL_TEST_DB` is how a second database is named so
+        that two runs can proceed at once; the suffix check below still applies to
+        whatever it says, so the interlock is not weakened by being configurable.
+    
+        **And pointed at a queue no deployment polls**, for the same reason the DSN
+        override is nulled out: `Settings()` reads this repository's `.env`, which
+        names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+        deployment. Anything built straight from these settings without an override
+        would be configured to put work in front of that worker. The name is per
+        process, so two suites running at once do not take each other's workflows
+        either. Everything that actually starts a run goes through
+        `execution_settings`, which narrows this further to one queue per test; this
+        is the floor under it, for the settings that never reach that fixture.
+    
+        Raises:
+            RuntimeError: The configured database is not a test database, or the
+                configured queue is the one a deployment polls.
+        """
+        # The DSN override is addressed by its alias, which is the name pydantic
+        # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
+        # suite that truncates every table.
+        settings = Settings(
+            env="test",
+            postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+            temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+            RAVEL_POSTGRES_DSN=None,
+        )
+        if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
+>           raise RuntimeError(
+                f"integration tests truncate every table and refuse to run against "
+                f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+            )
+E           RuntimeError: integration tests truncate every table and refuse to run against 'ravel_t06_final'; the name must end in '_test'
+
+tests/integration/conftest.py:124: RuntimeError
