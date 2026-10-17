@@ -51,9 +51,18 @@ The T02 task is adoption and verification, not a rewrite of these features.
 
 ### Integration / E2E
 
-- `tests/integration` is running against real PostgreSQL and Temporal with LocalStack 3.8 as the S3-compatible endpoint.
+- `tests/integration`: 709 tests, exit 0, 100% complete against real PostgreSQL and Temporal with LocalStack 3.8 as the S3-compatible endpoint.
+- `tests/e2e`: 27 tests, exit 0.
 - LocalStack results are `SIMULATED_S3`: they prove client-side behavior but do not satisfy the GATES requirement for real MinIO. Real MinIO remains an internal environment gap.
-- `tests/e2e` and the Phase 11 acceptance matrix will be recorded with their actual exit codes/skips; skipped internal rows are not PASS.
+- `make phase11-acceptance`: 11/11 items demonstrated, 0 failed, 0 missing; pytest exit 0. Individual skips remain visible in the rows:
+  - P11-02 deep read: 1 live/external skip;
+  - P11-05 Slurm: 1 real-cluster/external skip;
+  - P11-10 services: 1 skip because the canonical container has no user-level systemd (the host WSL has systemd; this is an internal environment gap, not a product failure);
+  - P11-11 whole chain: 1 live/external skip.
+- Two Phase11 acceptance tests were fixed after the first run:
+  - `test_phase11_reconcile.py` now waits for the worker's backend-job row before reading it or terminating the workflow; the previous run raced the submit activity.
+  - `test_phase11_services.py`'s `transient_unit` cleanup now checks for a user-level systemd before calling `systemctl`; a container skip no longer becomes an ERROR.
+- `make release-gate` is running; its exit code and every row will be recorded as-is. External rows are not converted to PASS.
 
 ## Simulated / real / human distinction (T02-AC3)
 

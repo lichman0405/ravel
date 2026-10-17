@@ -219,8 +219,12 @@ def transient_unit(tmp_path: Path, integration_settings: Settings) -> Iterator[s
     try:
         yield name
     finally:
-        systemctl("stop", name)
-        systemctl("reset-failed", name)
+        # The test body skips when there is no user manager. The cleanup must
+        # make the same check, or a skip turns into an ERROR from a missing
+        # systemctl in a container.
+        if user_manager_is_running():
+            systemctl("stop", name)
+            systemctl("reset-failed", name)
 
 
 def start_unit(name: str, policy: dict[str, str], environment: Path) -> None:

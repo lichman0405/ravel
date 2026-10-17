@@ -200,6 +200,28 @@ async def run_until(
     raise AssertionError(f"{what} did not appear within {timeout}s")
 
 
+async def wait_for_backend_job(headless: Headless, prepared: Prepared) -> None:
+    """Wait until the worker's submit activity has written the job row.
+
+    A node reaches RUNNING when the workflow starts, which is before the
+    backend's ``submit`` activity necessarily completes. Reading or terminating
+    at that instant races the activity: the reconciliation then has no job row
+    to mark, and the test fails for a timing reason rather than a recovery
+    reason. The row is the fact this case is about.
+    """
+
+    def present() -> bool:
+        with headless.database.read_only() as session:
+            return (
+                BackendJobRepository(
+                    session, prepared.project_id
+                ).latest_for_node(prepared.node_id)
+                is not None
+            )
+
+    await run_until(present, what="the backend job")
+
+
 # ── Criterion one: an exhausted activity, and a workflow nobody started ─────
 
 
@@ -327,6 +349,7 @@ async def test_p11_01_a_run_that_is_still_alive_is_left_alone(
         is NodeStatus.RUNNING,
         what="the run to reach its node",
     )
+    await wait_for_backend_job(headless, prepared)
     with headless.database.read_only() as session:
         before = BackendJobRepository(session, prepared.project_id).latest_for_node(
             prepared.node_id
@@ -363,6 +386,7 @@ async def test_p11_01_a_terminated_run_is_recovered_as_a_cancellation(
         is NodeStatus.RUNNING,
         what="the run to reach its node",
     )
+    await wait_for_backend_job(headless, prepared)
 
     await headless.client.client.get_workflow_handle(workflow_id).terminate()
     probe = a_probe(headless)
