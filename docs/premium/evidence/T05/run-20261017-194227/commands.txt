@@ -1,0 +1,13 @@
+===== command 1: .venv/bin/python -m alembic upgrade head =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+
+===== command 2: .venv/bin/python -m pytest tests/premium/T05 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T05/docs/premium/evidence/T05/run-20261017-194227/cmd-02-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T05 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T05/docs/premium/evidence/T05/run-20261017-194227/cmd-02-junit.xml
+
+...................................                                      [100%]
+
