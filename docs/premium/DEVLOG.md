@@ -34,6 +34,8 @@
 | 2026-10-17 19:00 Asia/Shanghai | Supervisor | T04 | 修复T04后验收harness：ScriptedSeats接受brief、supervisor测试使用同一SCRIPTED_SEAT_OWNER、ScriptedWorker每次start刷新lease binding、brief断言检查binding字段 | 独立复审APPROVE（test-only，无fence绕过）；`test_phase10_supervisor.py`通过前13项，P10-W03时序flake单独重跑通过；ff-only合入integration 53771de | T05 review |
 | 2026-10-17 19:47 Asia/Shanghai | Reviewer | T05 | 独立复审持久重试/冷却/升级，AC1–AC4 | `reviews/T05/1.json` APPROVE；P2 operator路由未接线、P3 per-process global cap/轮内lease检查记录；无阻塞findings | 集成候选 |
 | 2026-10-17 19:47 Asia/Shanghai | Supervisor | T05 | 补 concrete nodeids、migration、make lint到T05门禁；空库迁移run-193645，候选run-194532 PASS；ff-only合入integration | integration HEAD fbebde3；PROGRESS/T05=DONE；6/30 DONE；T06进行中 | 继续T06 |
+| 2026-10-17 21:00 Asia/Shanghai | Reviewer | T06 | 独立复审Action/审批绑定/预算/执行入口；首轮FIX_REQUIRED（gateway resolve未同步、outcome回调/attempt=1未披露），修复后APPROVE | `reviews/T06/1.json` APPROVE，AC1–AC4 PASS；P1 gateway sync、claimant/cancel/claim expiry修复；P2 outcome回调/T09-T11与attempt=1明确记录 | 集成候选 |
+| 2026-10-17 21:00 Asia/Shanghai | Supervisor | T06 | 修复security review 4项；gateway resolve调用sync_after_resolution；46 tests；fresh DB run-204258、候选run-205746 PASS；ff-only合入integration | integration HEAD be98bd8；PROGRESS/T06=DONE；7/30 DONE；T07/T08/T09/T12/T22 eligible | 下一波 |
 
 
 
