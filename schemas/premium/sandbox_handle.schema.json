@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/sandbox_handle.schema.json",
+  "title": "SandboxHandle",
+  "description": "A provider-neutral sandbox handle. Secrets are never in the handle; missing capability returns UNSUPPORTED rather than degrading on the host.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["handle_id", "provider", "project_id", "epoch", "capabilities", "state"],
+  "properties": {
+    "handle_id": {"type": "string", "format": "uuid"},
+    "provider": {"type": "string", "enum": ["DOCKER", "SSH_VM"]},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "epoch": {"type": "integer", "minimum": 1},
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv_exec", "files", "network"],
+      "properties": {
+        "argv_exec": {"type": "boolean"},
+        "shell": {"type": "boolean"},
+        "files": {"type": "boolean"},
+        "network": {"type": "boolean"},
+        "gpu": {"type": "boolean"},
+        "max_timeout_seconds": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": ["PROVISIONING", "READY", "STOPPED", "DESTROYED", "FAILED", "QUARANTINED"]
+    }
+  }
+}

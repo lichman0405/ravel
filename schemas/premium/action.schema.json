@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/action.schema.json",
+  "title": "Action",
+  "description": "A single externally-visible side effect. The server derives project, role and lease from the trusted runtime binding; none of those fields may be supplied by the model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action_id",
+    "project_id",
+    "kind",
+    "payload_hash",
+    "requesting_binding",
+    "envelope_version",
+    "status",
+    "created_at",
+    "expires_at",
+    "attempts"
+  ],
+  "properties": {
+    "action_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "kind": {
+      "type": "string",
+      "enum": ["COMPUTE_SUBMIT", "MAIL_SEND", "LAB_HANDOVER", "SANDBOX_EXEC"]
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Hash of the exact payload the human approved."
+    },
+    "payload_artifact_ref": {
+      "type": ["string", "null"],
+      "description": "Object-store reference for the payload body; binaries never enter PostgreSQL."
+    },
+    "contract_id": {"type": ["string", "null"], "maxLength": 64},
+    "contract_version": {"type": ["integer", "null"], "minimum": 1},
+    "requesting_binding": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Trusted binding id issued to the runtime; the server checks owner and epoch."
+    },
+    "target_ref": {"type": ["string", "null"], "maxLength": 256},
+    "required_approval_ref": {"type": ["string", "null"], "maxLength": 64},
+    "envelope_version": {"type": "integer", "minimum": 1},
+    "budget_reservation_ref": {"type": ["string", "null"], "maxLength": 64},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "AWAITING_APPROVAL",
+        "READY",
+        "CLAIMED",
+        "ACCEPTED",
+        "COMPLETED",
+        "REJECTED",
+        "EXPIRED",
+        "CANCELLED",
+        "UNKNOWN",
+        "FAILED_CONFIRMED"
+      ]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt_id", "claimed_at", "outcome"],
+        "properties": {
+          "attempt_id": {"type": "string", "format": "uuid"},
+          "claimed_at": {"type": "string", "format": "date-time"},
+          "outcome": {
+            "type": "string",
+            "enum": ["PENDING", "ACCEPTED", "UNKNOWN", "FAILED_CONFIRMED"]
+          },
+          "external_ref": {"type": ["string", "null"], "maxLength": 256},
+          "note": {"type": ["string", "null"], "maxLength": 2000}
+        }
+      }
+    },
+    "prior_action_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Set when a terminated or changed payload requires a new Action."
+    }
+  }
+}

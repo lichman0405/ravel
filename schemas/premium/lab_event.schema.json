@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/lab_event.schema.json",
+  "title": "HumanLabEvent",
+  "description": "An event reported by an authorized human operator. Every event is person-reported; software cannot sign for the operator or confirm that an instrument stopped.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "handover_id",
+    "actor_user_id",
+    "protocol_version",
+    "event_type",
+    "reported_at",
+    "person_reported"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "handover_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "actor_user_id": {"type": "string", "minLength": 1, "maxLength": 32},
+    "protocol_version": {"type": "integer", "minimum": 1},
+    "sample_id": {"type": ["string", "null"], "maxLength": 128},
+    "sop_ref": {"type": ["string", "null"], "maxLength": 256},
+    "lead_confirmation_ref": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Reference to the responsible lead's confirmation; automated checks only verify its presence/linkage."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "ACKNOWLEDGED",
+        "START_REPORTED",
+        "DEVIATION_REPORTED",
+        "OUTPUT_UPLOADED",
+        "STOP_CONFIRMED"
+      ]
+    },
+    "reported_at": {"type": "string", "format": "date-time"},
+    "raw_output_ref": {"type": ["string", "null"], "maxLength": 1024},
+    "raw_output_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "deviation_note": {"type": ["string", "null"], "maxLength": 4000},
+    "person_reported": {"type": "boolean", "const": true}
+  }
+}

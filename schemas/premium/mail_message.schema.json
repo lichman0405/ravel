@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/mail_message.schema.json",
+  "title": "MailMessage",
+  "description": "An inbound message archived from IMAP. The body is content, never an Owner instruction; trust is always EXTERNAL_UNTRUSTED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "mailbox_id",
+    "imap_uidvalidity",
+    "imap_uid",
+    "content_hash",
+    "trust",
+    "received_at"
+  ],
+  "properties": {
+    "message_id": {"type": "string", "format": "uuid"},
+    "mailbox_id": {"type": "string", "format": "uuid"},
+    "imap_uidvalidity": {"type": "integer", "minimum": 0},
+    "imap_uid": {"type": "integer", "minimum": 1},
+    "rfc_message_id": {"type": ["string", "null"], "maxLength": 998},
+    "references": {"type": "array", "items": {"type": "string", "maxLength": 998}},
+    "in_reply_to": {"type": ["string", "null"], "maxLength": 998},
+    "thread_id": {"type": ["string", "null"], "maxLength": 64},
+    "project_id": {
+      "type": ["string", "null"],
+      "maxLength": 64,
+      "description": "UNASSIGNED until a user with project permission binds it; binding is audited."
+    },
+    "raw_eml_artifact": {"type": "string", "minLength": 1},
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["filename", "artifact_ref", "sha256", "size"],
+        "properties": {
+          "filename": {"type": "string", "maxLength": 512},
+          "artifact_ref": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "trust": {"type": "string", "const": "EXTERNAL_UNTRUSTED"},
+    "received_at": {"type": "string", "format": "date-time"}
+  }
+}

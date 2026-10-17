@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/budget_reservation.schema.json",
+  "title": "BudgetReservation",
+  "description": "A reservation made before an external submit. An unknown external result keeps the reservation; a larger actual cost is recorded, not hidden.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reservation_id",
+    "project_id",
+    "action_id",
+    "status",
+    "cost_known",
+    "reserved_at"
+  ],
+  "properties": {
+    "reservation_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "action_id": {"type": "string", "format": "uuid"},
+    "status": {
+      "type": "string",
+      "enum": ["RESERVED", "SETTLED", "RELEASED", "UNKNOWN"]
+    },
+    "cost_known": {
+      "type": "boolean",
+      "description": "False means the site could not price the work; resource-hour limits and UNKNOWN apply."
+    },
+    "estimated_cost_cny": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+      "description": "Fixed-point CNY decimal string; never a float."
+    },
+    "cost_upper_bound_cny": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "actual_cost_cny": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "resource_hours": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "resource_hours_upper_bound": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "overrun_event_ref": {"type": ["string", "null"], "maxLength": 64},
+    "reserved_at": {"type": "string", "format": "date-time"},
+    "settled_at": {"type": ["string", "null"], "format": "date-time"}
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/mailbox.schema.json",
+  "title": "Mailbox",
+  "description": "One dedicated IMAP TLS + SMTP TLS account. Plaintext and arbitrary SMTP endpoints are not permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mailbox_id",
+    "imap_host",
+    "imap_port",
+    "imap_tls",
+    "smtp_host",
+    "smtp_port",
+    "smtp_tls",
+    "username",
+    "credential_ref",
+    "fixed_from",
+    "recipient_allowlist",
+    "enabled"
+  ],
+  "properties": {
+    "mailbox_id": {"type": "string", "format": "uuid"},
+    "project_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 64},
+      "description": "Projects this mailbox may serve; empty means owner-scoped only."
+    },
+    "owner_user_id": {"type": "string", "minLength": 1, "maxLength": 32},
+    "imap_host": {"type": "string", "minLength": 1, "maxLength": 253},
+    "imap_port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "imap_tls": {"type": "boolean", "const": true},
+    "smtp_host": {"type": "string", "minLength": 1, "maxLength": 253},
+    "smtp_port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "smtp_tls": {"type": "boolean", "const": true},
+    "username": {"type": "string", "minLength": 1, "maxLength": 320},
+    "credential_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Secret-manager reference; the secret value is resolved only in the mail worker."
+    },
+    "fixed_from": {"type": "string", "format": "email"},
+    "recipient_allowlist": {
+      "type": "array",
+      "items": {"type": "string", "format": "email"},
+      "description": "Outbound recipients allowed without a per-recipient operator approval."
+    },
+    "enabled": {"type": "boolean"}
+  }
+}
