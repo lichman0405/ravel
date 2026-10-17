@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "31f08418fee692ccb3be998a18b9dd4bc37880e8",
+  "integration_head_sha": "21d660b881eb9172d019f50385b36cee71b12cae",
   "tasks": {
     "T00": {
       "status": "DONE",
