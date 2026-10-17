@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "status": "COLLECTED",
-  "collected_at": "2026-10-17 13:35:08 +0800",
-  "source_sha": "95b980974a7aa67678417272bd905090c88b5b85",
-  "source_digest": "ba12f962fd7fde4de17bc7e15c14d070e9fa5eca06c992d9bb286977e84919cc",
+  "collected_at": "2026-10-17 13:54:49 +0800",
+  "source_sha": "6125adc342f4fa744eaac8a019470818955446dd",
+  "source_digest": "a4b44792bdefa44e86c765fa9b734bbb1f893c7cb0d4b27468e4ccba2ed6cb47",
   "collection_command": "python -m pytest -q --strict-markers --import-mode=importlib --collect-only -q --import-mode=importlib -p no:cacheprovider",
   "collection_exit": 0,
   "tests": [
