@@ -107,18 +107,18 @@
       "note": "T05 RUNNING：持久 retry_episodes 表/迁移、RetryPolicy/Store、loop turn timeout/并发上限、supervisor operator_retry/pending_escalations；35 tests + migration gate PASS；等待独立 Review。"
     },
     "T06": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T06-actions",
+      "base_sha": "61d7594",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 19:50 Asia/Shanghai",
+      "note": "T06 RUNNING：基于 T05 tip 的独立工作树实现 Action/审批版本绑定/预算预留；待提交与门禁。"
     },
     "T07": {
       "status": "TODO",
