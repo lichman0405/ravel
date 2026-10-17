@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "task_id": "T01",
+  "generated_at": "2026-10-17 14:00 Asia/Shanghai",
+  "source": {
+    "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
+    "implementation_sha": "e3cba300d8279f86df0a89fade9fa43193cb0ac0",
+    "note": "Results are bound to the canonical container tree; the final T01 gate is re-run after the baseline file itself is committed."
+  },
+  "environment": {
+    "canonical": "ravel-premium-ubuntu24:latest",
+    "os": "Ubuntu 24.04 x86_64",
+    "python": "3.12.3",
+    "docker": "29.1.3",
+    "compose": "2.40.3",
+    "node": "18.19.1",
+    "pyright": "1.1.414",
+    "git": "2.43.0",
+    "workdir": "/workspace/ravel-worktrees/T01",
+    "host": "Windows 11 + WSL2 Ubuntu 26.04 (not canonical; only orchestration)"
+  },
+  "runs": [
+    {
+      "suite": "static",
+      "command": "make lint",
+      "result": "PASS",
+      "exit_code": 0,
+      "detail": "ruff: All checks passed; pyright: 0 errors, 0 warnings",
+      "evidence": "docs/premium/evidence/T01/run-20261017-135504/cmd-02.txt"
+    },
+    {
+      "suite": "T01 gate tests",
+      "command": ".venv/bin/python -m pytest tests/premium/T01 -q -rxXs",
+      "result": "PASS",
+      "exit_code": 0,
+      "tests": 25,
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "docs/premium/evidence/T01/run-20261017-135504/cmd-01-junit.xml"
+    },
+    {
+      "suite": "unit",
+      "command": ".venv/bin/python -m pytest tests/unit -q --junitxml=/tmp/unit.xml",
+      "result": "PASS",
+      "exit_code": 0,
+      "tests": 803,
+      "passed": 803,
+      "failed": 0,
+      "skipped": 0,
+      "detail": "Counts read from /tmp/unit.xml; no services required"
+    },
+    {
+      "suite": "integration",
+      "command": ".venv/bin/python -m pytest tests/integration -q -rxXs",
+      "result": "PENDING",
+      "exit_code": null,
+      "note": "Running against real PostgreSQL and Temporal in the canonical container with host networking. Real MinIO is unavailable (registry 401/410; official binary download 410), so MinIO-dependent tests cannot be PASS. This row must be updated with the actual exit code and skip/fail counts; it must not be called PASS."
+    },
+    {
+      "suite": "dsh",
+      "command": "RAVEL_REQUIRE_DSH=1 .venv/bin/python -m pytest tests/dsh -m dsh",
+      "result": "BLOCKED_EXTERNAL",
+      "exit_code": null,
+      "reason": "No DEEPSEEK_API_KEY and no authorized live DSH run in this environment; 20 external nodeids in legacy-inventory.json."
+    },
+    {
+      "suite": "live_research",
+      "command": ".venv/bin/python -m pytest tests/live_research -m live",
+      "result": "BLOCKED_EXTERNAL",
+      "exit_code": null,
+      "reason": "Live Internet research is not part of T01 internal baseline; 12 external nodeids in legacy-inventory.json."
+    },
+    {
+      "suite": "release-gate",
+      "command": "make release-gate",
+      "result": "NOT_RUN",
+      "exit_code": null,
+      "reason": "T02 adopts Phase11 and owns the legacy release-gate run; T01 does not invent a PASS for it."
+    }
+  ],
+  "summary": {
+    "pass": ["static", "T01 gate tests", "unit"],
+    "pending": ["integration"],
+    "blocked_external": ["dsh", "live_research"],
+    "not_run": ["release-gate"],
+    "internal_environment_gaps": [
+      "real MinIO unavailable; MinIO-dependent integration/e2e tests must not be counted as PASS"
+    ]
+  }
+}
