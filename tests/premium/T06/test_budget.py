@@ -22,10 +22,12 @@ from ravel.domain.actions import BudgetExceeded
 from ravel.domain.enums import (
     ActionAttemptOutcome,
     ActionStatus,
+    ApprovalStatus,
     BudgetReservationStatus,
 )
 from ravel.domain.project import Project
 from ravel.state.database import Database
+from ravel.state.repositories.identity import ApprovalRepository
 
 
 def _budget(session: Session, project_id: str, settings: Settings) -> BudgetService:
@@ -367,3 +369,46 @@ def test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work(
             estimate="0.01",
         )
         service.approve(following.action_id, resolved_by=owner)
+
+
+@pytest.mark.timeout(180)
+def test_an_approval_resolved_outside_the_service_releases_its_action(
+    database: Database,
+    project: Project,
+    integration_settings: Settings,
+) -> None:
+    """The old gateway door must move the Action, not only the approval row."""
+    owner = project.created_by
+    with database.transaction() as session:
+        install_envelope(session, project.project_id, "MAIL_SEND")
+        _budget(session, project.project_id, integration_settings).configure(
+            limit_cny="10.00", configured_by=owner
+        )
+
+    with database.transaction() as session:
+        service = ActionService(
+            session, project.project_id, settings=integration_settings
+        )
+        action = create_mail(
+            service,
+            owner,
+            message_id="<gateway-approved@ravel.example>",
+            estimate="0.50",
+        )
+    assert action.status is ActionStatus.AWAITING_APPROVAL
+    assert action.required_approval_ref is not None
+
+    with database.transaction() as session:
+        ApprovalRepository(session, project.project_id).resolve(
+            action.required_approval_ref,
+            ApprovalStatus.APPROVED,
+            resolved_by=owner,
+        )
+
+    with database.transaction() as session:
+        moved = ActionService(
+            session, project.project_id, settings=integration_settings
+        ).sync_after_resolution(action.required_approval_ref)
+    assert moved is not None
+    assert moved.status is ActionStatus.READY
+    assert moved.budget_reservation_ref is not None
