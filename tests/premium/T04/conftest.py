@@ -9,6 +9,7 @@ interlock could drift.
 from __future__ import annotations
 
 from tests.integration.conftest import (  # noqa: F401
+    _database_test_lock,
     clean,
     database,
     integration_settings,
