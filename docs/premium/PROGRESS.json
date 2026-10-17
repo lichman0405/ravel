@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 13:45 Asia/Shanghai",
+  "updated_at": "2026-10-17 14:00 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -26,18 +26,20 @@
       "note": "T00 DONE：独立Reviewer APPROVE（候选5356394，集成候选ace2b18复核对齐source_digest），ff-only合入cc/ravel-premium-v1。"
     },
     "T01": {
-      "status": "RUNNING",
+      "status": "REVIEW",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T01",
       "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
-      "head_sha": null,
-      "source_digest": null,
+      "head_sha": "2266aff5b5986f9d363674a2744a1db491c4ba07",
+      "source_digest": "8be298ab3b34052fbfe4a70bf006a4ec545f2121e1ae6b2ca9e1e8da526af740",
       "review_ref": null,
-      "gate_refs": [],
+      "gate_refs": [
+        "evidence/T01/run-20261017-135751/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": "2026-10-17 13:45 Asia/Shanghai",
-      "note": "T01实现中：新增premium_preflight/premium_task、T01测试、Makefile/pyproject入口；canonical Ubuntu 24.04容器内运行门禁。Supervisor扩充白名单：docs/premium/{legacy-inventory.json,acceptance-map.json,baseline-results.json,environment-mapping.json,tasklogs/T01.md}。"
+      "last_updated": "2026-10-17 14:00 Asia/Shanghai",
+      "note": "T01实现与canonical门禁PASS：25 T01 tests、make lint、preflight；unit 803 passed；integration PENDING（MinIO缺口）；dsh/live BLOCKED_EXTERNAL。等待独立Review。"
     },
     "T02": {
       "status": "TODO",
