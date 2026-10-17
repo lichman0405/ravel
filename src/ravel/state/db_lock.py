@@ -21,10 +21,12 @@ platform temporary directory.
 
 from __future__ import annotations
 
+import contextlib
 import errno
 import hashlib
 import os
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 __all__ = ["DatabaseLock", "database_lock_path", "lock_dir"]
@@ -42,14 +44,14 @@ def _shared_parent() -> Path:
     return root.parent
 
 
-def lock_dir(env: dict[str, str] | None = None) -> Path:
+def lock_dir(env: Mapping[str, str] | None = None) -> Path:
     """The shared lock directory, or a writable fallback.
 
     The directory is created on demand by ``DatabaseLock``. The function is
     deterministic for a given checkout so two processes compute the same path.
     """
-    env = os.environ if env is None else env
-    configured = env.get("RAVEL_PREMIUM_LOCK_DIR")
+    source: Mapping[str, str] = os.environ if env is None else env
+    configured = source.get("RAVEL_PREMIUM_LOCK_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
 
@@ -64,18 +66,18 @@ def lock_dir(env: dict[str, str] | None = None) -> Path:
         return Path(os.path.abspath(os.sep + "tmp")) / "ravel-premium-locks"
 
 
-def database_lock_path(env: dict[str, str] | None = None) -> Path:
-    env = os.environ if env is None else env
-    host = env.get("RAVEL_POSTGRES_HOST", "127.0.0.1").strip().lower().strip("[]")
+def database_lock_path(env: Mapping[str, str] | None = None) -> Path:
+    source: Mapping[str, str] = os.environ if env is None else env
+    host = source.get("RAVEL_POSTGRES_HOST", "127.0.0.1").strip().lower().strip("[]")
     if host in {"localhost", "::1"}:
         host = "127.0.0.1"
     identity = "{host}:{port}/{db}".format(
         host=host,
-        port=int(env.get("RAVEL_POSTGRES_PORT", "55432")),
-        db=env.get("RAVEL_POSTGRES_DB", "ravel_test").strip().lower(),
+        port=int(source.get("RAVEL_POSTGRES_PORT", "55432")),
+        db=source.get("RAVEL_POSTGRES_DB", "ravel_test").strip().lower(),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
-    return lock_dir(env) / f"database-{digest}.lock"
+    return lock_dir(source) / f"database-{digest}.lock"
 
 
 class DatabaseLock:
@@ -168,15 +170,11 @@ class DatabaseLock:
             import msvcrt
 
             handle.seek(0)  # type: ignore[union-attr]
-            try:
+            with contextlib.suppress(OSError):
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[union-attr]
-            except OSError:
-                pass
         else:
-            try:
+            with contextlib.suppress(OSError):
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[union-attr]
-            except OSError:
-                pass
         handle.close()  # type: ignore[union-attr]
 
     def __exit__(self, *exc: object) -> None:
