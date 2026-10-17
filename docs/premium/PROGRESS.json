@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 18:10 Asia/Shanghai",
+  "updated_at": "2026-10-17 18:15 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "66891c9b6269646901a569fae64a494ac8101770",
+  "integration_head_sha": "d07fe563464ca0f7f724b6d25b713d7a54eea9a7",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -75,23 +75,21 @@
       "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001；全表113个唯一AC，其中T03-T29 102、T04-T29 99，T00-T02 11；独立AC3复审reviews/T03/2.json PASS，确认差集仅为T00-T02的11条且无遗漏；候选dc3b6b9已ff-only合入。"
     },
     "T04": {
-      "status": "FIX_REQUIRED",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T04-fence",
       "base_sha": "066fe498cef90809a597d84157ad2fae830c7097",
-      "head_sha": "d2c87418afa1d7851d09838439fb8cdddaa9d43d",
-      "source_digest": null,
+      "head_sha": "a62eff4e0d1a04bf0c6dfaf0d40190619364f7e2",
+      "source_digest": "a5186a53740f889e5731191808364174c8a5d75f32e87a731ae3b8c3ff80acb2",
       "review_ref": "reviews/T04/2.json",
       "gate_refs": [
-        "evidence/T04/run-20261017-160705/manifest.json",
-        "evidence/T04/migration-20261017-1730/manifest.json"
+        "evidence/T04/run-20261017-180438/manifest.json",
+        "evidence/T04/run-20261017-180741/manifest.json"
       ],
-      "integration_merge_sha": "0e75a91628412855c72761a91308df30421c40ed",
-      "blocker_refs": [
-        "B05"
-      ],
-      "last_updated": "2026-10-17 18:05 Asia/Shanghai",
-      "note": "T04 重开 FIX_REQUIRED：原实现仅在turn/轮次边界检查租约，in-flight turn可在失效后写DAG/启动执行；独立评审要求把owner_instance_id/epoch绑定冻结在启动时，并在所有科研/执行副作用入口fence。修复分支cc/T04-binding-fence已加per-binding brief、启动快照、DAG/Research/Review/Worker/Contract/Conclusion入口检查及回归；待独立复审和集成。历史0e75a91保留，不回退。"
+      "integration_merge_sha": "17d855d15bb4ce08cfe41455ea87bd84dabd14ba",
+      "blocker_refs": [],
+      "last_updated": "2026-10-17 18:15 Asia/Shanghai",
+      "note": "T04 重开修复后DONE：per-binding brief文件 + tool server启动快照，18个科研/执行副作用入口require_current_lease；独立复审AC1-AC4 PASS（P2 TOCTOU作为非阻塞hardening记录）；T04 12 passed、candidate gate run-20261017-180741 PASS；候选17d855d与tip tree一致，ff-only合入。历史0e75a91保留。"
     },
     "T05": {
       "status": "TODO",
