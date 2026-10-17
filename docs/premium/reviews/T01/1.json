@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "task_id": "T01",
+  "attempt": 1,
+  "reviewer_id": "independent-panel-T01-AC1-AC4",
+  "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
+  "candidate_sha": "5495e06e51f49fb61ac4035cd0d01500231c6c01",
+  "source_digest": "84f769a0a093a98b6ee69e6fdee58ddc22fb84f2323ac2b0b6253cb3c1929d3a",
+  "reviewed_at": "2026-10-17 15:08:30 +0800",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T01-AC1",
+      "result": "PASS",
+      "evidence": "The development-only --allow-noncanonical path was removed; check_os always requires Ubuntu 24.04 x86_64; tests cover noncanonical OS (3 cases), wrong Python, missing git/docker/compose, and main() returning 1 for failed OS/Python. Canonical container preflight_exit=0."
+    },
+    {
+      "id": "T01-AC2",
+      "result": "PASS",
+      "evidence": "Undeclared tasks lock by default (database_suite absent -> True); explicit false opt-out is audited for T01; structural pytest target parsing covers pytest/python -m pytest with options and bare tests parents; marker backstop normalizes separators/case; localhost/127.0.0.1 normalize to one path; fixed /tmp lock dir on POSIX; second runner times out and succeeds after release."
+    },
+    {
+      "id": "T01-AC3",
+      "result": "PASS",
+      "evidence": "Failing subcommand -> exit 1; empty selection (exit 5 or no tests ran) -> FAIL; unmapped AC/no commands -> exit 2; pytest skip -> FAIL; dirty tree -> exit 2; unknown task -> non-zero. Tests pass in the canonical container."
+    },
+    {
+      "id": "T01-AC4",
+      "result": "PASS",
+      "evidence": "run-20261017-150746 manifest binds source_commit 5495e06, source_digest 84f769a..., commands/exit codes, preflight_exit 0, JUnit and logs; integration baseline records 538 collected / 63 MinIO skips / exit 0 as FAIL, not PASS; no credentials appear in the gate commands."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T01/run-20261017-150746/manifest.json",
+    "baseline-results.json",
+    "environment-mapping.json"
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "scripts/premium_task.py",
+      "line": 326,
+      "trigger": "Exotic pytest invocation forms such as joined -mpytest, pytest.exe, bash -c 'pytest tests', or pytest . with database_suite=false",
+      "impact": "Residual lock bypass only for an explicitly opted-out task with a malformed command; undeclared tasks always lock.",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Extend pytest token recognition to joined -m<module> and .exe basenames, and treat shell-indirected pytest with a bare tests root as database-collecting.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "scripts/premium_task.py",
+      "line": 470,
+      "trigger": "A command prints a credential while its output is captured",
+      "impact": "commands.txt would contain the printed credential; the runner does not redact command output.",
+      "acceptance_id": "T01-AC4",
+      "required_fix": "Add a redaction pass for known credential patterns and a sampled log test, or keep the documented rule that commands must not print secrets.",
+      "advisory": true
+    }
+  ],
+  "integration_candidate": false
+}
