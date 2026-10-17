@@ -52,12 +52,15 @@ def main() -> int:
             node = stack.pop()
             if isinstance(node, dict):
                 reference = node.get("$ref")
-                if isinstance(reference, str) and reference.startswith("#"):
+                if (
+                    isinstance(reference, str)
+                    and reference.startswith("#")
+                    and not reference.startswith("#/")
+                ):
                     # Local references are resolved only against their own
                     # document; the schemas in this directory do not use
                     # cross-file refs, so a local ref must be a JSON pointer.
-                    if not reference.startswith("#/"):
-                        failures.append(f"{path.name}: unsupported $ref {reference}")
+                    failures.append(f"{path.name}: unsupported $ref {reference}")
                 stack.extend(node.values())
             elif isinstance(node, list):
                 stack.extend(node)
