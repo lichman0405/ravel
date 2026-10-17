@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "T04",
+  "attempt": 1,
+  "reviewer_id": "independent-reviewers-T04-AC1-AC4",
+  "base_sha": "80b261c69e0522fd5ce0b32d1f115a663a9ab868",
+  "candidate_sha": "68390f21a2150732fb061248469246ec1d8a7279",
+  "source_digest": "d460d3d325a0e513f177e60c12bea6ea96ff95118eed314d154ba0b9ef3b1c71",
+  "reviewed_at": "2026-10-17 17:40 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T04-AC1",
+      "result": "PASS",
+      "evidence": "project_leases project_id PK; LeaseService.acquire is a database transaction with row lock; second supervisor gets LeaseHeld; ProjectSupervisor._claim_project runs before any DSH seat. Independent reviewer PASS."
+    },
+    {
+      "id": "T04-AC2",
+      "result": "PASS",
+      "evidence": "expiry uses DB now(); expired/released takeover increments epoch; old owner renew/release/check fail. Tests pass. Independent reviewer PASS."
+    },
+    {
+      "id": "T04-AC3",
+      "result": "PASS",
+      "evidence": "LeaseGuard.ensure stops the loop before the next turn; release on exit; expiry leaves the row to a new owner; duplicate runs remain guarded by the existing Temporal run identity/submission key (src/ravel/execution/reconcile.py, src/ravel/execution/temporal/contracts.py; tests/integration/reconcile/test_execution_reconcile.py, tests/unit/domain/test_reconciliation.py). Independent reviewer PASS with P3 notes."
+    },
+    {
+      "id": "T04-AC4",
+      "result": "PASS",
+      "evidence": "different project ids acquire independently; the existing _active_projects filter excludes PAUSED and user permissions are unchanged. Tests pass. Independent reviewer PASS."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T04/run-20261017-160705/manifest.json",
+    "evidence/T04/migration-20261017-1730/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/leases.py",
+      "line": 207,
+      "trigger": "non-LeaseLost database error during guard ensure",
+      "impact": "exception instead of a clean halted loop; still fail-closed, outer _tick logs and retries",
+      "acceptance_id": "T04-AC3",
+      "required_fix": "Document outer retry (done in task log); no data-authority bypass.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/leases.py",
+      "line": 207,
+      "trigger": "turn outliving TTL",
+      "impact": "lease checks are at round boundaries; Temporal submission key remains the duplicate guard",
+      "acceptance_id": "T04-AC3",
+      "required_fix": "Keep TTL (60s) well above turn duration or add an in-turn fence in the Action/T06 path.",
+      "advisory": true
+    }
+  ],
+  "integration_candidate": false
+}

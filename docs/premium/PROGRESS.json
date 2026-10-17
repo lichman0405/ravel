@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 17:35 Asia/Shanghai",
+  "updated_at": "2026-10-17 17:40 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -75,21 +75,21 @@
       "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS；候选dc3b6b9与tip tree一致，ff-only合入。"
     },
     "T04": {
-      "status": "REVIEW",
+      "status": "INTEGRATING",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T04",
       "base_sha": "80b261c69e0522fd5ce0b32d1f115a663a9ab868",
       "head_sha": "68390f21a2150732fb061248469246ec1d8a7279",
       "source_digest": "d460d3d325a0e513f177e60c12bea6ea96ff95118eed314d154ba0b9ef3b1c71",
-      "review_ref": null,
+      "review_ref": "reviews/T04/1.json",
       "gate_refs": [
         "evidence/T04/run-20261017-160705/manifest.json",
         "evidence/T04/migration-20261017-1730/manifest.json"
       ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": "2026-10-17 17:35 Asia/Shanghai",
-      "note": "T04实现与canonical门禁PASS：6项lease测试 + make lint；迁移到b7e4c2a1d9f3；等待独立Review。"
+      "last_updated": "2026-10-17 17:40 Asia/Shanghai",
+      "note": "T04独立AC1-AC2/AC3-AC4复核APPROVE；6项lease测试+lint+迁移PASS；P3 advisory为DB异常fail-closed、Temporal submission-key引用、in-turn fence留T06。等待集成候选复核。"
     },
     "T05": {
       "status": "TODO",
