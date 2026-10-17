@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "task_id": "T04",
+  "attempt": 2,
+  "reviewer_id": "independent-T04-AC1-AC4-rereview",
+  "base_sha": "066fe498cef90809a597d84157ad2fae830c7097",
+  "candidate_sha": "d2c87418afa1d7851d09838439fb8cdddaa9d43d",
+  "source_digest": "a5186a53740f889e5731191808364174c8a5d75f32e87a731ae3b8c3ff80acb2",
+  "reviewed_at": "2026-10-17 18:10 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T04-AC1",
+      "result": "PASS",
+      "evidence": "project_leases project_id PK; LeaseService.acquire uses SELECT ... FOR UPDATE and raises LeaseHeld for a live other owner; ProjectSupervisor._claim_project claims before constructing any seat. Independent re-review PASS."
+    },
+    {
+      "id": "T04-AC2",
+      "result": "PASS",
+      "evidence": "Takeover increments epoch. All deterministic DAG-mutation and start-execution entry points, plus the expanded scientific/execution side-effect handlers, check owner+epoch, released_at and expires_at before writing or submitting. Stale-owner tests pass; a brief snapshot cannot be upgraded by a later owner write; binding-scoped brief files prevent overwrite while an old server runs. Independent re-review PASS."
+    },
+    {
+      "id": "T04-AC3",
+      "result": "PASS",
+      "evidence": "Temporal workflow id includes node and contract version with REJECT_DUPLICATE; the takeover regression uses a real backend_jobs row and real ExecutionReconciler, refuses stale A without a submission, and leaves job count at one. Independent re-review PASS."
+    },
+    {
+      "id": "T04-AC4",
+      "result": "PASS",
+      "evidence": "One lease row per project; different projects are independent; PAUSED filtering and the existing role checks remain in front of the new lease gate. Independent re-review PASS."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T04/run-20261017-180438/manifest.json",
+    "evidence/T04/run-20261017-170544/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "src/ravel/mcp/context.py",
+      "line": 166,
+      "trigger": "takeover between the read-only lease check and the later write/submission",
+      "impact": "small TOCTOU window; duplicate workflows remain bounded by workflow id + reconciliation",
+      "acceptance_id": "T04-AC2",
+      "required_fix": "Hardening: recheck or lock project_leases in the write transaction and immediately before start_workflow. Not blocking AC2 because the deterministic stale case is refused.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/dsh/runtime.py",
+      "line": 37,
+      "trigger": "shared role overlay filename per project/role",
+      "impact": "narrow path where a new owner's overlay could be read by an old process that has not started its harness yet",
+      "acceptance_id": "T04-AC2",
+      "required_fix": "Binding-scope the overlay filename like the brief; tracked as residual risk.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/mcp/scope.py",
+      "line": 92,
+      "trigger": "bool accepted as lease_epoch; binding_id not persisted in PostgreSQL",
+      "impact": "brief is supervisor-written; owner+epoch from project_leases remains authoritative",
+      "acceptance_id": "T04-AC2",
+      "required_fix": "Reject bool explicitly and add a PG binding row if a later task requires binding-level revocation.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/e2e/conftest.py",
+      "line": 638,
+      "trigger": "headless e2e seat does not renew its lease and ProjectLoop has no lease_guard",
+      "impact": "test-only flake risk for e2e runs longer than the 60s TTL; the real fence still refuses a stale side effect",
+      "acceptance_id": "T04-AC4",
+      "required_fix": "Renew or reacquire in long headless runs; not a production path.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "P2 check-to-write TOCTOU remains; deterministic stale-binding refusal is proven, but atomic hardening is not implemented.",
+    "Shared ROLE_PATCH_NAME overlay is the remaining shared-path edge.",
+    "A concurrent first-ever acquire on a missing lease row can surface IntegrityError; the supervisor retries on the next tick and no second authority is granted.",
+    "Long turns beyond TTL fail closed at the next side-effect entry point rather than writing.",
+    "The P10-W14 full-file failure was a run-timing flake, not a fence refusal; the test does not call an MCP handler."
+  ],
+  "integration_candidate": false
+}
