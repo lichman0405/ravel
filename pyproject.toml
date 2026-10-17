@@ -63,7 +63,9 @@ testpaths = ["tests"]
 # The repository root, so a test module can import a helper from a sibling
 # conftest (`tests` is a namespace package: pytest's own path insertion only
 # reaches the directory the test module is in).
-pythonpath = ["."]
+# tests/dsh/test_spike.py imports its sibling mcp_probe by bare name, which
+# importlib mode no longer puts on sys.path automatically.
+pythonpath = [".", "tests/dsh"]
 asyncio_mode = "auto"
 timeout = 300
 markers = [
@@ -74,13 +76,15 @@ markers = [
     "acceptance: one of the A01-A20 acceptance cases",
     "phase10: one of the Phase 10 autonomy acceptance cases",
 ]
-addopts = "-q --strict-markers"
+# importlib avoids the duplicate-basename import error between, for example,
+# tests/acceptance/test_lab.py and tests/integration/gateway/test_lab.py.
+addopts = "-q --strict-markers --import-mode=importlib"
 
 [tool.pyright]
 # `src` layout: the package is installed into the venv, but the language
 # server needs the source root on its path to resolve `ravel.*` before an
 # editable install exists.
-extraPaths = ["src", "tests"]
+extraPaths = ["src", "tests", "scripts"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

@@ -15,9 +15,12 @@
         "Reviewer 对接管清单与文档的一致性审查"
       ],
       "classification": "internal",
-      "status": "NOT_RUN",
+      "status": "PASS",
       "test_nodeids": [],
-      "manual_evidence_refs": [],
+      "manual_evidence_refs": [
+        "reviews/T00/1.json",
+        "evidence/T00/run-20261017-1306/manifest.json"
+      ],
       "execution_commands": [],
       "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
     },
@@ -34,10 +37,59 @@
         "make lint"
       ],
       "classification": "internal",
-      "status": "NOT_RUN",
-      "test_nodeids": [],
+      "status": "READY",
+      "test_nodeids": [
+        "tests/premium/T01/test_digest.py::test_digest_ignores_record_changes",
+        "tests/premium/T01/test_digest.py::test_digest_changes_when_product_changes",
+        "tests/premium/T01/test_digest.py::test_digest_is_sha256_hex",
+        "tests/premium/T01/test_digest.py::test_dirty_paths_ignores_evidence_but_not_product",
+        "tests/premium/T01/test_lock.py::test_second_runner_cannot_enter_while_lock_held",
+        "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+        "tests/premium/T01/test_preflight.py::test_canonical_os_passes",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release0-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release1-x86_64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_fails[release2-aarch64]",
+        "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+        "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+        "tests/premium/T01/test_preflight.py::test_missing_docker_fails",
+        "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
+        "tests/premium/T01/test_preflight.py::test_cli_is_nonzero_when_docker_and_git_are_absent",
+        "tests/premium/T01/test_task_runner.py::test_failing_command_fails_the_task_and_is_recorded",
+        "tests/premium/T01/test_task_runner.py::test_empty_pytest_selection_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_skip_is_not_a_pass",
+        "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+        "tests/premium/T01/test_task_runner.py::test_no_commands_fails",
+        "tests/premium/T01/test_task_runner.py::test_dirty_tree_is_refused",
+        "tests/premium/T01/test_task_runner.py::test_manifest_binds_commit_digest_and_artifacts",
+        "tests/premium/T01/test_task_runner.py::test_digest_subcommand_prints_sha256",
+        "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
+        "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created"
+      ],
       "manual_evidence_refs": [],
-      "execution_commands": [],
+      "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "pytest",
+            "tests/premium/T01",
+            "-q",
+            "-rxXs"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
+          "external": false
+        }
+      ],
       "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
     },
     "T02": {
