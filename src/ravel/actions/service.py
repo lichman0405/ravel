@@ -54,6 +54,7 @@ from ravel.domain.enums import (
     ActionKind,
     ActionStatus,
     ApprovalStatus,
+    UserRole,
 )
 from ravel.domain.ids import new_id
 from ravel.domain.roles import AgentRole
@@ -475,7 +476,12 @@ class ActionService:
     # ── Outcomes ────────────────────────────────────────────────────────────
 
     def record_accepted(
-        self, action_id: str, *, external_ref: str | None = None, note: str | None = None
+        self,
+        action_id: str,
+        *,
+        external_ref: str | None = None,
+        note: str | None = None,
+        reported_by: str | None = None,
     ) -> Action:
         """The external system accepted the work. Not success, and not cost.
 
@@ -483,6 +489,7 @@ class ActionService:
             ActionConflict: The Action is not `CLAIMED`.
         """
         action, row = self.actions.lock(action_id)
+        self._require_reporter(action, reported_by)
         if action.status is ActionStatus.ACCEPTED:
             return action
         if action.status is not ActionStatus.CLAIMED:
@@ -508,6 +515,7 @@ class ActionService:
         *,
         actual_cny: str | None = None,
         external_ref: str | None = None,
+        reported_by: str | None = None,
     ) -> Action:
         """The work finished, with a known actual cost.
 
@@ -527,6 +535,7 @@ class ActionService:
                 "stays UNKNOWN and is never settled as zero"
             )
         action, row = self.actions.lock(action_id)
+        self._require_reporter(action, reported_by)
         if action.status is ActionStatus.COMPLETED:
             return action
         if action.status is ActionStatus.UNKNOWN:
@@ -551,7 +560,9 @@ class ActionService:
             budget_reservation_ref=settled.reservation_id,
         )
 
-    def record_unknown(self, action_id: str, *, reason: str) -> Action:
+    def record_unknown(
+        self, action_id: str, *, reason: str, reported_by: str | None = None
+    ) -> Action:
         """The submission's outcome is not known.
 
         The budget reservation stays held and the concurrency slot stays
@@ -562,6 +573,7 @@ class ActionService:
             ActionConflict: The Action is not `CLAIMED` or `ACCEPTED`.
         """
         action, row = self.actions.lock(action_id)
+        self._require_reporter(action, reported_by)
         if action.status is ActionStatus.UNKNOWN:
             return action
         if action.status not in (ActionStatus.CLAIMED, ActionStatus.ACCEPTED):
@@ -587,6 +599,7 @@ class ActionService:
         *,
         reason: str,
         actual_cny: str | None = None,
+        reported_by: str | None = None,
     ) -> Action:
         """The external system definitely did not do the work.
 
@@ -598,6 +611,7 @@ class ActionService:
             ActionConflict: The Action is not `CLAIMED`, `ACCEPTED` or `UNKNOWN`.
         """
         action, row = self.actions.lock(action_id)
+        self._require_reporter(action, reported_by)
         if action.status is ActionStatus.FAILED_CONFIRMED:
             return action
         if action.status not in (
@@ -634,6 +648,7 @@ class ActionService:
         actual_cny: str | None = None,
         external_ref: str | None = None,
         note: str = "",
+        reported_by: str | None = None,
     ) -> Action:
         """Resolve an `UNKNOWN` Action to `ACCEPTED` or `FAILED_CONFIRMED`.
 
@@ -659,6 +674,7 @@ class ActionService:
                 "outcome that becomes another unknown is not reconciled"
             )
         action, row = self.actions.lock(action_id)
+        self._require_reporter(action, reported_by)
         if action.status is not ActionStatus.UNKNOWN:
             raise ActionConflict(
                 f"Action {action_id} is {action.status.value}, not UNKNOWN"
@@ -859,6 +875,11 @@ class ActionService:
                 f"approval {approval.approval_id} is {approval.status.value}; "
                 f"Action {action.action_id} may not execute"
             )
+        if approval.action != action.kind.value:
+            raise StaleApproval(
+                f"approval {approval.approval_id} authorizes {approval.action!r}, "
+                f"not this {action.kind.value} Action"
+            )
         if not approval.resolved_by:
             raise ApprovalRequired(
                 f"approval {approval.approval_id} records no human resolver"
@@ -887,16 +908,24 @@ class ActionService:
     def _verify_contract_unchanged(self, action: Action) -> None:
         """Refuse an Action whose frozen execution contract has been replaced.
 
+        Any Action that names a node and a contract is bound to it — compute
+        submissions and lab handovers alike. An Action that names neither (a
+        mail send) has no execution contract to re-read.
+
         Raises:
             StaleApproval: A newer execution contract version exists, or the
                 recorded contract is gone.
         """
-        if action.kind is not ActionKind.COMPUTE_SUBMIT:
+        if (
+            action.node_id is None
+            or action.contract_id is None
+            or action.contract_version is None
+        ):
             return
         try:
             latest = ExecutionContractRepository(
                 self.session, self.project_id
-            ).for_node(action.node_id or "")
+            ).for_node(action.node_id)
         except NotFound as error:
             raise StaleApproval(
                 "the execution contract this Action was approved under no longer "
@@ -1002,6 +1031,37 @@ class ActionService:
                 f"{actor!r} is not a live project member or a RAVEL agent role; an "
                 "Action must be attributable to one or the other"
             )
+
+    def _require_reporter(self, action: Action, reported_by: str | None) -> None:
+        """Only the executor -- or an owner reconciling -- may report an outcome.
+
+        Reporting is not a read: it can release or settle a budget and move the
+        Action to a terminal state. A caller that never claimed the Action must
+        not be able to write its ending.
+        """
+        if action.claimed_by is None:
+            raise PermissionError(
+                f"Action {action.action_id} has no claimant recorded; its outcome "
+                "cannot be reported"
+            )
+        reporter = reported_by or action.claimed_by
+        if reporter == action.claimed_by:
+            self._require_actor(reporter)
+            return
+        membership = MembershipRepository(self.session, self.project_id).for_user(
+            reporter
+        )
+        if (
+            membership is None
+            or not membership.is_active
+            or membership.role is not UserRole.PROJECT_OWNER
+        ):
+            raise PermissionError(
+                f"{reporter!r} did not claim Action {action.action_id} and is not a "
+                "live owner who may reconcile it"
+            )
+        if not UserRepository(self.session).get(reporter).is_active:
+            raise PermissionError(f"account {reporter!r} is deactivated")
 
     def _require_claimant(
         self, action: Action, claimed_by: str, principal_user_id: str | None

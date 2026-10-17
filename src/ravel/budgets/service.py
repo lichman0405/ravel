@@ -197,12 +197,18 @@ class BudgetService:
         committed = self.committed(action.cluster)
         estimate = parse_cny(action.estimated_cny, field="estimated cost") or _ZERO
 
-        if not action.cost_known and (account is None or limit == _ZERO):
-            raise BudgetExceeded(
-                "this Action's cost is unknown and the project has configured "
-                "no paid budget; unknown never means free, so it cannot be "
-                "promised against a zero limit"
-            )
+        if not action.cost_known:
+            if account is None or limit == _ZERO:
+                raise BudgetExceeded(
+                    "this Action's cost is unknown and the project has configured "
+                    "no paid budget; unknown never means free, so it cannot be "
+                    "promised against a zero limit"
+                )
+            if estimate <= _ZERO:
+                raise BudgetExceeded(
+                    "this Action's cost is unknown and no positive upper bound was "
+                    "provided; unknown cannot be reserved as zero"
+                )
         projected = committed + estimate
         if projected > limit:
             raise BudgetExceeded(

@@ -146,12 +146,24 @@ def test_unknown_cost_is_refused_against_a_zero_limit(
             limit_cny="100.00", configured_by=owner
         )
 
+    # A positive limit does not make an unbounded unknown reservable: it would
+    # commit zero against a cost nobody can bound. The caller must state an
+    # upper bound; UNKNOWN is still not zero.
+    with pytest.raises(BudgetExceeded, match="upper bound"), database.transaction() as session:
+        create_mail(
+            ActionService(session, project.project_id, settings=integration_settings),
+            owner,
+            message_id="<unpriced@ravel.example>",
+            estimate=None,
+            cost_known=False,
+        )
+
     with database.transaction() as session:
         action = create_mail(
             ActionService(session, project.project_id, settings=integration_settings),
             owner,
             message_id="<unpriced@ravel.example>",
-            estimate=None,
+            estimate="5.00",
             cost_known=False,
         )
     assert action.status is ActionStatus.READY
@@ -162,13 +174,12 @@ def test_unknown_cost_is_refused_against_a_zero_limit(
         assert reservation is not None
         assert reservation.status is BudgetReservationStatus.RESERVED
         assert reservation.cost_known is False
-        assert reservation.estimated_cost_cny is None, (
-            "an unknown cost was written as an amount; UNKNOWN is a state, "
-            "not zero"
+        assert Decimal(reservation.estimated_cost_cny or "0") == Decimal("5.00"), (
+            "the explicit upper bound must be the committed amount"
         )
-        assert budget.committed("default") == Decimal("0"), (
-            "an unpriced reservation must not invent a committed amount; its "
-            "hard bound is the resource-hours ceiling"
+        assert Decimal(reservation.cost_upper_bound_cny or "0") == Decimal("5.00")
+        assert budget.committed("default") == Decimal("5.00"), (
+            "an unknown-cost reservation with an upper bound must commit that bound"
         )
 
 
@@ -252,6 +263,45 @@ def test_known_outcomes_release_the_reservation_and_unknown_keeps_it(
         assert reservation is not None
         assert reservation.status is BudgetReservationStatus.RELEASED
         assert budget.committed("default") == Decimal("0")
+
+
+def test_outcome_reports_require_the_claimant_or_a_live_owner(
+    database: Database,
+    project: Project,
+    integration_settings: Settings,
+) -> None:
+    """A caller that did not claim the Action cannot write its ending."""
+    owner = project.created_by
+    with database.transaction() as session:
+        install_envelope(session, project.project_id, "MAIL_SEND")
+        _budget(session, project.project_id, integration_settings).configure(
+            limit_cny="10.00", configured_by=owner
+        )
+
+    with database.transaction() as session:
+        service = ActionService(
+            session, project.project_id, settings=integration_settings
+        )
+        action = create_mail(
+            service, owner, message_id="<reporter@ravel.example>", estimate="0.50"
+        )
+        service.approve(action.action_id, resolved_by=owner)
+        service.claim(action.action_id, claimed_by=owner)
+
+        with pytest.raises(PermissionError, match="did not claim"):
+            service.record_accepted(
+                action.action_id, reported_by="not-a-project-member"
+            )
+        with pytest.raises(PermissionError, match="did not claim"):
+            service.record_unknown(
+                action.action_id,
+                reason="an intruder must not be able to close the attempt",
+                reported_by="not-a-project-member",
+            )
+
+        accepted = service.record_accepted(action.action_id)
+    assert accepted.status is ActionStatus.ACCEPTED
+    assert accepted.claimed_by == owner
 
 
 def test_completion_requires_an_actual_cost_and_an_overrun_pauses_new_work(

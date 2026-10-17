@@ -260,10 +260,18 @@ def effective_resource_limits(
     the deployment default applies.
     """
     limits = ResourceLimits(
-        cpu_hours=cpu_hours if cpu_hours is not None else DEFAULT_MAX_CPU_HOURS_PER_JOB,
-        gpu_hours=gpu_hours if gpu_hours is not None else DEFAULT_MAX_GPU_HOURS_PER_JOB,
+        cpu_hours=(
+            _decimal(cpu_hours, field="cpu_hours")
+            if cpu_hours is not None
+            else DEFAULT_MAX_CPU_HOURS_PER_JOB
+        ),
+        gpu_hours=(
+            _decimal(gpu_hours, field="gpu_hours")
+            if gpu_hours is not None
+            else DEFAULT_MAX_GPU_HOURS_PER_JOB
+        ),
         wall_clock_hours=(
-            wall_clock_hours
+            _decimal(wall_clock_hours, field="wall_clock_hours")
             if wall_clock_hours is not None
             else DEFAULT_MAX_WALL_CLOCK_HOURS_PER_JOB
         ),
