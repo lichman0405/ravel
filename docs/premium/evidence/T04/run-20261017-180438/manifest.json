@@ -1,0 +1,122 @@
+{
+  "run_id": "run-20261017-180438",
+  "task_id": "T04",
+  "acceptance_map": {
+    "T04-AC1": {
+      "test_nodeids": [
+        "tests/premium/T04/test_lease.py::test_two_supervisors_only_one_acquires",
+        "tests/premium/T04/test_lease.py::test_expired_lease_is_taken_over_with_a_larger_epoch",
+        "tests/premium/T04/test_lease.py::test_release_keeps_the_epoch_monotonic",
+        "tests/premium/T04/test_lease.py::test_different_projects_can_be_held_in_parallel",
+        "tests/premium/T04/test_lease.py::test_guard_stops_after_the_lease_expires",
+        "tests/premium/T04/test_lease.py::test_supervisor_claim_is_a_gate_before_agents"
+      ],
+      "manual_evidence_refs": [
+        "tasklogs/T04.md",
+        "evidence/T04/migration-20261017-1730/manifest.json"
+      ]
+    },
+    "T04-AC2": {
+      "test_nodeids": [
+        "tests/premium/T04/test_lease.py::test_two_supervisors_only_one_acquires",
+        "tests/premium/T04/test_lease.py::test_expired_lease_is_taken_over_with_a_larger_epoch",
+        "tests/premium/T04/test_lease.py::test_release_keeps_the_epoch_monotonic",
+        "tests/premium/T04/test_lease.py::test_different_projects_can_be_held_in_parallel",
+        "tests/premium/T04/test_lease.py::test_guard_stops_after_the_lease_expires",
+        "tests/premium/T04/test_lease.py::test_supervisor_claim_is_a_gate_before_agents"
+      ],
+      "manual_evidence_refs": [
+        "tasklogs/T04.md",
+        "evidence/T04/migration-20261017-1730/manifest.json"
+      ]
+    },
+    "T04-AC3": {
+      "test_nodeids": [
+        "tests/premium/T04/test_lease.py::test_two_supervisors_only_one_acquires",
+        "tests/premium/T04/test_lease.py::test_expired_lease_is_taken_over_with_a_larger_epoch",
+        "tests/premium/T04/test_lease.py::test_release_keeps_the_epoch_monotonic",
+        "tests/premium/T04/test_lease.py::test_different_projects_can_be_held_in_parallel",
+        "tests/premium/T04/test_lease.py::test_guard_stops_after_the_lease_expires",
+        "tests/premium/T04/test_lease.py::test_supervisor_claim_is_a_gate_before_agents"
+      ],
+      "manual_evidence_refs": [
+        "tasklogs/T04.md",
+        "evidence/T04/migration-20261017-1730/manifest.json"
+      ]
+    },
+    "T04-AC4": {
+      "test_nodeids": [
+        "tests/premium/T04/test_lease.py::test_two_supervisors_only_one_acquires",
+        "tests/premium/T04/test_lease.py::test_expired_lease_is_taken_over_with_a_larger_epoch",
+        "tests/premium/T04/test_lease.py::test_release_keeps_the_epoch_monotonic",
+        "tests/premium/T04/test_lease.py::test_different_projects_can_be_held_in_parallel",
+        "tests/premium/T04/test_lease.py::test_guard_stops_after_the_lease_expires",
+        "tests/premium/T04/test_lease.py::test_supervisor_claim_is_a_gate_before_agents"
+      ],
+      "manual_evidence_refs": [
+        "tasklogs/T04.md",
+        "evidence/T04/migration-20261017-1730/manifest.json"
+      ]
+    }
+  },
+  "started_at": "2026-10-17 18:04:31 +0800",
+  "completed_at": "2026-10-17 18:05:24 +0800",
+  "source_commit": "d2c87418afa1d7851d09838439fb8cdddaa9d43d",
+  "source_digest": "a5186a53740f889e5731191808364174c8a5d75f32e87a731ae3b8c3ff80acb2",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T04 -q -rxXs --junitxml=/workspace/ravel-worktrees/T04-fence/docs/premium/evidence/T04/run-20261017-180438/cmd-01-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T04-fence",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T04/run-20261017-180438/cmd-01-junit.xml",
+  "log_path": "docs/premium/evidence/T04/run-20261017-180438/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T04/run-20261017-180438/cmd-01-junit.xml",
+      "sha256": "57558a76cbfdc65621ba81d4b2243303eb00d0893e78d3bb5a19f86aa595fa03",
+      "size": 1713
+    },
+    {
+      "ref": "docs/premium/evidence/T04/run-20261017-180438/cmd-01.txt",
+      "sha256": "f2aa4d099d977a9ac807e81aeddbebb940e319006434a842e28f926562b08c37",
+      "size": 248
+    },
+    {
+      "ref": "docs/premium/evidence/T04/run-20261017-180438/cmd-02.txt",
+      "sha256": "00703a6f2d5ec02a67d11a07d238c9c4f17d995653db09a71487136466304417",
+      "size": 251
+    },
+    {
+      "ref": "docs/premium/evidence/T04/run-20261017-180438/commands.txt",
+      "sha256": "9e0168058e2e786f7e61d87eb762f3197192da782433f741f077e392fed80980",
+      "size": 786
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}
