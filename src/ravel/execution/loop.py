@@ -78,6 +78,7 @@ from ravel.domain.enums import NodeStatus, NodeType, ProjectStatus, ReviewOutcom
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.project import Project
 from ravel.domain.state_machines import TERMINAL_PROJECT_STATUSES, requires_frozen_criteria
+from ravel.execution.retry_policy import RetryWiring, question_state_version
 from ravel.state.database import Database
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.projects import ProjectRegistry
@@ -455,6 +456,12 @@ class ProjectLoop:
     #: another turn or execution start. `None` is the local, single-process
     #: path used by tests and one-shot scripts.
     lease_guard: Callable[[], bool] | None = None
+    #: The persistent retry budget, the deployment's request limiter, and the
+    #: clock they share. `None` is the unwired path — a one-shot script or a
+    #: unit test — where `max_turns_per_question` still budgets questions in
+    #: memory. A supervisor always wires it, because a budget that does not
+    #: survive a restart is not a budget: see `ravel.execution.retry_policy`.
+    retry: RetryWiring | None = None
     _rounds: int = field(default=0, init=False, repr=False)
     #: The `(node, status)` episodes an execution seat has already been given a
     #: turn for. Dispatch bookkeeping, not a record — see `_turn_list`.
@@ -464,10 +471,23 @@ class ProjectLoop:
     #: comes back — a node that fails, is replanned, and lands in REVIEWING
     #: again — starts a fresh budget rather than inheriting a spent one.
     _asked: dict[str, int] = field(default_factory=dict, init=False, repr=False)
-    #: Questions the loop has stopped asking because their budget is spent. Read
-    #: by the stall counter in `run`, which is what turns a spent question into
-    #: an ending rather than into a silence.
+    #: Questions this *run* has stopped asking because its own budget is spent.
+    #: Read by the stall counter in `run`, which is what turns a spent question
+    #: into an ending rather than into a silence. Both paths fill it: the run's
+    #: `max_turns_per_question` is a per-run ceiling, and the durable episode is
+    #: the lifetime budget across runs — the two compose rather than replace
+    #: each other.
     _unanswered: set[str] = field(default_factory=set, init=False, repr=False)
+    #: Questions the durable budget is holding — a cooldown, or an episode
+    #: waiting on an operator. A round spent here is a *wait*, not a stall: the
+    #: loop is doing exactly what the policy says, and counting it toward
+    #: `max_stalled_rounds` would end a run in the middle of a cooldown that
+    #: was working as designed.
+    _retry_blocked: set[str] = field(default_factory=set, init=False, repr=False)
+    #: Episodes whose operator escalation this loop has already reported. Keeps
+    #: the log line to one per episode rather than one per poll; the durable
+    #: record is the retry row, and this is only the process-local echo of it.
+    _escalations_noted: set[str] = field(default_factory=set, init=False, repr=False)
 
     async def run(self) -> ProjectRun:
         """Drive the project until it ends, or until it stops moving.
@@ -505,7 +525,15 @@ class ProjectLoop:
                 # nobody has answered is the exception: something may well be in
                 # flight, and none of it is progress — `_advance` has stopped
                 # asking, so no round will change this.
-                if not situation.in_flight or self._unanswered:
+                #
+                # A question the durable budget is holding is the other
+                # exception, and it is the opposite one: the loop has *not*
+                # stopped asking, it is waiting out a cooldown the policy
+                # imposed. Counting those rounds would end the run before the
+                # cooldown expired, which is the retry policy defeating itself.
+                if not self._retry_blocked and (
+                    not situation.in_flight or self._unanswered
+                ):
                     stalled += 1
                 if stalled >= self.max_stalled_rounds:
                     return self._end(situation, stalled=stalled, halted=True)
@@ -585,6 +613,18 @@ class ProjectLoop:
             key: count for key, count in self._asked.items() if key in being_asked
         }
         self._unanswered = set()
+        self._retry_blocked = set()
+
+        if self.retry is not None:
+            # A question this round is not asking has ended its episode, and
+            # its budget goes with it. Persisted rather than merely forgotten,
+            # so the same question returning after a real state change starts
+            # from a fresh row instead of inheriting the one before it.
+            self.retry.store.retire_unasked(
+                project_id=self.project_id,
+                problem_keys=being_asked,
+                now=self.retry.now(),
+            )
 
         if situation.needs_decision:
             await self._ask(asking["decision"], self.master.act, situation)
@@ -662,7 +702,18 @@ class ProjectLoop:
         in the log. That is the whole of the escalation — RAVEL's word for "this
         project has stopped" is the halt, and the caller re-driving the loop is
         the bounded retry.
+
+        **When the loop is wired, the budget is PostgreSQL's.** The sentence
+        above describes the local path, where a run's ending is the escalation.
+        A supervised deployment cannot use that: re-driving the loop is exactly
+        what a supervisor does, so an in-memory budget would be reset by every
+        re-drive. `_ask_with_budget` keeps the count, the cooldowns and the
+        operator gate in `retry_episodes`, and the durable row — not this
+        method's dictionary — is what bounds the calls across restarts.
         """
+        if self.retry is not None:
+            await self._ask_with_budget(key, answer, situation)
+            return
         asked = self._asked.get(key, 0)
         if asked >= self.max_turns_per_question:
             if asked == self.max_turns_per_question:
@@ -676,6 +727,109 @@ class ProjectLoop:
             return
         self._asked[key] = asked + 1
         await answer(situation)
+
+    async def _ask_with_budget(
+        self,
+        key: str,
+        answer: Callable[[Situation], Awaitable[None]],
+        situation: Situation,
+    ) -> None:
+        """Ask one question against the persistent, bounded retry episode.
+
+        The attempt is recorded **before** the turn: a process that dies during
+        the call has still spent it, which is what makes "at most nine model
+        calls" true across restarts rather than only across clean runs. A
+        blocked reservation makes no call at all — that is the cooldown and the
+        operator gate — and records the question as retry-blocked so the stall
+        counter treats the round as a wait.
+
+        A timeout is an unanswered attempt, not a crash: the loop logs it and
+        moves on to the next round, where the cooldown (if the budget's round
+        boundary has arrived) or the next attempt applies. Any other exception
+        propagates, because a Master or Review turn that raised a real fault
+        should be loud rather than silently converted into "the model did not
+        answer".
+        """
+        assert self.retry is not None
+        asked = self._asked.get(key, 0)
+        if asked >= self.max_turns_per_question:
+            # The run's own ceiling still applies. Three attempts per run is
+            # the "round" the durable policy counts, so a run that has spent
+            # them stops and lets the next run — admitted only after the
+            # cooldown — spend the next three. Without this ceiling a run with
+            # the cooldowns behind it would spend all nine attempts in one
+            # sitting, and a run that has stopped asking is also what the
+            # stall counter reads as an ending rather than a silence.
+            if asked == self.max_turns_per_question:
+                logger.warning(
+                    "no answer after %d turns in this run, no longer asking: "
+                    "project=%s question=%s",
+                    asked,
+                    self.project_id,
+                    key,
+                )
+            self._unanswered.add(key)
+            return
+
+        reservation = self.retry.store.reserve(
+            project_id=self.project_id,
+            problem_key=key,
+            state_version=question_state_version(situation, key),
+            now=self.retry.now(),
+        )
+        if not reservation.dispatch:
+            self._retry_blocked.add(key)
+            if reservation.reason == "cooldown":
+                logger.info(
+                    "retry cooldown holds a question: project=%s question=%s "
+                    "attempts=%d until=%s",
+                    self.project_id,
+                    key,
+                    reservation.attempts,
+                    reservation.cooldown_until,
+                )
+            elif (
+                reservation.reason == "awaiting_operator"
+                and reservation.episode_id not in self._escalations_noted
+            ):
+                self._escalations_noted.add(reservation.episode_id)
+                logger.warning(
+                    "question exhausted %d attempts and awaits an operator: "
+                    "project=%s question=%s episode=%s",
+                    reservation.attempts,
+                    self.project_id,
+                    key,
+                    reservation.episode_id,
+                )
+            return
+
+        self._asked[key] = asked + 1
+        try:
+            await self._dispatch(lambda: answer(situation))
+        except TimeoutError:
+            logger.warning(
+                "model turn timed out: project=%s question=%s attempt=%d timeout=%ss",
+                self.project_id,
+                key,
+                reservation.attempts,
+                self.retry.policy.turn_timeout_seconds,
+            )
+
+    async def _dispatch(self, call: Callable[[], Awaitable[None]]) -> None:
+        """Run one model-backed turn under the deployment's limits.
+
+        The slot is taken before the timeout starts, so time spent queued
+        behind the concurrency cap is not charged to the turn. Unwired loops
+        call the port directly: the local one-shot path has no deployment to
+        bound and no persistent episode to time.
+        """
+        if self.retry is None:
+            await call()
+            return
+        async with self.retry.limiter.slot(self.project_id):
+            await asyncio.wait_for(
+                call(), timeout=self.retry.policy.turn_timeout_seconds
+            )
 
     async def _executor_starts(self, situation: Situation) -> None:
         """Hand each node the DAG has cleared to run to the seat that executes it.
@@ -701,7 +855,7 @@ class ProjectLoop:
             if seat is None:
                 continue
             try:
-                await seat.start(node)
+                await self._dispatch(lambda node=node, seat=seat: seat.start(node))
             except Exception:
                 logger.exception(
                     "seat could not start node %s in project %s",
@@ -728,7 +882,12 @@ class ProjectLoop:
         if not turns:
             return
         results = await asyncio.gather(
-            *(seat.act(node, situation) for node, seat, _episode in turns),
+            *(
+                self._dispatch(
+                    lambda node=node, seat=seat: seat.act(node, situation)
+                )
+                for node, seat, _episode in turns
+            ),
             return_exceptions=True,
         )
         for (node, _seat, episode), result in zip(turns, results, strict=True):

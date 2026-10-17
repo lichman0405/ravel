@@ -59,6 +59,8 @@ from ravel.domain.enums import (
     NodeStatus,
     NodeType,
     ProjectStatus,
+    RetryEpisodeStatus,
+    RetryQuestion,
     ReviewCheckpoint,
     ReviewOutcome,
     TerminationStatus,
@@ -176,6 +178,111 @@ class ProjectLeaseRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     renewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RetryEpisodeRow(Base):
+    """One bounded-retry episode for one unanswered question.
+
+    **The row, not a process counter, is the budget.** A supervisor restart
+    constructs a new `ProjectLoop`, and an in-memory attempt count would start
+    again at zero for a question that had already been asked nine times. The
+    identity is `(project, fingerprint, state_version)`: the first names whose
+    project, the second names which question, and the third names the scientific
+    state the question is about. A changed state is a new episode — that is the
+    automatic unlock — while a timer alone never changes the row's budget.
+
+    `status` is automation state and never a `ProjectStatus`. A stalled runtime
+    is not a scientific failure, a success, or an ending; the project keeps the
+    status its own DAG gave it, and this table says only what the runtime will
+    do next about asking again.
+
+    The partial unique index is what "one live episode per question" means. A
+    retired row stays behind as history and does not block its replacement,
+    which is why the predicate lists the three open statuses rather than
+    excluding `RETIRED` from a constraint that could not express "one live row"
+    anyway.
+    """
+
+    __tablename__ = "retry_episodes"
+    __table_args__ = (
+        _enum_constraint("question", RetryQuestion),
+        _enum_constraint("status", RetryEpisodeStatus),
+        CheckConstraint(
+            "attempts >= 0 AND attempts <= 9", name="attempts_within_budget"
+        ),
+        CheckConstraint(
+            "round_number >= 1 AND round_number <= 3", name="round_within_budget"
+        ),
+        CheckConstraint(
+            "(status = 'COOLDOWN') = (cooldown_until IS NOT NULL)",
+            name="cooldown_iff_cooldown_status",
+        ),
+        CheckConstraint(
+            "status <> 'RETIRED' OR retired_at IS NOT NULL",
+            name="retirement_has_a_moment",
+        ),
+        CheckConstraint(
+            "status <> 'AWAITING_OPERATOR' OR escalated_at IS NOT NULL",
+            name="escalation_has_a_moment",
+        ),
+        Index(
+            "uq_retry_episodes_open",
+            "project_id",
+            "fingerprint",
+            "state_version",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('ACTIVE', 'COOLDOWN', 'AWAITING_OPERATOR')"
+            ),
+        ),
+        Index("ix_retry_episodes_project_status", "project_id", "status"),
+    )
+
+    episode_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    #: `decision`, `pre-flight`, `verdict` or `ending` — which power is being
+    #: asked. A closed vocabulary, because a fifth question kind would be a
+    #: new dispatch path rather than a new value in this column.
+    question: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: The loop's full question identity (`what:id1,id2`), kept for a person
+    #: reading the table. The fingerprint is what the index uses.
+    problem_key: Mapped[str] = mapped_column(Text, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    state_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    #: Model calls made for this episode. Advanced *before* the call, so a
+    #: process that dies mid-turn has still spent it.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    cooldown_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    escalated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: The durable escalation's identity: set once, when the ninth attempt
+    #: spends the budget. A consumer dedupes one notification per episode on
+    #: it rather than on the tick that saw it.
+    escalation_event_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    operator_actor: Mapped[str | None] = mapped_column(REF, nullable=True)
+    operator_retried_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retired_reason: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 class ProjectMembershipRow(Base):
