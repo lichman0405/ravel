@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 15:12 Asia/Shanghai",
+  "updated_at": "2026-10-17 15:20 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -42,18 +42,18 @@
       "note": "T01 DONE：独立AC1-AC4复核APPROVE；最终门禁run-20261017-150746 PASS；集成候选7cae892与任务tip f525ceb tree一致，Reviewer确认；ff-only合入cc/ravel-premium-v1。"
     },
     "T02": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T02",
+      "base_sha": "b79fd5287c42ced28d80137e5f3f16e5c9487998",
+      "head_sha": "7cca83e4bddffb2fa4017267c63e136c0ca15baa",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 15:20 Asia/Shanghai",
+      "note": "T02实现中：已merge固定Phase11 c9815f1（merge 7cca83e）；lint PASS；unit 1106 tests/0 failed/2 skipped；空库与Phase10快照迁移均到单head d1f7a40c8e21，marker保留；integration/e2e运行中。"
     },
     "T03": {
       "status": "TODO",

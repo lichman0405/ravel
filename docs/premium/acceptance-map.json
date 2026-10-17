@@ -124,11 +124,40 @@
         "make release-gate（保留原退出码和所有 external 行）"
       ],
       "classification": "internal",
-      "status": "NOT_RUN",
+      "status": "RUNNING",
       "test_nodeids": [],
-      "manual_evidence_refs": [],
-      "execution_commands": [],
-      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+      "manual_evidence_refs": [
+        "PHASE11_ADOPTION.md",
+        "tasklogs/T02.md"
+      ],
+      "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "pytest",
+            "tests/unit",
+            "tests/integration",
+            "tests/e2e",
+            "-q",
+            "-rxXs"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
+          "external": false
+        }
+      ],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。",
+      "database_suite": true
     },
     "T03": {
       "acceptance_ids": [
