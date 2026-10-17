@@ -32,6 +32,8 @@
 | 2026-10-17 18:40 Asia/Shanghai | Reviewer | T01 | 锁修复独立复审：首轮changes_requested（live_research re-export、task默认未生效）；修复后复审APPROVE，P3中断清理复测通过 | `reviews/T01/2.json` APPROVE；AC2 PASS；T01 49 passed；T04 6 passed；无阻塞findings | 集成候选 |
 | 2026-10-17 18:40 Asia/Shanghai | Supervisor | T01 | candidate-T01-lockfix合并最终fix + integration；T01/T04门禁run-183828/run-184042 PASS；release-gate readback CERTIFIED；ff-only推进integration | integration HEAD 31f0841；PROGRESS/T01 source_digest/evidence更新；5/30 DONE | 继续T05/T06 |
 | 2026-10-17 19:00 Asia/Shanghai | Supervisor | T04 | 修复T04后验收harness：ScriptedSeats接受brief、supervisor测试使用同一SCRIPTED_SEAT_OWNER、ScriptedWorker每次start刷新lease binding、brief断言检查binding字段 | 独立复审APPROVE（test-only，无fence绕过）；`test_phase10_supervisor.py`通过前13项，P10-W03时序flake单独重跑通过；ff-only合入integration 53771de | T05 review |
+| 2026-10-17 19:47 Asia/Shanghai | Reviewer | T05 | 独立复审持久重试/冷却/升级，AC1–AC4 | `reviews/T05/1.json` APPROVE；P2 operator路由未接线、P3 per-process global cap/轮内lease检查记录；无阻塞findings | 集成候选 |
+| 2026-10-17 19:47 Asia/Shanghai | Supervisor | T05 | 补 concrete nodeids、migration、make lint到T05门禁；空库迁移run-193645，候选run-194532 PASS；ff-only合入integration | integration HEAD fbebde3；PROGRESS/T05=DONE；6/30 DONE；T06进行中 | 继续T06 |
 
 
 

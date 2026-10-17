@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 19:40 Asia/Shanghai",
+  "updated_at": "2026-10-17 19:47 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "53771de139df62c144305163986e3020f7ea923f",
+  "integration_head_sha": "fbebde3efbcb0ecd6bebba3db3b076249328f918",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -93,32 +93,35 @@
       "note": "T04 重开修复后DONE：per-binding brief文件 + tool server启动快照，18个科研/执行副作用入口require_current_lease；独立复审AC1-AC4 PASS（P2 TOCTOU作为非阻塞hardening记录）；T04 12 passed、candidate gate run-20261017-180741 PASS；候选17d855d与tip tree一致，ff-only合入。历史0e75a91保留。"
     },
     "T05": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T05",
       "base_sha": "b5ad0cad6fe787a4517b44875f6f5f79e0b22174",
-      "head_sha": "9930db5",
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
+      "head_sha": "ad8b06e",
+      "source_digest": "a6fa4c9f80eb09eff79d58e327e7dd622f69ca395ca3aefde6098ecc1a97248b",
+      "review_ref": "reviews/T05/1.json",
+      "gate_refs": [
+        "evidence/T05/run-20261017-194532/manifest.json",
+        "evidence/T05/run-20261017-193645/manifest.json"
+      ],
+      "integration_merge_sha": "fbebde3",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 19:40 Asia/Shanghai",
-      "note": "T05 RUNNING：持久 retry_episodes 表/迁移、RetryPolicy/Store、loop turn timeout/并发上限、supervisor operator_retry/pending_escalations；35 tests + migration gate PASS；等待独立 Review。"
+      "last_updated": "2026-10-17 19:47 Asia/Shanghai",
+      "note": "T05 DONE：retry_episodes持久预算/迁移、RetryPolicy/Store、180s turn timeout + 2/6并发、cooldown/operator gate、pending_escalations；35 tests + migration + lint PASS；空库迁移run-193645、候选run-194532 PASS；独立AC1-AC4复审APPROVE（P2 operator路由/P3 per-process global cap记录）；ff-only合入fbebde3。"
     },
     "T06": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T06-actions",
+      "base_sha": "61d7594",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 19:50 Asia/Shanghai",
+      "note": "T06 RUNNING：基于 T05 tip 的独立工作树实现 Action/审批版本绑定/预算预留；待提交与门禁。"
     },
     "T07": {
       "status": "TODO",
