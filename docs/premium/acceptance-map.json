@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "state": "PLANNED_NOT_EXECUTED",
+  "command_contract_note": "T01 implements task runner/digest/preflight; T22 implements gate/live entrypoints.",
+  "tasks": {
+    "T00": {
+      "acceptance_ids": [
+        "T00-AC1",
+        "T00-AC2",
+        "T00-AC3"
+      ],
+      "gate_entrypoints": [
+        "git status --short",
+        "git diff --check",
+        "Reviewer 对接管清单与文档的一致性审查"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T01": {
+      "acceptance_ids": [
+        "T01-AC1",
+        "T01-AC2",
+        "T01-AC3",
+        "T01-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-preflight",
+        ".venv/bin/python -m pytest tests/premium/T01 -q",
+        "make lint"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T02": {
+      "acceptance_ids": [
+        "T02-AC1",
+        "T02-AC2",
+        "T02-AC3",
+        "T02-AC4"
+      ],
+      "gate_entrypoints": [
+        "make lint",
+        "隔离锁内 .venv/bin/python -m pytest tests/unit tests/integration tests/e2e",
+        "legacy inventory 中全部 internal acceptance 项",
+        "make release-gate（保留原退出码和所有 external 行）"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T03": {
+      "acceptance_ids": [
+        "T03-AC1",
+        "T03-AC2",
+        "T03-AC3"
+      ],
+      "gate_entrypoints": [
+        "git diff --check",
+        "契约 schema 解析/引用检查",
+        "Reviewer 逐 AC 审核"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T04": {
+      "acceptance_ids": [
+        "T04-AC1",
+        "T04-AC2",
+        "T04-AC3",
+        "T04-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T04"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T05": {
+      "acceptance_ids": [
+        "T05-AC1",
+        "T05-AC2",
+        "T05-AC3",
+        "T05-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T05"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T06": {
+      "acceptance_ids": [
+        "T06-AC1",
+        "T06-AC2",
+        "T06-AC3",
+        "T06-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T06"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T07": {
+      "acceptance_ids": [
+        "T07-AC1",
+        "T07-AC2",
+        "T07-AC3",
+        "T07-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T07"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T08": {
+      "acceptance_ids": [
+        "T08-AC1",
+        "T08-AC2",
+        "T08-AC3",
+        "T08-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T08"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T09": {
+      "acceptance_ids": [
+        "T09-AC1",
+        "T09-AC2",
+        "T09-AC3",
+        "T09-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T09"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T10": {
+      "acceptance_ids": [
+        "T10-AC1",
+        "T10-AC2",
+        "T10-AC3",
+        "T10-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T10"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T11": {
+      "acceptance_ids": [
+        "T11-AC1",
+        "T11-AC2",
+        "T11-AC3",
+        "T11-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T11"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T12": {
+      "acceptance_ids": [
+        "T12-AC1",
+        "T12-AC2",
+        "T12-AC3",
+        "T12-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T12"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T13": {
+      "acceptance_ids": [
+        "T13-AC1",
+        "T13-AC2",
+        "T13-AC3",
+        "T13-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T13"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T14": {
+      "acceptance_ids": [
+        "T14-AC1",
+        "T14-AC2",
+        "T14-AC3",
+        "T14-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T14"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T15": {
+      "acceptance_ids": [
+        "T15-AC1",
+        "T15-AC2",
+        "T15-AC3",
+        "T15-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T15"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T16": {
+      "acceptance_ids": [
+        "T16-AC1",
+        "T16-AC2",
+        "T16-AC3",
+        "T16-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T16"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T17": {
+      "acceptance_ids": [
+        "T17-AC1",
+        "T17-AC2",
+        "T17-AC3",
+        "T17-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T17"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T18": {
+      "acceptance_ids": [
+        "T18-AC1",
+        "T18-AC2",
+        "T18-AC3",
+        "T18-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T18"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T19": {
+      "acceptance_ids": [
+        "T19-AC1",
+        "T19-AC2",
+        "T19-AC3",
+        "T19-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T19"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T20": {
+      "acceptance_ids": [
+        "T20-AC1",
+        "T20-AC2",
+        "T20-AC3",
+        "T20-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T20"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T21": {
+      "acceptance_ids": [
+        "T21-AC1",
+        "T21-AC2",
+        "T21-AC3",
+        "T21-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T21"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T22": {
+      "acceptance_ids": [
+        "T22-AC1",
+        "T22-AC2",
+        "T22-AC3",
+        "T22-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-task TASK=T22"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T23": {
+      "acceptance_ids": [
+        "T23-AC1",
+        "T23-AC2",
+        "T23-AC3",
+        "T23-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-gate PROFILE=internal",
+        "Reviewer最终集成审查",
+        "git diff --check",
+        "合并后源码tree核对"
+      ],
+      "classification": "internal",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T24": {
+      "acceptance_ids": [
+        "T24-AC1",
+        "T24-AC2",
+        "T24-AC3"
+      ],
+      "gate_entrypoints": [
+        "make premium-live TASK=T24"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T25": {
+      "acceptance_ids": [
+        "T25-AC1",
+        "T25-AC2",
+        "T25-AC3"
+      ],
+      "gate_entrypoints": [
+        "make premium-live TASK=T25"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T26": {
+      "acceptance_ids": [
+        "T26-AC1",
+        "T26-AC2",
+        "T26-AC3"
+      ],
+      "gate_entrypoints": [
+        "make premium-live TASK=T26",
+        "实验负责人真实签收与回传证明"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T27": {
+      "acceptance_ids": [
+        "T27-AC1",
+        "T27-AC2",
+        "T27-AC3"
+      ],
+      "gate_entrypoints": [
+        "make premium-live TASK=T27"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T28": {
+      "acceptance_ids": [
+        "T28-AC1",
+        "T28-AC2",
+        "T28-AC3"
+      ],
+      "gate_entrypoints": [
+        "make premium-live TASK=T28"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    },
+    "T29": {
+      "acceptance_ids": [
+        "T29-AC1",
+        "T29-AC2",
+        "T29-AC3",
+        "T29-AC4"
+      ],
+      "gate_entrypoints": [
+        "make premium-gate PROFILE=certified",
+        "make release-gate",
+        "Reviewer最终认证审查"
+      ],
+      "classification": "external",
+      "status": "NOT_RUN",
+      "test_nodeids": [],
+      "manual_evidence_refs": [],
+      "execution_commands": [],
+      "fill_rule": "派发前填写实际命令与AC→nodeid/人工证据映射；未填不可PASS。gate_entrypoints是外层入口，禁止作为自身递归执行命令。"
+    }
+  }
+}

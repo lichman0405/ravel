@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "status": "PENDING_T01_COLLECTION",
+  "collected_at": null,
+  "source_sha": null,
+  "tests": [],
+  "rule": "必须实际pytest collect后填全部nodeid；空清单不可用于任何PASS。"
+}

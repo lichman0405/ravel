@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "task_id": "Txx",
+  "attempt": 1,
+  "reviewer_id": null,
+  "base_sha": null,
+  "candidate_sha": null,
+  "source_digest": null,
+  "reviewed_at": null,
+  "decision": null,
+  "acceptance_results": [],
+  "gate_evidence_refs": [],
+  "findings": [],
+  "integration_candidate": false,
+  "finding_shape": {
+    "priority": "P0/P1/P2/P3",
+    "file": null,
+    "line": null,
+    "trigger": null,
+    "impact": null,
+    "acceptance_id": null,
+    "required_fix": null,
+    "advisory": false
+  }
+}

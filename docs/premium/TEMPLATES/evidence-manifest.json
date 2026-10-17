@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "run_id": null,
+  "task_id": null,
+  "acceptance_ids": [],
+  "started_at_utc": null,
+  "started_at_beijing": null,
+  "source_commit": null,
+  "source_digest": null,
+  "platform": null,
+  "versions": {},
+  "commands": [],
+  "cwd": null,
+  "exit_code": null,
+  "junit_path": null,
+  "log_path": null,
+  "artifacts": [],
+  "data_mode": null,
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": null,
+  "blocked_reason": null
+}

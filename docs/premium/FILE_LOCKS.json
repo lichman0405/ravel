@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "writer": "SUPERVISOR_ONLY",
+  "active_locks": [],
+  "shared_paths": [
+    "src/ravel/config.py",
+    "src/ravel/domain/enums.py",
+    "src/ravel/state/tables.py",
+    "src/ravel/state/mapping.py",
+    "src/ravel/state/guards.py",
+    "src/ravel/state/migrations/**",
+    "src/ravel/gateway/app.py",
+    "src/ravel/mcp/registry.py",
+    "pyproject.toml",
+    "Makefile",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "docs/premium/CONTRACTS.md",
+    "schemas/**"
+  ],
+  "database_tests": {
+    "mode": "SYSTEM_WIDE_EXCLUSIVE",
+    "lock_path": null,
+    "holder": null
+  },
+  "lock_shape": {
+    "path": null,
+    "task_id": null,
+    "owner": null,
+    "branch": null,
+    "granted_at": null,
+    "release_condition": null
+  }
+}
