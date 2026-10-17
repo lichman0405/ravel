@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "task_id": "T01",
+  "attempt": 2,
+  "reviewer_id": "independent-T01-AC2-lock-rereview",
+  "base_sha": "066fe498cef90809a597d84157ad2fae830c7097",
+  "candidate_sha": "31a7205",
+  "source_digest": "f9e09f4d43d1dab24750b08f9a98c887b6c401f590e02205bde03b9ebd5e6522",
+  "reviewed_at": "2026-10-17 18:35 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T01-AC2",
+      "result": "PASS",
+      "evidence": "premium-task, release-gate and direct pytest share one lock file. pytest children own the lock through the database fixture; runners lock only non-pytest database commands with no parent/child deadlock. The lock identity uses RAVEL_TEST_DB with host/port from env > .env > defaults; the shared directory comes from Git's common dir; an unwritable directory fails hard. Process-local reentrancy handles composed session fixtures while external processes still wait/refuse. The independent re-review approved after the P1/P2/P3 fixes; final P3 cleanup was independently traced."
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "file": "tests/live_research/conftest.py",
+      "line": 32,
+      "trigger": "lock fixture not re-exported",
+      "impact": "live-research fixture chain would fail once it reached database",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Fixed: _database_test_lock imported.",
+      "advisory": false
+    },
+    {
+      "priority": "P1",
+      "file": "scripts/premium_task.py",
+      "line": 636,
+      "trigger": "task-level database default omitted from per-command decision",
+      "impact": "an undeclared non-pytest database command could run without the lock while the manifest said locked",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Fixed: needs_database_declared distinguishes an explicit false from the task default.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/state/db_lock.py",
+      "line": 104,
+      "trigger": "host/port identity split between exported env and .env",
+      "impact": "two locks for the same test database when .env is customized",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Fixed: env > repo .env > defaults, matching Settings; test DB name stays RAVEL_TEST_DB.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "docs/premium/evidence/T01/lock-competition-20261017-1820/manifest.json",
+      "line": null,
+      "trigger": "old evidence bound to pre-redesign code",
+      "impact": "claims not tied to reviewed code",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Fixed: new artifact binds 0e8994b/digest ec07e0ba and a fresh cross-WSL/container refusal; final gates at 183828/184042.",
+      "advisory": false
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/db_lock.py",
+      "line": 186,
+      "trigger": "interrupt between process-local depth and return",
+      "impact": "later locks could bypass flock in the same process",
+      "acceptance_id": "T01-AC2",
+      "required_fix": "Fixed at 31a7205; the except path unwinds the depth and closes the handle.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The new declaration test pins normalize_command, not the run_task branch itself; that branch is verified by inspection.",
+    "Heuristic boundary: a shell wrapper that starts pytest indirectly takes the parent lock while the pytest child waits. No current premium task or gate row has that shape.",
+    "Windows-native msvcrt and POSIX flock are different mechanisms; the proven crossing is WSL-host to Linux container.",
+    "A relative RAVEL_PREMIUM_LOCK_DIR resolves against each process's cwd; internal callers use absolute paths.",
+    "The release-gate CERTIFIED result is the single research-readback row; the full gate remains open under BLOCKERS.md B03."
+  ],
+  "gate_evidence_refs": [
+    "evidence/T01/lock-competition-20261017-1820/manifest.json",
+    "evidence/T01/run-20261017-183828/manifest.json",
+    "evidence/T01/run-20261017-183533/manifest.json"
+  ],
+  "integration_candidate": false
+}
