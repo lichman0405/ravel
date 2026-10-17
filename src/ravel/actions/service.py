@@ -419,6 +419,17 @@ class ActionService:
                 first), or its reservation is inconsistent.
         """
         action, row = self.actions.lock(action_id)
+        if action.status in (
+            ActionStatus.CLAIMED,
+            ActionStatus.ACCEPTED,
+            ActionStatus.UNKNOWN,
+            ActionStatus.COMPLETED,
+            ActionStatus.FAILED_CONFIRMED,
+            ActionStatus.CANCELLED,
+            ActionStatus.REJECTED,
+            ActionStatus.EXPIRED,
+        ):
+            return action, False
         if action.is_expired():
             self._expire_locked(action, row)
             raise ActionConflict(
