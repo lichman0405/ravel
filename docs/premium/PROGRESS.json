@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 19:47 Asia/Shanghai",
+  "updated_at": "2026-10-17 21:00 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "fbebde3efbcb0ecd6bebba3db3b076249328f918",
+  "integration_head_sha": "be98bd8749a902535efa33cf8237959c5173543c",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -110,21 +110,21 @@
       "note": "T05 DONE：retry_episodes持久预算/迁移、RetryPolicy/Store、180s turn timeout + 2/6并发、cooldown/operator gate、pending_escalations；35 tests + migration + lint PASS；空库迁移run-193645、候选run-194532 PASS；独立AC1-AC4复审APPROVE（P2 operator路由/P3 per-process global cap记录）；ff-only合入fbebde3。"
     },
     "T06": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T06-actions",
       "base_sha": "61d7594",
-      "head_sha": "c9d5235",
-      "source_digest": null,
-      "review_ref": null,
+      "head_sha": "0520e4e5985d5cda1506753f5f86484257a99cb9",
+      "source_digest": "00c830f71d152477cafd1b047a1188bc3f78f2554c7a1061c1232dd9205d78ea",
+      "review_ref": "reviews/T06/1.json",
       "gate_refs": [
-        "evidence/T06/run-20261017-205353/manifest.json",
+        "evidence/T06/run-20261017-205746/manifest.json",
         "evidence/T06/run-20261017-204258/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "be98bd8749a902535efa33cf8237959c5173543c",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 20:47 Asia/Shanghai",
-      "note": "T06 RUNNING：Action/审批版本绑定/预算预留/start_execution入口/迁移；45 tests + migration + lint PASS；已合入integration；等待独立AC1-AC4复审。"
+      "last_updated": "2026-10-17 21:00 Asia/Shanghai",
+      "note": "T06 DONE：Action/审批版本绑定/预算预留/CNY定点/UNKNOWN/幂等/start_execution入口/gateway resolve sync/迁移；46 tests + migration + lint PASS；fresh DB run-204258、candidate run-205746 PASS；独立AC1-AC4复审APPROVE（P2 outcome回调/attempt=1接线明确留给T09/T11/T17/T19；P3覆盖项记录）；ff-only合入be98bd8。"
     },
     "T07": {
       "status": "TODO",
