@@ -1,0 +1,26 @@
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 5c2355f96e2a, initial schema
+INFO  [alembic.runtime.migration] Running upgrade 5c2355f96e2a -> d3e067ead13a, evidence source snapshots are object keys, not identifiers
+INFO  [alembic.runtime.migration] Running upgrade d3e067ead13a -> 603e26d7e0c4, backend jobs, the in-flight record of one attempt
+INFO  [alembic.runtime.migration] Running upgrade 603e26d7e0c4 -> cae8d84d9792, worker messages belong to a project
+INFO  [alembic.runtime.migration] Running upgrade cae8d84d9792 -> 7b1f4c2a90de, a project can end without answering the question
+INFO  [alembic.runtime.migration] Running upgrade 7b1f4c2a90de -> 3d9a6f01b7c2, a review measures against the criteria the node was given
+INFO  [alembic.runtime.migration] Running upgrade 3d9a6f01b7c2 -> 9e4c7b12af03, a node can wait on master before it runs
+INFO  [alembic.runtime.migration] Running upgrade 9e4c7b12af03 -> f559c62b222e, an inconclusive ending is a decision, so it needs a type
+INFO  [alembic.runtime.migration] Running upgrade f559c62b222e -> 7c1d9b40e6a2, a deviation can be resolved, which is the one UPDATE it permits
+INFO  [alembic.runtime.migration] Running upgrade 7c1d9b40e6a2 -> 2b8e4f7c1a35, an attempt belongs to a contract version
+INFO  [alembic.runtime.migration] Running upgrade 2b8e4f7c1a35 -> 4a7c1e93d5b8, a source remembers the tier it was given
+INFO  [alembic.runtime.migration] Running upgrade 4a7c1e93d5b8 -> 9d2f5b7c4e18, a login chain is a history, not a row that moves
+INFO  [alembic.runtime.migration] Running upgrade 9d2f5b7c4e18 -> b1c4a7e2f903, the conversation is project state
+INFO  [alembic.runtime.migration] Running upgrade b1c4a7e2f903 -> d4e7a1b90c26, a lost run is not a result
+INFO  [alembic.runtime.migration] Running upgrade d4e7a1b90c26 -> c8f2a5d10e47, a contract names the environment it runs in
+INFO  [alembic.runtime.migration] Running upgrade c8f2a5d10e47 -> e1b7c3f4a920, preparation is not a decision
+INFO  [alembic.runtime.migration] Running upgrade e1b7c3f4a920 -> a7c3e5b1f284, a bench keeps the terms it was given
+INFO  [alembic.runtime.migration] Running upgrade a7c3e5b1f284 -> b2f8d1c73a55, a membership can be withdrawn
+INFO  [alembic.runtime.migration] Running upgrade b2f8d1c73a55 -> c5a9e2f01b73, a process can say it is alive
+INFO  [alembic.runtime.migration] Running upgrade c5a9e2f01b73 -> d1f7a40c8e21, a process can say it is going
+INFO  [alembic.runtime.migration] Running upgrade d1f7a40c8e21 -> b7e4c2a1d9f3, project leases: one driver per project, with a monotonic epoch
+INFO  [alembic.runtime.migration] Running upgrade b7e4c2a1d9f3 -> c3a9f1d2e4b7, retry episodes: a persisted budget for unanswered model turns
