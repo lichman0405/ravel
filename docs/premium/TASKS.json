@@ -1,0 +1,1529 @@
+{
+  "schema_version": 1,
+  "target_repo": "C:/Users/lishi/code/ravel",
+  "local_observed_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
+  "phase11_source_sha": "c9815f13282c6df85e76e616679473511e94f812",
+  "tasks": [
+    {
+      "id": "T00",
+      "slug": "takeover",
+      "title": "接管本地仓库与建立开发记录",
+      "depends_on": [],
+      "lane": "SUPERVISOR",
+      "files": [
+        "docs/premium/**；根 CLAUDE.md 仅追加本包入口；不改产品代码"
+      ],
+      "steps": [
+        "目标只能是 C:/Users/lishi/code/ravel。读取 git status --porcelain=v1、branch、HEAD、remote -v、worktree list 和适用的 AGENTS.md/CLAUDE.md；不读取或输出 .env 值。",
+        "核对本地 main 的已观察基线 79db86e07d8c2e541fd366d6667b54ee76f671fb；执行时若 HEAD 改变，保存实际 SHA 与差异清单，不回退到该 SHA。",
+        "若工作区出现用户修改，逐文件记录，禁止 stash、覆盖或代为 commit；从当前已提交 HEAD 创建独立 worktree，保留原工作区。若修改涉及将要编辑的同一功能，记录 BLOCKED_USER_INPUT 并继续其他任务。",
+        "创建本地集成分支 cc/ravel-premium-v1，保存 MAIN_BASE_SHA、ORIGINAL_BRANCH 和 INTEGRATION_WORKTREE。若同名已存在，读取既有进度并恢复，禁止覆盖重建。",
+        "把本交接包复制到 docs/premium，初始化本包列出的状态文件、日志目录、任务与审查记录。已存在同名文件时保留并进行内容合并，禁止把已有进度清零。",
+        "在根 CLAUDE.md 追加本包是高端版开发入口及 SPEC.md 的明确范围更新；保留原五角色、证据和 DAG 权限规则。提交 docs(T00): adopt premium development contract。"
+      ],
+      "acceptance": [
+        {
+          "id": "T00-AC1",
+          "requirement": "真实本地路径、分支、SHA、dirty 状态及所有现有 worktree 已记录；没有触碰用户未提交文件。"
+        },
+        {
+          "id": "T00-AC2",
+          "requirement": "docs/premium 下 30 个任务 ID 唯一且依赖无环，所有状态初值为 TODO；T00 自身只有经 Reviewer 审查后才进入 DONE。"
+        },
+        {
+          "id": "T00-AC3",
+          "requirement": "Reviewer 能从一次启动提示定位规则、任务、roadmap、进度、日志和外部阻塞。"
+        }
+      ],
+      "deliverables": [
+        "BASELINE.md",
+        "PROGRESS.json / PROGRESS.md",
+        "DEVLOG.md",
+        "FILE_LOCKS.json",
+        "T00 commit SHA"
+      ],
+      "gates": [
+        "git status --short",
+        "git diff --check",
+        "Reviewer 对接管清单与文档的一致性审查"
+      ],
+      "card": "TASKS/T00-takeover.md",
+      "branch": "cc/T00-takeover"
+    },
+    {
+      "id": "T01",
+      "slug": "environment-gates",
+      "title": "Linux 环境、测试隔离及证据执行入口",
+      "depends_on": [
+        "T00"
+      ],
+      "lane": "PLATFORM",
+      "files": [
+        "scripts/premium_task.py（新）",
+        "scripts/premium_preflight.py（新）",
+        "tests/premium/T01/**（新）",
+        "Makefile、pyproject.toml、测试配置：共享文件锁"
+      ],
+      "steps": [
+        "后端标准环境固定 Ubuntu 24.04 x86_64 / Python 3.12 / Docker Engine+Compose v2。优先使用已有 WSL2 Ubuntu 或已有获准 Linux 主机；不自动安装操作系统、重启或重装 Docker。Windows 只承担桌面构建与 Git。",
+        "记录后端路径与 Windows 仓库之间的映射；全部实现必须回到同一本地 Git 提交图。若后端在 Linux 镜像工作区中，必须记录所检出 SHA 和回传分支，禁止 rsync 未提交产品代码冒充已验证提交。",
+        "实现 make premium-preflight、make premium-source-digest 和 make premium-task TASK=Txx。后者读取 acceptance-map.json 的底层execution_commands和AC映射，禁止递归调用自身；串行执行、保存退出码、日志、JUnit、被测SHA、dirty状态及环境版本；失败不能被后续命令覆盖。",
+        "所有可能访问数据库的测试执行器使用同一个系统级排他锁；锁路径由数据库/端口组合哈希生成，放在共享运行目录，跨 worktree 一致。仅修改 queue 名不能替代数据库隔离；拒绝非测试数据库名。",
+        "收集当前全部 pytest nodeid，建立 legacy-inventory.json：每项必须归入 internal 或 external，并列出依据、原 marker、外部资源；无法分类时失败。保留现有 suite 和 gate，不能删测试、统一 xfail 或用 -k 隐藏失败。",
+        "运行已有静态检查及可用的确定性基线，真实 DSH/Internet/HPC/Lab 缺资源逐项标 BLOCKED_EXTERNAL。未运行的测试不能标 PASS。生成 baseline-results.json。"
+      ],
+      "acceptance": [
+        {
+          "id": "T01-AC1",
+          "requirement": "缺少 Linux/Python/Docker 时 preflight 非零并精确列出依赖，不能声称后端验收通过。"
+        },
+        {
+          "id": "T01-AC2",
+          "requirement": "第二个测试执行器竞争同一数据库时等待或明确拒绝，不能开始 TRUNCATE。"
+        },
+        {
+          "id": "T01-AC3",
+          "requirement": "故意失败的子命令使 premium-task 非零；空测试选择、未映射 AC、无理由 skip 均失败。"
+        },
+        {
+          "id": "T01-AC4",
+          "requirement": "日志没有凭据，产物包含运行时间、命令、退出码、SHA 与环境；预先收集失败亦不能得到空白 PASS。"
+        }
+      ],
+      "deliverables": [
+        "运行入口",
+        "legacy-inventory.json",
+        "acceptance-map.json 初版",
+        "baseline-results.json",
+        "环境映射"
+      ],
+      "gates": [
+        "make premium-preflight",
+        ".venv/bin/python -m pytest tests/premium/T01 -q",
+        "make lint"
+      ],
+      "card": "TASKS/T01-environment-gates.md",
+      "branch": "cc/T01-environment-gates"
+    },
+    {
+      "id": "T02",
+      "slug": "phase11-adoption",
+      "title": "审查并引入已存在的 Phase 11",
+      "depends_on": [
+        "T00",
+        "T01"
+      ],
+      "lane": "BASELINE",
+      "files": [
+        "上游 Phase11 的 174 个差异文件，仅在本任务分支整批接管；此任务集成前禁止其他任务写这些路径"
+      ],
+      "steps": [
+        "候选源固定 https://github.com/lichman0405/ravel 的 c9815f13282c6df85e76e616679473511e94f812，不跟随最新 main。fetch 前检查 remote；不更改 remote URL。通过可信官方 URL 获取该对象，保存取得方式。",
+        "用 git merge-base --is-ancestor 检查本地基线与候选源关系；已知观察基线 79db86e 是该源祖先。若执行时不是祖先，不盲合并，先保存分歧清单并形成单独适配决定。",
+        "从集成分支创建 cc/T02-phase11-adoption，merge --no-ff 固定候选 SHA，保留上游历史；docs/premium 与 CLAUDE 范围入口冲突逐行保留双方有效要求。禁止 reset 本地 main 到远端。",
+        "Reviewer 先按权限、migration、Temporal 恢复、Slurm 提交幂等、实验人员回传、证据深读六类检查差异；已有代码发现缺陷就在本分支修复并追加 commit。",
+        "更新测试清单覆盖 Phase11 所有新增项；运行 legacy deterministic suites 与 Phase11 内部项；真实集群和真人实验缺口保持 external，不把仓库旧报告当本轮测试。",
+        "记录 imported SHA、merge SHA、差异、修复和门禁；通过后交 Supervisor 合并集成分支。"
+      ],
+      "acceptance": [
+        {
+          "id": "T02-AC1",
+          "requirement": "现有 Phase11 的 reconcile/deepread/preparation/Slurm/HumanLab/服务管理/角色界面代码已存在于候选提交，并在本轮完成确定性验收。"
+        },
+        {
+          "id": "T02-AC2",
+          "requirement": "所有 migration 在独立测试库从空库升级、从本地 Phase10 数据快照升级均成功；既有记录可读且不被篡改。"
+        },
+        {
+          "id": "T02-AC3",
+          "requirement": "源码与测试明确 simulated、真实 research、真实 HPC、真人实验的不同状态；外部未验证保持 BLOCKED_EXTERNAL。"
+        },
+        {
+          "id": "T02-AC4",
+          "requirement": "Reviewer 审查候选完整 diff 和集成候选树，旧 V0/Phase10 不出现未解释回归。"
+        }
+      ],
+      "deliverables": [
+        "PHASE11_ADOPTION.md",
+        "迁移与回归报告",
+        "Phase11 源码历史",
+        "更新的 legacy-inventory"
+      ],
+      "gates": [
+        "make lint",
+        "隔离锁内 .venv/bin/python -m pytest tests/unit tests/integration tests/e2e",
+        "legacy inventory 中全部 internal acceptance 项",
+        "make release-gate（保留原退出码和所有 external 行）"
+      ],
+      "card": "TASKS/T02-phase11-adoption.md",
+      "branch": "cc/T02-phase11-adoption"
+    },
+    {
+      "id": "T03",
+      "slug": "contracts",
+      "title": "冻结高端版接口、范围与 AC 映射",
+      "depends_on": [
+        "T02"
+      ],
+      "lane": "CONTRACT",
+      "files": [
+        "docs/premium/CONTRACTS.md",
+        "docs/premium/SPEC.md",
+        "schemas/premium/**（新）",
+        "docs/premium/acceptance-map.json"
+      ],
+      "steps": [
+        "逐项落实 CONTRACTS.md 中定义的 Lease、Action、Budget、Mailbox、Sandbox、API/Event、报告契约，不另建平行 Project/DAG/Evidence 系统。",
+        "为每个新持久化实体列主键、项目外键、唯一约束、状态转换、只读/可写角色及迁移计划；复用现有 Envelope/Approval/Outbox 时列出适配映射。",
+        "冻结 v1 API 的路径、请求/响应示例、鉴权、错误码、分页和重连语义；生成计划不是产品实现，但须足以让前后端独立开发。",
+        "把每项 T04–T29 的 AC 映射到测试文件/场景或人工证据格式；外部项不能混入 internal PASS。"
+      ],
+      "acceptance": [
+        {
+          "id": "T03-AC1",
+          "requirement": "Reviewer 确认接口字段、错误及状态转换完整；不存在让模型指定可信身份的参数。"
+        },
+        {
+          "id": "T03-AC2",
+          "requirement": "五类产品角色没有扩充，Master 的 DAG/contract 决策权没有转移给开发 Supervisor、桌面用户或执行器。"
+        },
+        {
+          "id": "T03-AC3",
+          "requirement": "T04–T29 的每项 AC 有唯一 ID、类型与预期证据，任务依赖与接口版本一致。"
+        }
+      ],
+      "deliverables": [
+        "CONTRACTS.md v1",
+        "schemas/premium",
+        "acceptance-map.json 完整版",
+        "ADR-001"
+      ],
+      "gates": [
+        "git diff --check",
+        "契约 schema 解析/引用检查",
+        "Reviewer 逐 AC 审核"
+      ],
+      "card": "TASKS/T03-contracts.md",
+      "branch": "cc/T03-contracts"
+    },
+    {
+      "id": "T04",
+      "slug": "project-lease",
+      "title": "Supervisor 项目租约与过期进程隔离",
+      "depends_on": [
+        "T03"
+      ],
+      "lane": "RUNTIME",
+      "files": [
+        "src/ravel/execution/supervisor.py",
+        "src/ravel/execution/leases.py（新）",
+        "tests/premium/T04/**",
+        "租约表/migration、config：共享锁"
+      ],
+      "steps": [
+        "实现每 Project 的数据库租约、持有者 ID、单调 fencing epoch；默认 TTL=60 秒、续租=15 秒，数据库时间为准。",
+        "驱动 Agent turn、DAG mutation 请求和启动 execution 的确定性入口验证租约 epoch；通过服务端 scope 传递，不由模型填写。",
+        "续租失败或租约丢失立即停止新的 turn 与外部提交；已存在 Temporal/HPC 作业由新持有者查询恢复，不重复提交。",
+        "把 lease 状态加入运维只读投影；正常退出条件释放，不允许旧进程释放新 epoch 的租约。"
+      ],
+      "acceptance": [
+        {
+          "id": "T04-AC1",
+          "requirement": "两个 Supervisor 同时抢同一 Project，只有一个能调用 Agent 和提交执行。"
+        },
+        {
+          "id": "T04-AC2",
+          "requirement": "模拟 TTL 过期后新 owner 获得更大 epoch；旧 owner 的写入与 start 被拒绝。"
+        },
+        {
+          "id": "T04-AC3",
+          "requirement": "强停持有者后恢复项目，已提交任务未重复；数据库中断不会授予第二套本地权威。"
+        },
+        {
+          "id": "T04-AC4",
+          "requirement": "不同 Project 能由不同持有者并行推进，pause/用户权限检查仍生效。"
+        }
+      ],
+      "deliverables": [
+        "租约实现/迁移",
+        "竞争与故障注入证据",
+        "运维状态字段"
+      ],
+      "gates": [
+        "make premium-task TASK=T04"
+      ],
+      "card": "TASKS/T04-project-lease.md",
+      "branch": "cc/T04-project-lease"
+    },
+    {
+      "id": "T05",
+      "slug": "bounded-retry",
+      "title": "持久化重问限制、冷却与停滞通知",
+      "depends_on": [
+        "T04"
+      ],
+      "lane": "RUNTIME",
+      "files": [
+        "src/ravel/execution/loop.py",
+        "src/ravel/execution/supervisor.py",
+        "src/ravel/execution/retry_policy.py（新）",
+        "tests/premium/T05/**",
+        "重试状态表/config：共享锁"
+      ],
+      "steps": [
+        "对 project/问题指纹/相关状态版本持久化计数；每轮最多3次、最多3轮，轮间冷却60秒和300秒，达到9次后锁为 AWAITING_OPERATOR，Supervisor 重启不清零。",
+        "默认模型 turn 超时180秒，最多2个并发模型请求/Project、部署全局最多6个；到达已有项目预算则更早停止。操作员显式重试或相关科学状态版本变化才解锁，单纯 timer 不解锁。",
+        "仅产生一条 durable escalation 事件与待处理项，不每 tick 发消息；保留 Project 的科学状态，不把运行故障写成科学失败或直接 SUCCESS。",
+        "有正常运行中的长时计算或等待真人实验，不累计为模型停滞。"
+      ],
+      "acceptance": [
+        {
+          "id": "T05-AC1",
+          "requirement": "无响应问题跨10次 Supervisor 重启总模型调用仍不超过9次；无新状态时不自动恢复调用。"
+        },
+        {
+          "id": "T05-AC2",
+          "requirement": "冷却期间没有 Agent 请求；人为重试记录操作者和新的 retry episode。"
+        },
+        {
+          "id": "T05-AC3",
+          "requirement": "长 HPC/真人等待不被误判；通知每 episode 一条。"
+        },
+        {
+          "id": "T05-AC4",
+          "requirement": "Project 终止、pause、失去租约均能停止新 turn，保留既有证据和决定。"
+        }
+      ],
+      "deliverables": [
+        "持久化重试策略",
+        "停滞投影",
+        "确定性时间/重启测试"
+      ],
+      "gates": [
+        "make premium-task TASK=T05"
+      ],
+      "card": "TASKS/T05-bounded-retry.md",
+      "branch": "cc/T05-bounded-retry"
+    },
+    {
+      "id": "T06",
+      "slug": "actions-budget",
+      "title": "有版本审批、执行 Action 与资源预算",
+      "depends_on": [
+        "T03"
+      ],
+      "lane": "AUTHORITY",
+      "files": [
+        "src/ravel/actions/**（新）",
+        "src/ravel/budgets/**（新）",
+        "src/ravel/gateway/routes/control.py",
+        "tests/premium/T06/**",
+        "domain/state/mcp/config：共享锁"
+      ],
+      "steps": [
+        "复用现有 AuthorityEnvelope 和 Approval，通过 Action 绑定 exact payload_hash、contract_version、actor、recipient/target、budget、expires_at；默认审批有效24小时。",
+        "原子执行前校验身份、当前 Envelope、租约、审批版本、有效期与额度；内容变更创建新 Action/审批。",
+        "按 Project+cluster 做排队/资源预留，费用币种使用 CNY 定点数，预估与实耗分列；未知实际费用标 UNKNOWN，不能当0。",
+        "默认项目并发计算2、部署全局8；测试上限1 CPU小时/作业、0 GPU、24小时等待、预算必须由 Owner 显式配置，未配置付费额度=0。参数属于配置默认，不能覆盖用户已有更严 Envelope。",
+        "Action 状态按 CONTRACTS：不确定的外部提交进入 UNKNOWN，资源预留保留直到核对；禁止重试造重复副作用。"
+      ],
+      "acceptance": [
+        {
+          "id": "T06-AC1",
+          "requirement": "两个并发请求不能突破剩余额度；取消/已知拒绝释放、未知结果不释放。"
+        },
+        {
+          "id": "T06-AC2",
+          "requirement": "批准后修改收件人/输入/contract/额度均导致旧审批无效；过期或撤销成员不能执行。"
+        },
+        {
+          "id": "T06-AC3",
+          "requirement": "重复 Action ID 返回原状态，不能重复执行；HPC 和邮件分别使用其实际可保证的幂等策略。"
+        },
+        {
+          "id": "T06-AC4",
+          "requirement": "User/Research/Review/Worker 仍不能直接改变 Scientific DAG 或冻结标准。"
+        }
+      ],
+      "deliverables": [
+        "Action/预算实现",
+        "审批 API 兼容映射",
+        "资源竞争与版本测试"
+      ],
+      "gates": [
+        "make premium-task TASK=T06"
+      ],
+      "card": "TASKS/T06-actions-budget.md",
+      "branch": "cc/T06-actions-budget"
+    },
+    {
+      "id": "T07",
+      "slug": "gateway-security",
+      "title": "云端 Gateway 与来源/上传边界",
+      "depends_on": [
+        "T03"
+      ],
+      "lane": "SECURITY",
+      "files": [
+        "src/ravel/gateway/auth/**",
+        "src/ravel/gateway/routes/artifacts.py",
+        "src/ravel/research/addressing.py",
+        "src/ravel/research/fetching.py",
+        "tests/premium/T07/**",
+        "gateway/app/config：共享锁"
+      ],
+      "steps": [
+        "依据现有 SECURITY_NOTES/KNOWN_LIMITATIONS 建立逐项处置表；本任务必须覆盖凭据、跨项目访问、源抓取 SSRF、上传内存上限和公开入口。",
+        "生产启动拒绝开发 JWT/数据库/存储凭据；默认服务仅私网/loopback；配置 HTTPS 反代和 WebSocket 精确 Origin allowlist。登录失败按源IP+账号限流：5次/分钟，15分钟内累计20次锁该组合15分钟。",
+        "撤销 membership 后所有新 API 和活动流下一次权限检查被拒绝，活动流检查间隔不超过5秒；若实现账号停用，须显式字段和审计迁移。",
+        "来源网关逐跳验证重定向目标、限制私网/loopback/link-local/metadata，防止DNS重绑定；T07完成HTTP连接钉住与浏览器fail-closed入口：T19沙箱未绑定之前拒绝浏览器抓取，只保留受控真实HTTP/API研究；不在宿主无隔离启动Playwright。T19完成受限浏览器沙箱联调；科学站点allowlist不等于允许私网目标。",
+        "上传改为流式，默认每文件64MiB，超限413并回收临时对象；禁止路径穿越、压缩炸弹自动解压与凭据出现在异常/日志。"
+      ],
+      "acceptance": [
+        {
+          "id": "T07-AC1",
+          "requirement": "跨项目读写、撤权后事件流、伪造身份均被拒绝；Owner 不能调用 DAG mutation。"
+        },
+        {
+          "id": "T07-AC2",
+          "requirement": "HTTP公开URL重定向私网、DNS变化与metadata访问被真实连接地址钉住阻断，不能仅测字符串解析；未绑定合规provider的浏览器入口拒绝执行。T19再认证浏览器出站策略。"
+        },
+        {
+          "id": "T07-AC3",
+          "requirement": "65MiB上传返回413且进程内存增量不随文件线性增长；失败无孤儿正式 Artifact。"
+        },
+        {
+          "id": "T07-AC4",
+          "requirement": "真实研究检索仍可通过授权公网来源进行；拒绝访问有明确 ACCESS_LIMITED 等记录而非伪造内容。"
+        }
+      ],
+      "deliverables": [
+        "安全缺口处置表",
+        "权限/网络/上传验证",
+        "配置及部署说明"
+      ],
+      "gates": [
+        "make premium-task TASK=T07"
+      ],
+      "card": "TASKS/T07-gateway-security.md",
+      "branch": "cc/T07-gateway-security"
+    },
+    {
+      "id": "T08",
+      "slug": "cos-backup",
+      "title": "COS 兼容存储与恢复演练",
+      "depends_on": [
+        "T03"
+      ],
+      "lane": "STORAGE",
+      "files": [
+        "src/ravel/state/store.py",
+        "scripts/premium_backup.py（新）",
+        "scripts/premium_restore.py（新）",
+        "tests/premium/T08/**",
+        "config/deploy 文档：共享锁"
+      ],
+      "steps": [
+        "在既有 S3ArtifactStore 上适配可配置 endpoint/region/bucket/addressing，不建立第二套 artifact 元数据。",
+        "对象 immutable put/hash/重试/内容冲突语义与 MinIO 一致；浏览器只取短期受控下载，不得到 COS 账号密钥。",
+        "备份包含 PostgreSQL 一致性转储、全部引用对象清单/哈希、DSH pin、软件版本及配置键名；秘密另由操作员备份，不打印。",
+        "恢复仅允许明确命名的新测试库/新bucket前缀；禁止覆盖运行库，记录恢复时刻和通过的对象数。"
+      ],
+      "acceptance": [
+        {
+          "id": "T08-AC1",
+          "requirement": "MinIO兼容集成测试通过，已有 Artifact 的哈希、大小与内容保持一致。"
+        },
+        {
+          "id": "T08-AC2",
+          "requirement": "从含Project/DAG/Evidence/实验上传的数据快照恢复到独立目标，所有外键及对象引用有效。"
+        },
+        {
+          "id": "T08-AC3",
+          "requirement": "缺对象、哈希错误、重复不同内容 put 均明确失败。"
+        },
+        {
+          "id": "T08-AC4",
+          "requirement": "提供 COS live 检查入口；未有账号时标外部阻塞，不能以MinIO冒充COS验证。"
+        }
+      ],
+      "deliverables": [
+        "存储适配",
+        "备份/恢复脚本",
+        "恢复报告",
+        "COS live preflight"
+      ],
+      "gates": [
+        "make premium-task TASK=T08"
+      ],
+      "card": "TASKS/T08-cos-backup.md",
+      "branch": "cc/T08-cos-backup"
+    },
+    {
+      "id": "T09",
+      "slug": "hpc-targets",
+      "title": "HPC 目标配置、并行提交和幂等恢复",
+      "depends_on": [
+        "T02",
+        "T04",
+        "T06"
+      ],
+      "lane": "COMPUTE",
+      "files": [
+        "src/ravel/backends/slurm/**",
+        "src/ravel/execution/backends.py",
+        "scripts/run_temporal_worker.py",
+        "tests/premium/T09/**",
+        "config/schema：共享锁"
+      ],
+      "steps": [
+        "扩展已有 SlurmComputeBackend 以 target_id 选择固定白名单集群，目标包含 host/known_hosts/user/partition/account/workdir/software_catalog；凭据只在执行进程解析。",
+        "严格主机密钥验证，SSH失败不得自动接受未知主机；上传路径和远端文件类型检验，拒绝符号链接与目录越界。",
+        "同一输入的 project/node/contract_version/attempt 构成稳定提交键；先查submission record/队列/accounting再提交，提交响应丢失进入核对，不盲发第二次sbatch。",
+        "并行只放行 DAG READY 且依赖/Review/预算允许的节点，绑定 T06 配额；不因新增 Agent 放大集群资源。",
+        "收集 JobID、调度状态、ExitCode、Elapsed、AllocTRES/可得计量、原始日志及manifest。站点不提供计量时标UNKNOWN。"
+      ],
+      "acceptance": [
+        {
+          "id": "T09-AC1",
+          "requirement": "两个相同提交并发、响应丢失和worker重启均不产生可观测重复Job；无法确认时状态UNKNOWN且禁止自动重提。"
+        },
+        {
+          "id": "T09-AC2",
+          "requirement": "两条独立计算在quota=2时并行，第三条排队，join必须等所需两条完成；quota=1时串行。"
+        },
+        {
+          "id": "T09-AC3",
+          "requirement": "取消仅针对相同project/target的job；known_hosts错、partition拒绝、sacct延迟各有明确状态。"
+        },
+        {
+          "id": "T09-AC4",
+          "requirement": "凭据未进入模型、manifest、错误和前端；此处使用scripted scheduler的内部测试标明非真实HPC。"
+        }
+      ],
+      "deliverables": [
+        "多目标Slurm配置",
+        "并发/恢复测试",
+        "真实HPC检查脚本"
+      ],
+      "gates": [
+        "make premium-task TASK=T09"
+      ],
+      "card": "TASKS/T09-hpc-targets.md",
+      "branch": "cc/T09-hpc-targets"
+    },
+    {
+      "id": "T10",
+      "slug": "raspa-package",
+      "title": "第一条科学计算路线：RASPA 输入到 Review",
+      "depends_on": [
+        "T02",
+        "T09",
+        "T12"
+      ],
+      "lane": "SCIENCE",
+      "files": [
+        "src/ravel/preparation/raspa.py",
+        "src/ravel/compute/raspa/**（新）",
+        "tests/premium/T10/**",
+        "schemas/premium/compute/**"
+      ],
+      "steps": [
+        "第一条支持路线固定 RASPA 的气体吸附/GCMC；不使用它替代电导率、DFT或其他未支持方法。先检查materializer语法对应的软件主版本，固定兼容版本与digest/模块标识。",
+        "从官方软件实例或原始论文选一套可再分发输入，登记真实来源、结构/力场/分子定义许可；把方法、单位、温压、采样参数及seed写进冻结contract，不从模型记忆补缺。",
+        "生成不可变manifest和输入包，确定 required_outputs、解析器schema、收敛/数值容差及Review标准；这些标准必须在真实run之前固定。",
+        "增加软件环境探测与结果解析；软件缺失/版本不符/许可不可用拒绝start并返回Master。parser测试可用明确标示的fixture，不能登记为真实结果。"
+      ],
+      "acceptance": [
+        {
+          "id": "T10-AC1",
+          "requirement": "缺温度/压力/力场/结构/单位时拒绝物化；路径注入与非支持方法拒绝。"
+        },
+        {
+          "id": "T10-AC2",
+          "requirement": "同一contract输入包hash可复现，版本变化产生新包；解析器区分软件失败、非收敛、正常结果。"
+        },
+        {
+          "id": "T10-AC3",
+          "requirement": "结果单位、输入和来源可逐项追到Ledger；Review标准没有根据结果反改。"
+        },
+        {
+          "id": "T10-AC4",
+          "requirement": "真实运行另由T25验收；本任务只声明实现及确定性验证完成。"
+        }
+      ],
+      "deliverables": [
+        "RASPA支持矩阵",
+        "来源与许可记录",
+        "输入/结果schema",
+        "Review案例"
+      ],
+      "gates": [
+        "make premium-task TASK=T10"
+      ],
+      "card": "TASKS/T10-raspa-package.md",
+      "branch": "cc/T10-raspa-package"
+    },
+    {
+      "id": "T11",
+      "slug": "human-lab",
+      "title": "真人实验签收、偏差和原始数据链",
+      "depends_on": [
+        "T02",
+        "T06",
+        "T12"
+      ],
+      "lane": "LAB",
+      "files": [
+        "src/ravel/backends/lab/**",
+        "src/ravel/gateway/routes/lab.py",
+        "src/ravel/preparation/lab.py",
+        "tests/premium/T11/**",
+        "domain/state：共享锁"
+      ],
+      "steps": [
+        "扩展已有HumanLabBackend，保存lab_user的签收/开始报告/结果交付事件，事件均为person-reported；不得把系统推测当仪器状态。",
+        "实验包绑定protocol版本、sample_id、必交原始文件、设备标识和既有SOP引用；没有实验负责人确认SOP/场地/设备适用性，不把包标为可实际开做。",
+        "真人通过Gateway签收、报告偏差、上传命名输出；实验条件变更回Master形成新contract并经过审批，旧版本上传保留来源但不能完成新版本run。",
+        "系统取消只撤销交接和接收资格，界面显示待人工确认停止；保留迟到上传的拒绝/补充记录，不能声称停止仪器。"
+      ],
+      "acceptance": [
+        {
+          "id": "T11-AC1",
+          "requirement": "错误角色、跨项目、错误contract版本和未要求的输出不能完成实验run。"
+        },
+        {
+          "id": "T11-AC2",
+          "requirement": "偏差原文、操作者、时间、文件hash与样品ID可追踪；上传不等于科学PASS。"
+        },
+        {
+          "id": "T11-AC3",
+          "requirement": "实验持续WAITING_EXTERNAL且无真人信号时不伪造RUNNING或结果；签收事件明确为人类报告。"
+        },
+        {
+          "id": "T11-AC4",
+          "requirement": "真实实验验收在T26，自动化模拟人员只能证明软件交接。"
+        }
+      ],
+      "deliverables": [
+        "人类交接API与状态",
+        "样品/原始数据追溯",
+        "偏差回路验证"
+      ],
+      "gates": [
+        "make premium-task TASK=T11"
+      ],
+      "card": "TASKS/T11-human-lab.md",
+      "branch": "cc/T11-human-lab"
+    },
+    {
+      "id": "T12",
+      "slug": "evidence-report",
+      "title": "证据类型和可核对的科研报告",
+      "depends_on": [
+        "T03"
+      ],
+      "lane": "EVIDENCE",
+      "files": [
+        "src/ravel/reports/**（新）",
+        "src/ravel/research/**（限provenance读写）",
+        "tests/premium/T12/**",
+        "Evidence投影/schema：共享锁"
+      ],
+      "steps": [
+        "复用既有EvidenceSource/Artifact/ResearchRecord，补足FACT/INFERENCE/HYPOTHESIS、COMPUTATION/HUMAN_LAB/SIMULATED分类与外键；已存在字段不另建重复语义。",
+        "报告先由确定性代码渲染任务执行次数、模拟/真实、状态、Review和证据索引，再由Master写解释；每个结论引用存在的source/record及页码或范围。",
+        "发现报告陈述与Ledger不符标为REPORT_CONFLICT，禁止作为已认证报告导出；用户可查看冲突及原记录。",
+        "snapshot不允许存储时保留许可/来源和可访问证据定位；paywall/auth失败不能生成虚构内容。"
+      ],
+      "acceptance": [
+        {
+          "id": "T12-AC1",
+          "requirement": "模拟产物永远不能成为真实测量或真实计算证据；修改标签不能绕过原始provenance。"
+        },
+        {
+          "id": "T12-AC2",
+          "requirement": "捏造source ID、hash不符、无页码范围与错误执行次数被拒绝或显式标冲突。"
+        },
+        {
+          "id": "T12-AC3",
+          "requirement": "独立Review读取的是冻结验收标准与原始产物；Master报告不覆盖Ledger事实。"
+        },
+        {
+          "id": "T12-AC4",
+          "requirement": "真实Research调用在后续live gate，parser fixture测试标明非真实来源采集。"
+        }
+      ],
+      "deliverables": [
+        "报告生成/冲突验证",
+        "证据分类映射",
+        "可审计项目报告样例"
+      ],
+      "gates": [
+        "make premium-task TASK=T12"
+      ],
+      "card": "TASKS/T12-evidence-report.md",
+      "branch": "cc/T12-evidence-report"
+    },
+    {
+      "id": "T13",
+      "slug": "api-events",
+      "title": "桌面 API v1、事件重连与生成客户端",
+      "depends_on": [
+        "T03",
+        "T06",
+        "T07"
+      ],
+      "lane": "API",
+      "files": [
+        "src/ravel/gateway/routes/premium/**（新）",
+        "src/ravel/gateway/stream.py",
+        "packages/api-client/**（新）",
+        "tests/premium/T13/**",
+        "gateway/app/schema：共享锁"
+      ],
+      "steps": [
+        "发布CONTRACTS定义的/v1路由；旧TUI/API保留兼容，接口适配复用现有service层，不能直接写DAG。",
+        "从FastAPI OpenAPI生成TypeScript类型和客户端；生成产物可复现，手写代码不改生成文件。",
+        "WebSocket使用项目内单调seq，snapshot锚点与replay一致；断线从最后已处理seq恢复，过旧cursor回复RESYNC_REQUIRED及新snapshot。",
+        "所有分页有稳定cursor和limit<=100；error使用稳定code/request_id/details，无秘密；关联任务可在原项目重连读取。"
+      ],
+      "acceptance": [
+        {
+          "id": "T13-AC1",
+          "requirement": "同一项目断线/重连没有漏失事件，重复事件按seq去重；撤权5秒内断流。"
+        },
+        {
+          "id": "T13-AC2",
+          "requirement": "错误项目和过期token不能读取snapshot或重放；过旧cursor要求resync而不是空成功。"
+        },
+        {
+          "id": "T13-AC3",
+          "requirement": "生成客户端与OpenAPI一致，旧TUI回归通过；API schema中无用户DAG mutation端点。"
+        },
+        {
+          "id": "T13-AC4",
+          "requirement": "真实FastAPI+PostgreSQL集成测试通过，不能用静态JSON充当后端验收。"
+        }
+      ],
+      "deliverables": [
+        "v1 OpenAPI",
+        "api-client包",
+        "事件恢复与兼容报告"
+      ],
+      "gates": [
+        "make premium-task TASK=T13"
+      ],
+      "card": "TASKS/T13-api-events.md",
+      "branch": "cc/T13-api-events"
+    },
+    {
+      "id": "T14",
+      "slug": "desktop-shell",
+      "title": "Electron 桌面外壳、登录与 Windows 构建",
+      "depends_on": [
+        "T03",
+        "T07"
+      ],
+      "lane": "DESKTOP",
+      "files": [
+        "apps/desktop/**（新）",
+        "package.json/pnpm-workspace.yaml/pnpm-lock.yaml（新，共享锁）",
+        "tests/premium/T14/**（入口映射至桌面测试）"
+      ],
+      "steps": [
+        "Electron+React+TypeScript；Node 22 LTS、pnpm9，初始化时记录当前选定稳定包版本并锁定lockfile，不使用浮动latest。",
+        "默认连接已有RAVEL云端HTTPS；只允许operator配置的服务origin和开发loopback；不在桌面自动安装Docker或云端后端。",
+        "contextIsolation=true、nodeIntegration=false、sandbox=true；renderer只调用白名单IPC，外部URL经验证在系统浏览器打开。",
+        "用户token存系统安全存储；不可用时只放内存，不落明文；登出清除会话。DSH/HPC/COS/邮箱服务凭据不进入renderer。",
+        "生成Windows x64内部构建和Linux x64开发构建；内部未签名明确标识，外部签名发布需操作员证书。"
+      ],
+      "acceptance": [
+        {
+          "id": "T14-AC1",
+          "requirement": "Windows真实Electron窗口可登录/退出、重启后按安全存储策略恢复；截图作为辅助证据。"
+        },
+        {
+          "id": "T14-AC2",
+          "requirement": "恶意renderer/导航/IPC不能执行任意shell、读取.env或转发token给非配置origin。"
+        },
+        {
+          "id": "T14-AC3",
+          "requirement": "服务离线有明确状态且可重连；关闭桌面不停止云端Supervisor。"
+        },
+        {
+          "id": "T14-AC4",
+          "requirement": "打包后的产物完成安装或portable启动验证，只有浏览器截图不算Windows桌面通过。"
+        }
+      ],
+      "deliverables": [
+        "桌面shell",
+        "内部Windows构建与SHA256",
+        "Electron安全测试",
+        "依赖许可清单"
+      ],
+      "gates": [
+        "make premium-task TASK=T14"
+      ],
+      "card": "TASKS/T14-desktop-shell.md",
+      "branch": "cc/T14-desktop-shell"
+    },
+    {
+      "id": "T15",
+      "slug": "desktop-project",
+      "title": "桌面真实项目、DAG、证据和计算视图",
+      "depends_on": [
+        "T13",
+        "T14",
+        "T09",
+        "T11",
+        "T12"
+      ],
+      "lane": "DESKTOP",
+      "files": [
+        "apps/desktop/src/features/projects/**",
+        "apps/desktop/src/features/evidence/**",
+        "apps/desktop/src/features/compute/**",
+        "tests/premium/T15/**"
+      ],
+      "steps": [
+        "基于生成客户端实现项目列表/创建、Master聊天、时间线、只读DAG、来源证据深读、计算Job和实验任务投影。",
+        "DAG明确依赖/并行/join、READY/RUNNING/WAITING_EXTERNAL/Review等现有真实状态；只读视图不提供拖拽修改科学DAG。",
+        "计算界面显示集群/JobID/软件/排队/资源/原始日志/Review；实验界面突出真人等待与person-reported事件；模拟结果显著标记。",
+        "聊天消息由Gateway持久化，重连不会重复发送；加载/空态/错误态均对真实API实现。"
+      ],
+      "acceptance": [
+        {
+          "id": "T15-AC1",
+          "requirement": "两项目切换与跨项目权限测试通过，界面对应PostgreSQL真实记录。"
+        },
+        {
+          "id": "T15-AC2",
+          "requirement": "至少一条真实后端事件由WebSocket进入DAG/作业视图，断线恢复无丢失或重复写入。"
+        },
+        {
+          "id": "T15-AC3",
+          "requirement": "证据点击能回到真实存储的source/范围/哈希，mock数据显示仅在测试fixture模式。"
+        },
+        {
+          "id": "T15-AC4",
+          "requirement": "桌面创建Project、与Master沟通后能读取持久状态；live模型缺key单独阻塞，不能伪造模型回复。"
+        }
+      ],
+      "deliverables": [
+        "项目/证据/计算界面",
+        "真实后端E2E证据",
+        "桌面页面状态矩阵"
+      ],
+      "gates": [
+        "make premium-task TASK=T15"
+      ],
+      "card": "TASKS/T15-desktop-project.md",
+      "branch": "cc/T15-desktop-project"
+    },
+    {
+      "id": "T16",
+      "slug": "mail-inbound",
+      "title": "单账号 IMAP 收件、归档与项目关联",
+      "depends_on": [
+        "T06",
+        "T07",
+        "T08"
+      ],
+      "lane": "MAIL",
+      "files": [
+        "src/ravel/correspondence/inbound.py（新）",
+        "src/ravel/correspondence/models.py（新）",
+        "tests/premium/T16/**",
+        "mail表/config/路由：共享锁"
+      ],
+      "steps": [
+        "第一版固定一个operator配置的IMAP TLS邮箱；支持按UIDVALIDITY+UID保存持久cursor，Message-ID和内容hash辅助去重，UIDVALIDITY变化必须重建索引防重复。",
+        "存原始.eml和附件到现有Artifact Store，解析只处理受限MIME；默认原邮件含附件总量25MiB，超过上限记录oversize并不下载执行。附件绝不自动运行/解压。",
+        "线程按References/In-Reply-To与本项目thread映射关联；新外部联系人或未知项目进入UNASSIGNED，只允许已授权用户绑定，不让模型猜项目拥有者。",
+        "外部正文和附件始终为不可信内容，不能变成Owner身份、审批、工具调用或科研证据；Research核验后才能登记正式Evidence。"
+      ],
+      "acceptance": [
+        {
+          "id": "T16-AC1",
+          "requirement": "重启、重复拉取、UIDVALIDITY改变和邮件相同Message-ID但内容不同均有确定去重/冲突记录。"
+        },
+        {
+          "id": "T16-AC2",
+          "requirement": "伪造From/Project-ID/“批准”正文不能授予权限或触发计算/发信。"
+        },
+        {
+          "id": "T16-AC3",
+          "requirement": "隔离真实IMAP测试服务能收取MIME/附件并校验hash，不以手写JSON替代IMAP解析链。"
+        },
+        {
+          "id": "T16-AC4",
+          "requirement": "25MiB上限、恶意附件名、跨项目References不能泄露或写错项目。"
+        }
+      ],
+      "deliverables": [
+        "IMAP适配",
+        "持久cursor/归档",
+        "不可信内容与线程测试"
+      ],
+      "gates": [
+        "make premium-task TASK=T16"
+      ],
+      "card": "TASKS/T16-mail-inbound.md",
+      "branch": "cc/T16-mail-inbound"
+    },
+    {
+      "id": "T17",
+      "slug": "mail-outbound",
+      "title": "SMTP 草稿、审批、Outbox 与发送不确定性",
+      "depends_on": [
+        "T06",
+        "T16"
+      ],
+      "lane": "MAIL",
+      "files": [
+        "src/ravel/correspondence/outbound.py（新）",
+        "src/ravel/correspondence/service.py（新）",
+        "tests/premium/T17/**",
+        "Action/Outbox投影/config：共享锁"
+      ],
+      "steps": [
+        "第一版固定同一专用企业邮箱的SMTP TLS发信；腾讯云SES API只预留适配接口，不在本版增加第二个生产发送路径。固定From，收件人默认仅operator allowlist。",
+        "正文、to/cc/bcc、附件hash、reply线程作为Action payload，Owner批准exact payload后由服务端发送；默认没有自动对外发信委托。",
+        "SMTP连接前失败可有限重试3次；一旦进入DATA发送阶段后结果不确定则UNKNOWN_DELIVERY，不自动重发。确定250接受后记ACCEPTED，不能记为对方已收到。",
+        "稳定Message-ID及In-Reply-To/References，记录发送尝试与Provider响应；operator可在核对Sent/provider记录后标已接受，或显式批准新尝试。明确SMTP无法提供绝对exactly-once保证。"
+      ],
+      "acceptance": [
+        {
+          "id": "T17-AC1",
+          "requirement": "相同Action并发只能有一个发送者；审批后修改to/cc/bcc或附件使原审批无效。"
+        },
+        {
+          "id": "T17-AC2",
+          "requirement": "SMTP DATA后断线/进程强停进入UNKNOWN_DELIVERY，重启不再次send。"
+        },
+        {
+          "id": "T17-AC3",
+          "requirement": "隔离SMTP真实协议服务记录收件人/正文/线程headers；未审批/越allowlist为零SMTP交付。"
+        },
+        {
+          "id": "T17-AC4",
+          "requirement": "外部实时邮箱验收由T27控制；内部fixture邮件不计外部邮件已发送。"
+        }
+      ],
+      "deliverables": [
+        "SMTP/Outbox实现",
+        "发送状态机",
+        "故障注入证据",
+        "人工核对操作说明"
+      ],
+      "gates": [
+        "make premium-task TASK=T17"
+      ],
+      "card": "TASKS/T17-mail-outbound.md",
+      "branch": "cc/T17-mail-outbound"
+    },
+    {
+      "id": "T18",
+      "slug": "desktop-actions",
+      "title": "桌面审批、预算、实验工作台和双向邮件",
+      "depends_on": [
+        "T15",
+        "T16",
+        "T17",
+        "T06"
+      ],
+      "lane": "DESKTOP",
+      "files": [
+        "apps/desktop/src/features/approvals/**",
+        "apps/desktop/src/features/lab/**",
+        "apps/desktop/src/features/mail/**",
+        "tests/premium/T18/**"
+      ],
+      "steps": [
+        "待处理列表展示Action完整收件人、附件、成本上限、contract版本、有效期和批准/拒绝；过期/内容改变/撤权后按钮状态跟服务端。",
+        "Owner可在现有权限下配置预算与pause/resume；Lab用户仅看其获准项目任务，下载包、person-reported签收/偏差及原始文件上传。",
+        "邮件界面显示收件、待关联、草稿、审批、ACCEPTED与UNKNOWN_DELIVERY，支持人工核对；不存在单凭邮件正文批准的快捷路径。",
+        "状态跨桌面重启从Gateway恢复，不把renderer本地state当执行依据。"
+      ],
+      "acceptance": [
+        {
+          "id": "T18-AC1",
+          "requirement": "Owner/Lab/Admin各权限对照通过，隐藏按钮以外还验证服务端拒绝。"
+        },
+        {
+          "id": "T18-AC2",
+          "requirement": "邮件审批展示所有to/cc/bcc，修改后旧批准无法使用；不确定发送明确禁止一键自动重试。"
+        },
+        {
+          "id": "T18-AC3",
+          "requirement": "真人实验包可下载、错版本上传拒绝、偏差记录可见且进入Master待决策。"
+        },
+        {
+          "id": "T18-AC4",
+          "requirement": "真实Gateway连接E2E通过，模拟界面只用来测视觉不能通过业务gate。"
+        }
+      ],
+      "deliverables": [
+        "审批/实验/邮箱工作台",
+        "权限与版本E2E",
+        "桌面操作手册"
+      ],
+      "gates": [
+        "make premium-task TASK=T18"
+      ],
+      "card": "TASKS/T18-desktop-actions.md",
+      "branch": "cc/T18-desktop-actions"
+    },
+    {
+      "id": "T19",
+      "slug": "docker-sandbox",
+      "title": "Docker 首选沙箱与受控 supervisor",
+      "depends_on": [
+        "T03",
+        "T06",
+        "T07"
+      ],
+      "lane": "SANDBOX",
+      "files": [
+        "src/ravel/sandbox/**（新，除vm.py）",
+        "infra/sandbox/**（新）",
+        "tests/premium/T19/**",
+        "执行/路由/config：共享锁"
+      ],
+      "steps": [
+        "实现CONTRACTS的SandboxProvider；Docker调用只在独立sandbox-supervisor服务，API/DSH/Agent容器不挂Docker socket。",
+        "默认一个Project一个非特权容器：read-only rootfs、非root UID、cap-drop ALL、no-new-privileges、seccomp、CPU=2、RAM=4GiB、PID=256、scratch=10GiB、单命令120秒。生产配额上限写入配置并尊重Envelope。",
+        "默认禁网；Research浏览器通过显式公网代理allowlist，拦截metadata/内网，操作员单独批准目标。宿主目录仅挂载该Project工作目录，禁止host PID/network和privileged。",
+        "读写文件路径以项目根为界，拒绝symlink/hardlink逃逸；产物经Gateway注册和hash验证，不能直接修改权威PG或实验结果。",
+        "把已有Research Playwright接到本provider及受控代理；解除T07浏览器fail-closed仅限合规已绑定沙箱，来源网关照常登记真实抓取快照与hash。",
+        "支持stop/destroy/reconnect，关闭前后资源与日志归属清楚；不在本任务加入不受控GUI电脑操作。"
+      ],
+      "acceptance": [
+        {
+          "id": "T19-AC1",
+          "requirement": "真实Docker容器及真实沙箱浏览器验证跨Project文件、宿主secret、Docker socket、私网和metadata不可达，不能只有docker参数字符串测试；浏览器回传与来源网关注册链有内部集成验证，真实公网来源抓取另由external Research行认证。"
+        },
+        {
+          "id": "T19-AC2",
+          "requirement": "CPU/RAM/PID/磁盘配额及超时确实执行；停止后进程被结束且记录可查询。"
+        },
+        {
+          "id": "T19-AC3",
+          "requirement": "容器Agent不能直接连接权威DB或HPC；命令日志脱敏，重连保持正确project绑定。"
+        },
+        {
+          "id": "T19-AC4",
+          "requirement": "无Docker环境时内部隔离gate为BLOCKED_EXTERNAL（resource=Linux/Docker），代码可以review但T19不标DONE。"
+        }
+      ],
+      "deliverables": [
+        "Docker provider",
+        "沙箱supervisor",
+        "真实容器隔离报告",
+        "provider契约测试"
+      ],
+      "gates": [
+        "make premium-task TASK=T19"
+      ],
+      "card": "TASKS/T19-docker-sandbox.md",
+      "branch": "cc/T19-docker-sandbox"
+    },
+    {
+      "id": "T20",
+      "slug": "vm-sandbox",
+      "title": "可插拔专用 SSH VM 沙箱",
+      "depends_on": [
+        "T19"
+      ],
+      "lane": "SANDBOX",
+      "files": [
+        "src/ravel/sandbox/vm.py（新）",
+        "src/ravel/sandbox/vm_pool.py（新）",
+        "tests/premium/T20/**",
+        "operator配置/schema：共享锁"
+      ],
+      "steps": [
+        "第二provider固定为operator预配的专用Linux SSH VM；RAVEL只租用池中资源，不自动购买VM，不把HPC登录节点当通用沙箱。",
+        "每VM同一时间仅一个Project，持久租约与fencing；首次分配需operator登记干净基线、known_hosts、低权账号和网络策略。",
+        "使用与Docker相同的execute/files/stop/artifact契约；能力不足显式UNSUPPORTED，不做host命令fallback。",
+        "Project释放后进入QUARANTINED；只有operator重建/验证干净基线并重新登记才回AVAILABLE，禁止仅删除目录后自动交给其他Project。"
+      ],
+      "acceptance": [
+        {
+          "id": "T20-AC1",
+          "requirement": "相同provider contract在Docker和scripted SSH VM适配器均通过；业务调用方没有provider专用分支。"
+        },
+        {
+          "id": "T20-AC2",
+          "requirement": "并发分配只租给一Project，过期epoch不能执行，known_hosts不符拒绝。"
+        },
+        {
+          "id": "T20-AC3",
+          "requirement": "释放VM不可被下一Project自动重用；HPC target配置不能当VM pool条目导入。"
+        },
+        {
+          "id": "T20-AC4",
+          "requirement": "真实VM隔离由T28认证；适配器测试不能标为已运行真实VM。"
+        }
+      ],
+      "deliverables": [
+        "SSH VM provider",
+        "专用VM池状态",
+        "重建/隔离手册"
+      ],
+      "gates": [
+        "make premium-task TASK=T20"
+      ],
+      "card": "TASKS/T20-vm-sandbox.md",
+      "branch": "cc/T20-vm-sandbox"
+    },
+    {
+      "id": "T21",
+      "slug": "cloud-ops",
+      "title": "腾讯云部署包、监控、备份与回滚",
+      "depends_on": [
+        "T04",
+        "T05",
+        "T07",
+        "T08",
+        "T09",
+        "T17",
+        "T19"
+      ],
+      "lane": "OPS",
+      "files": [
+        "infra/premium/**（新）",
+        "scripts/premium_deploy_check.py（新）",
+        "docs/premium/OPERATIONS.md",
+        "tests/premium/T21/**",
+        "服务配置：共享锁"
+      ],
+      "steps": [
+        "提供一台Ubuntu24.04 x86_64 CVM的Compose部署包：Gateway/Supervisor/Temporal worker/DSH运行平面、PG、Temporal、COS端点和独立sandbox-supervisor；公网只HTTPS反代。",
+        "隔离sandbox宿主权限域、内网DB/Temporal和邮箱/HPC凭据；镜像固定digest，秘密通过文件或既有secret机制注入，不进入镜像或Git。",
+        "接入健康、Project租约、停滞、预算、Temporal丢失run、队列、邮件UNKNOWN和对象hash失败监控；活着与依赖可达分别显示。",
+        "部署前备份，升级用新镜像与migration；提供已知可回退版本及不可逆migration处理。脚本默认plan/check，不自动购买资源、改DNS或部署用户机器。"
+      ],
+      "acceptance": [
+        {
+          "id": "T21-AC1",
+          "requirement": "本地隔离Linux部署可启动并从桌面访问，端口扫描无公开PG/Temporal/sandbox API。"
+        },
+        {
+          "id": "T21-AC2",
+          "requirement": "故意停Supervisor/worker并恢复，不重复外部提交；健康面板明确显示真实探测与心跳的差别。"
+        },
+        {
+          "id": "T21-AC3",
+          "requirement": "恢复至独立库/bucket前缀演练通过；回滚说明列明migration兼容性。"
+        },
+        {
+          "id": "T21-AC4",
+          "requirement": "腾讯云真实部署由T24，需要已提供且授权的目标；本任务不声称CVM实测。"
+        }
+      ],
+      "deliverables": [
+        "部署包与镜像清单",
+        "监控/回滚/恢复手册",
+        "Linux隔离部署证据"
+      ],
+      "gates": [
+        "make premium-task TASK=T21"
+      ],
+      "card": "TASKS/T21-cloud-ops.md",
+      "branch": "cc/T21-cloud-ops"
+    },
+    {
+      "id": "T22",
+      "slug": "release-gates",
+      "title": "全量验收矩阵和不可伪造的完成状态",
+      "depends_on": [
+        "T01",
+        "T03"
+      ],
+      "lane": "QA",
+      "files": [
+        "scripts/premium_gate.py（新）",
+        "docs/premium/acceptance-map.json",
+        "tests/premium/T22/**",
+        "Makefile/测试配置：共享锁"
+      ],
+      "steps": [
+        "实现make premium-gate PROFILE=internal或certified、make premium-gate-plan打印命令与覆盖、make premium-live TASK=T24等外部入口；保留make release-gate及其原CERTIFIED含义。",
+        "收集全部legacy/premium测试，每条映射内部/外部并列AC与资源；新增未分类测试、空suite、missing AC、skip/xfail和非零退出都不能产生PASS。",
+        "internal执行全部内部rows、Python静态和迁移、TypeScript typecheck/构建、Electron安全与真实Docker测试；模型/Internet/COS/HPC/真人/真实邮箱/VM各为独立external row。",
+        "certified包含internal和全部external；输出commit/tree SHA、环境、版本、命令、退出码、JUnit、人工证据ID与hash，结果只用CONTRACTS定义状态。",
+        "修复旧make test-integration marker少收测试问题：canonical runner按完整目录收集，比较nodeid列表，不能靠改报告数字解决。"
+      ],
+      "acceptance": [
+        {
+          "id": "T22-AC1",
+          "requirement": "注入失败/空选择/缺映射/跳过/伪造人工文件时gate非零。"
+        },
+        {
+          "id": "T22-AC2",
+          "requirement": "缺外部资源时certified非零并标PARTIALLY_CERTIFIED；internal也不得显示FULLY_CERTIFIED。"
+        },
+        {
+          "id": "T22-AC3",
+          "requirement": "旧V0/Phase10/Phase11全部nodeid均入矩阵且无静默丢失。"
+        },
+        {
+          "id": "T22-AC4",
+          "requirement": "所有数据库相关suite串行；日志退出码与最终状态一致。"
+        }
+      ],
+      "deliverables": [
+        "gate runner",
+        "覆盖矩阵",
+        "机器可读证据manifest",
+        "runner自身失败测试"
+      ],
+      "gates": [
+        "make premium-task TASK=T22"
+      ],
+      "card": "TASKS/T22-release-gates.md",
+      "branch": "cc/T22-release-gates"
+    },
+    {
+      "id": "T23",
+      "slug": "internal-integration",
+      "title": "内部全链集成、复审与本地 main 合并",
+      "depends_on": [
+        "T04",
+        "T05",
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+        "T11",
+        "T12",
+        "T13",
+        "T14",
+        "T15",
+        "T16",
+        "T17",
+        "T18",
+        "T19",
+        "T20",
+        "T21",
+        "T22"
+      ],
+      "lane": "SUPERVISOR",
+      "files": [
+        "集成分支中的必要跨模块修复",
+        "docs/premium/{PROGRESS,DEVLOG,ROADMAP,INTERNAL_ACCEPTANCE}.*",
+        "所有改动仍按文件锁与Review"
+      ],
+      "steps": [
+        "固定integration候选SHA，执行完整internal gate；场景含真实PG/Temporal/MinIO、真实Docker、协议级IMAP/SMTP测试服务、Electron，计算/实验人员替身清楚标为simulated。",
+        "同时测试Project暂停/恢复、Supervisor强停、活动流断线、审批过期、Slurm响应不确定、SMTP结果不确定和成员撤权；核对Ledger与桌面报告一致。",
+        "Reviewer对最终candidate完整diff、迁移链、权限矩阵、依赖许可与测试证据签发APPROVE；任何集成冲突修复或后续代码变更重新审查受影响范围。",
+        "按ENGINEERING_PROTOCOL本地merge --no-ff集成分支到main，工作区干净且main未被其他工作推进才执行。main变化则创建更新候选、重做受影响gate和Review，禁止强推/重置。",
+        "产出INTERNAL_READY_EXTERNAL_BLOCKED或INTERNAL_READY_EXTERNAL_PENDING；外部资源齐全则继续T24–T29，不能把内部main合并叫正式认证发布。"
+      ],
+      "acceptance": [
+        {
+          "id": "T23-AC1",
+          "requirement": "全部实现任务T00–T22已DONE且internal所有行PASS，无skip/xfail/TODO占位实现。"
+        },
+        {
+          "id": "T23-AC2",
+          "requirement": "最终Reviewed code tree与合并code tree一致，合并后git diff --check和工作区检查通过。"
+        },
+        {
+          "id": "T23-AC3",
+          "requirement": "本地main有可追溯merge commit和所有task/review/测试证据；没有push或真实发布。"
+        },
+        {
+          "id": "T23-AC4",
+          "requirement": "外部阻塞逐项写入BLOCKERS与PROGRESS，剩余未认证能力在界面和部署文档显式标记。"
+        }
+      ],
+      "deliverables": [
+        "INTERNAL_ACCEPTANCE.md",
+        "main merge SHA",
+        "最终Review",
+        "内部构建与哈希"
+      ],
+      "gates": [
+        "make premium-gate PROFILE=internal",
+        "Reviewer最终集成审查",
+        "git diff --check",
+        "合并后源码tree核对"
+      ],
+      "card": "TASKS/T23-internal-integration.md",
+      "branch": "cc/T23-internal-integration"
+    },
+    {
+      "id": "T24",
+      "slug": "cloud-live",
+      "title": "真实腾讯云 CVM 与 COS 验证",
+      "depends_on": [
+        "T23"
+      ],
+      "lane": "EXTERNAL",
+      "files": [
+        "tests/premium/live/T24/**",
+        "docs/premium/evidence/T24/**",
+        "资源配置只记录键名/资源ID不存秘密"
+      ],
+      "steps": [
+        "仅使用operator已提供并授权的测试CVM/COS/网络目标，要求资源白名单和费用上限；缺任一项记录BLOCKED_EXTERNAL。",
+        "部署固定内部release artifact，HTTPS登录桌面；对COS做put/read/hash/不可变冲突、备份和独立前缀恢复。",
+        "记录VPC/region/对象endpoint、镜像digest和实际网络访问证据；同地域内网连通由实际DNS/连接检查确认。"
+      ],
+      "acceptance": [
+        {
+          "id": "T24-AC1",
+          "requirement": "真实CVM与COS链路全通过，公网只预期HTTPS端口。"
+        },
+        {
+          "id": "T24-AC2",
+          "requirement": "恢复后的测试Project能重新读取全部引用Evidence/Artifact。"
+        },
+        {
+          "id": "T24-AC3",
+          "requirement": "费用、资源ID与实际操作在operator授权范围内；无资源时非零外部阻塞而非PASS。"
+        }
+      ],
+      "deliverables": [
+        "签名/哈希资源证据",
+        "COS恢复报告",
+        "云端操作记录"
+      ],
+      "gates": [
+        "make premium-live TASK=T24"
+      ],
+      "card": "TASKS/T24-cloud-live.md",
+      "branch": "cc/T24-cloud-live"
+    },
+    {
+      "id": "T25",
+      "slug": "hpc-live",
+      "title": "真实 HPC 调度与 RASPA 计算认证",
+      "depends_on": [
+        "T23"
+      ],
+      "lane": "EXTERNAL",
+      "files": [
+        "tests/premium/live/T25/**",
+        "docs/premium/evidence/T25/**"
+      ],
+      "steps": [
+        "先确认operator授权target/partition/account/软件许可/资源上限与known_hosts，缺项BLOCKED_EXTERNAL；使用T09/T10产物。",
+        "真实小作业验证submit/query/cancel/collect、断线恢复和并发上限；随后执行一条T10已冻结标准的真实RASPA benchmark。",
+        "提交前登记输入、来源、参数、环境与Acceptance；记录真实JobID、sacct及原始输出，由独立产品Review验收。"
+      ],
+      "acceptance": [
+        {
+          "id": "T25-AC1",
+          "requirement": "排队、运行、取消与完成分别有真实调度器证据；重试未重复提交。"
+        },
+        {
+          "id": "T25-AC2",
+          "requirement": "真实软件输出及数值/收敛按预先冻结标准验证；不能修改容差来追PASS。"
+        },
+        {
+          "id": "T25-AC3",
+          "requirement": "实际资源与额度可追踪，不可得成本明确UNKNOWN；mock scheduler结果不能计入。"
+        }
+      ],
+      "deliverables": [
+        "真实JobID/manifest/输出hash",
+        "产品Review记录",
+        "资源消耗报告"
+      ],
+      "gates": [
+        "make premium-live TASK=T25"
+      ],
+      "card": "TASKS/T25-hpc-live.md",
+      "branch": "cc/T25-hpc-live"
+    },
+    {
+      "id": "T26",
+      "slug": "lab-live",
+      "title": "真人实验员执行与原始测量认证",
+      "depends_on": [
+        "T23"
+      ],
+      "lane": "EXTERNAL",
+      "files": [
+        "tests/premium/live/T26/**（只验证证据和软件交接）",
+        "docs/premium/evidence/T26/**"
+      ],
+      "steps": [
+        "由operator指定实验负责人、获准场所/设备/既有SOP和参与人员；缺少任一条件则BLOCKED_EXTERNAL，开发Agent不能代替人执行或签名。",
+        "产品Master依据真实Research生成与SOP兼容的包，负责人确认；真人在工作台签收执行并提供原始仪器文件、样品ID、时间和偏差。",
+        "产品Review依据冻结标准评估，Master据结果决定下一步；软件测试只验证签收/来源/状态，不证明物理安全或测量正确。"
+      ],
+      "acceptance": [
+        {
+          "id": "T26-AC1",
+          "requirement": "至少一个真人已实际执行的实验，人员确认与原始数据hash可追溯。"
+        },
+        {
+          "id": "T26-AC2",
+          "requirement": "实验偏差或条件修改进入正式审批/contract版本链，模拟stub不被接纳为测量。"
+        },
+        {
+          "id": "T26-AC3",
+          "requirement": "真实测量科学结果可为PASS/FAIL/PARTIAL；系统验收要求边界和证据正确，不要求假设必然成功。"
+        }
+      ],
+      "deliverables": [
+        "真人确认记录",
+        "仪器原始文件索引",
+        "Review/Decision证据"
+      ],
+      "gates": [
+        "make premium-live TASK=T26",
+        "实验负责人真实签收与回传证明"
+      ],
+      "card": "TASKS/T26-lab-live.md",
+      "branch": "cc/T26-lab-live"
+    },
+    {
+      "id": "T27",
+      "slug": "mail-live",
+      "title": "真实邮箱双向回路",
+      "depends_on": [
+        "T23"
+      ],
+      "lane": "EXTERNAL",
+      "files": [
+        "tests/premium/live/T27/**",
+        "docs/premium/evidence/T27/**"
+      ],
+      "steps": [
+        "operator明确授权专用测试邮箱、From及允许收件人，配置IMAP/SMTP凭据和LIVE_ENABLE；禁止向任意外部联系人发送探测邮件。",
+        "从获准测试对端发入一封带无害附件的邮件，RAVEL归档/关联/草拟；Owner在桌面批准后发回复，对端确认接收并再次回复。",
+        "记录每跳Message-ID/References、时间、审批Action、附件hash和对端确认；测试邮件正文不得含真实敏感科研数据。"
+      ],
+      "acceptance": [
+        {
+          "id": "T27-AC1",
+          "requirement": "IMAP入站、草稿、审批、SMTP接受、对端接收、回信关联全链真实完成。"
+        },
+        {
+          "id": "T27-AC2",
+          "requirement": "重启收件不重复登记；出站状态区分ACCEPTED和对端已确认接收。"
+        },
+        {
+          "id": "T27-AC3",
+          "requirement": "From伪造/正文批准不触发越权；缺授权收件人时BLOCKED_EXTERNAL。"
+        }
+      ],
+      "deliverables": [
+        "真实邮件线程证据",
+        "审批与发送日志",
+        "对端接收确认"
+      ],
+      "gates": [
+        "make premium-live TASK=T27"
+      ],
+      "card": "TASKS/T27-mail-live.md",
+      "branch": "cc/T27-mail-live"
+    },
+    {
+      "id": "T28",
+      "slug": "vm-live",
+      "title": "Docker 与真实专用 VM 可替换验证",
+      "depends_on": [
+        "T23"
+      ],
+      "lane": "EXTERNAL",
+      "files": [
+        "tests/premium/live/T28/**",
+        "docs/premium/evidence/T28/**"
+      ],
+      "steps": [
+        "operator提供获准专用VM及干净基线、网络策略、known_hosts和低权账号；不自动创建计费实例。",
+        "使用相同任务包分别在真实Docker与VM执行文件/命令/停止/重连/产物回传契约；检查实际隔离与资源限制。",
+        "尝试跨项目/metadata/宿主凭据访问均应拒绝；VM释放进入隔离区，operator重建后才重新登记。"
+      ],
+      "acceptance": [
+        {
+          "id": "T28-AC1",
+          "requirement": "两个provider的同一contract套件都通过且业务代码无provider分支。"
+        },
+        {
+          "id": "T28-AC2",
+          "requirement": "真实VM权限/网络/资源隔离确实生效，不能只测试SSH mock。"
+        },
+        {
+          "id": "T28-AC3",
+          "requirement": "释放VM不能交给下一Project，直到有新基线确认。"
+        }
+      ],
+      "deliverables": [
+        "provider对照矩阵",
+        "真实隔离证据",
+        "VM重建/重新登记记录"
+      ],
+      "gates": [
+        "make premium-live TASK=T28"
+      ],
+      "card": "TASKS/T28-vm-live.md",
+      "branch": "cc/T28-vm-live"
+    },
+    {
+      "id": "T29",
+      "slug": "certified-release",
+      "title": "全真实科研闭环与最终交付",
+      "depends_on": [
+        "T24",
+        "T25",
+        "T26",
+        "T27",
+        "T28"
+      ],
+      "lane": "SUPERVISOR",
+      "files": [
+        "tests/premium/live/T29/**",
+        "docs/premium/{FINAL_REPORT,RELEASE_MANIFEST,ROADMAP,PROGRESS,BLOCKERS}.*",
+        "只在本地发布分支集成验证修复"
+      ],
+      "steps": [
+        "选择一个T25支持的计算与T26获准SOP确实相关的研究问题；由Master/Research基于原始来源建立统一metric和研究路线。兼容研究问题或SOP未提供时明确BLOCKED_EXTERNAL。",
+        "同一Project运行五类真实产品Agent、真实检索、真实HPC、真人实验、独立Review和Master的Decision；科学终局允许SUCCESS/FAILED/INCONCLUSIVE，不能预设成功。",
+        "桌面观察全过程并完成一次真实审批/邮件回路；验证Evidence->Contract->PreparedPackage->Execution->Review->Decision链，模拟结果一律不作真实证据。",
+        "运行certified gate及原有release-gate，Reviewer审最终版本与真实证据；修复走新任务分支、commit、复审、本地merge，禁止直接修改main。",
+        "全部门禁通过才标FULLY_CERTIFIED并制作本地release manifest；不自动push、tag远端、发GitHub Release或公开部署。"
+      ],
+      "acceptance": [
+        {
+          "id": "T29-AC1",
+          "requirement": "T00–T28均DONE，internal+external所有行PASS，无SKIP/BLOCKED/未映射AC。"
+        },
+        {
+          "id": "T29-AC2",
+          "requirement": "同一Project所有真实链路可追溯，产品Review与开发Reviewer的记录分开保存。"
+        },
+        {
+          "id": "T29-AC3",
+          "requirement": "最终main code tree有有效Review及测试证据；最终状态、日志、roadmap和版本manifest一致。"
+        },
+        {
+          "id": "T29-AC4",
+          "requirement": "任何无法真实证明的环节使certified非零并保持PARTIALLY_CERTIFIED，禁止“全部完成”文案。"
+        }
+      ],
+      "deliverables": [
+        "FINAL_REPORT.md",
+        "RELEASE_MANIFEST.json",
+        "完整门禁证据",
+        "最终main SHA与本地构建"
+      ],
+      "gates": [
+        "make premium-gate PROFILE=certified",
+        "make release-gate",
+        "Reviewer最终认证审查"
+      ],
+      "card": "TASKS/T29-certified-release.md",
+      "branch": "cc/T29-certified-release"
+    }
+  ]
+}

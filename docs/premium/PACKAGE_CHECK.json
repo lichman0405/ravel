@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-10-17 Asia/Shanghai",
+  "scope": "DOCUMENT_PACKAGE_ONLY",
+  "product_tests_run": false,
+  "target_repo_modified": false,
+  "result": "PASS",
+  "counts": {
+    "python_sources_parsed": 2,
+    "task_cards": 30,
+    "unique_acceptance_conditions": 113,
+    "json_files_parsed": 9,
+    "local_markdown_links_checked": 120,
+    "startup_required_elements": 11
+  },
+  "errors": [],
+  "dependency_dag_and_tracker_state": "validated by tools/tracker.py during generation",
+  "source_baseline": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
+  "limitations": [
+    "任务书校验不代表产品实现验收",
+    "外部服务/真实HPC/真人实验尚未执行"
+  ]
+}

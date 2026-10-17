@@ -50,3 +50,12 @@ Execution / Review / Decision 三权分离。
 
 
 Claude Code：请同时严格遵守 `START_PROMPT.md` 的阶段门槛，不要把本项目重构成普通 coding-agent 项目。
+
+## 高端版开发入口（2026-10-17）
+
+- 当前开发由 `docs/premium/CLAUDE_CODE_START_PROMPT.md` 和 `docs/premium/DEVELOPMENT_TASKBOOK.md` 组织，任务编号 T00–T29；权威进度是 `docs/premium/PROGRESS.json`，不是聊天记忆。
+- `docs/premium/SPEC.md` 对旧 V0 限制的明确更新：新增 Electron+React+TypeScript 桌面薄客户端；内部测试允许模拟执行，但最终认证要求真实 HPC 与真人实验；阶段范围改为 T00–T29；保留现有 DSH pin，只有实际阻塞才另立兼容升级任务。
+- 旧规则中的五类产品 Agent、DSH-only、真实 Research 证据、Master 唯一 DAG/Contract 决策权、PostgreSQL 权威状态、Temporal 只负责 durable execution 继续生效。
+- 开发 Supervisor / Reviewer / Subagent 是开发组织，不是产品内 Agent；不得把开发角色加入产品 agent model。
+- 开发流程和门禁严格按 `docs/premium/ENGINEERING_PROTOCOL.md`、`docs/premium/GATES.md`；未实现或未运行的命令不得写成 PASS。
+- 本地 Git 流程已授权：任务分支/worktree → 独立 Review → 集成候选 → ff-only 集成分支 → T23 才 no-ff 合并本地 main。禁止 push、force、reset --hard、git clean 或覆盖用户未提交修改。
