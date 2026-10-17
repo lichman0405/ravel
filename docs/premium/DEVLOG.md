@@ -29,6 +29,8 @@
 | 2026-10-17 18:05 Asia/Shanghai | Supervisor | STATE | 更新BLOCKERS/PROGRESS/ROADMAP_STATUS/DEVLOG；删除“尚未执行T00”过期文案；记录真实MinIO(B01)、容器systemd(B02)、完整release-gate(B03)、T04复审(B04)、T24–T29外部资源(B05) | tracker validate PASS；4/30 DONE；eligible T06/T07/T08/T12/T22 | 继续修复/复审 |
 | 2026-10-17 18:15 Asia/Shanghai | Reviewer | T04 | 独立复审修复后分支 d2c8741 | `reviews/T04/2.json` APPROVE；AC1–AC4 PASS；P2 check-to-write TOCTOU记录为非阻塞hardening；P3共享overlay/未持久化binding_id等记录 | 集成候选 |
 | 2026-10-17 18:15 Asia/Shanghai | Supervisor | T04 | 候选 candidate-T04-fence merge 17d855d；候选门禁 run-20261017-180741 PASS；ff-only推进integration | integration HEAD 17d855d；PROGRESS/T04=DONE；B04 RESOLVED；T05/T06/T07/T08/T12/T22 eligible | 继续T05/T06 |
+| 2026-10-17 18:40 Asia/Shanghai | Reviewer | T01 | 锁修复独立复审：首轮changes_requested（live_research re-export、task默认未生效）；修复后复审APPROVE，P3中断清理复测通过 | `reviews/T01/2.json` APPROVE；AC2 PASS；T01 49 passed；T04 6 passed；无阻塞findings | 集成候选 |
+| 2026-10-17 18:40 Asia/Shanghai | Supervisor | T01 | candidate-T01-lockfix合并最终fix + integration；T01/T04门禁run-183828/run-184042 PASS；release-gate readback CERTIFIED；ff-only推进integration | integration HEAD 31f0841；PROGRESS/T01 source_digest/evidence更新；5/30 DONE | 继续T05/T06 |
 
 
 
