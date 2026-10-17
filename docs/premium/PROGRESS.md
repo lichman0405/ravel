@@ -1,7 +1,7 @@
 # 开发进度（从PROGRESS.json生成）
 
-更新时间：2026-10-17 19:40 Asia/Shanghai；工程状态：IN_PROGRESS。
-任务完成：5/30。真实认证单列；计划与交接文档检查不计开发完成。
+更新时间：2026-10-17 19:47 Asia/Shanghai；工程状态：IN_PROGRESS。
+任务完成：6/30。真实认证单列；计划与交接文档检查不计开发完成。
 
 | Task | 标题 | 依赖 | 状态 | 作者 | 候选/合并 |
 |---|---|---|---|---|---|
@@ -10,7 +10,7 @@
 | [T02](TASKS/T02-phase11-adoption.md) | 审查并引入已存在的 Phase 11 | T00, T01 | DONE | SUPERVISOR | 54303ccf07/4ec87e11ae |
 | [T03](TASKS/T03-contracts.md) | 冻结高端版接口、范围与 AC 映射 | T02 | DONE | SUPERVISOR | f75529707b/dc3b6b9564 |
 | [T04](TASKS/T04-project-lease.md) | Supervisor 项目租约与过期进程隔离 | T03 | DONE | SUPERVISOR | a62eff4e0d/17d855d15b |
-| [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | RUNNING | SUPERVISOR | 9930db5 |
+| [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | DONE | SUPERVISOR | ad8b06e/fbebde3 |
 | [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | RUNNING | SUPERVISOR | — |
 | [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | TODO | 未派发 | — |
 | [T08](TASKS/T08-cos-backup.md) | COS 兼容存储与恢复演练 | T03 | TODO | 未派发 | — |
