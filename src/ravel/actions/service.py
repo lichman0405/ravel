@@ -1097,6 +1097,18 @@ class ActionService:
         subject = principal_user_id or claimed_by
         if self.session.get(UserRow, subject) is not None:
             self._require_actor(subject)
+            if subject != action.actor:
+                membership = MembershipRepository(
+                    self.session, self.project_id
+                ).for_user(subject)
+                if (
+                    membership is None
+                    or membership.role not in (UserRole.PROJECT_OWNER, UserRole.ADMIN)
+                ):
+                    raise PermissionError(
+                        f"{subject!r} did not request Action {action.action_id} and "
+                        "is not a live owner/admin who may claim it"
+                    )
             return
         if principal_user_id is not None:
             raise PermissionError(
