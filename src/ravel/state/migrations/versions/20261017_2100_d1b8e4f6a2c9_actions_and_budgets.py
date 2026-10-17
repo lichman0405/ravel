@@ -86,41 +86,41 @@ def upgrade() -> None:
         sa.Column("overrun_event_ref", sa.String(32), nullable=True),
         sa.CheckConstraint(
             "kind IN ('COMPUTE_SUBMIT', 'MAIL_SEND', 'LAB_HANDOVER', 'SANDBOX_EXEC')",
-            name="ck_actions_kind_is_known",
+            name=op.f("ck_actions_kind_is_known"),
         ),
         sa.CheckConstraint(
             "status IN ('DRAFT', 'AWAITING_APPROVAL', 'READY', 'CLAIMED', "
             "'ACCEPTED', 'COMPLETED', 'UNKNOWN', 'FAILED_CONFIRMED', "
             "'REJECTED', 'EXPIRED', 'CANCELLED')",
-            name="ck_actions_status_is_known",
+            name=op.f("ck_actions_status_is_known"),
         ),
         sa.CheckConstraint(
             "payload_hash ~ '^sha256:[0-9a-f]{64}$'",
-            name="ck_actions_payload_hash_is_sha256",
+            name=op.f("ck_actions_payload_hash_is_sha256"),
         ),
         sa.CheckConstraint(
             "contract_version IS NULL OR contract_version >= 1",
-            name="ck_actions_contract_version_positive_when_present",
+            name=op.f("ck_actions_contract_version_positive_when_present"),
         ),
         sa.CheckConstraint(
-            "envelope_version >= 1", name="ck_actions_envelope_version_positive"
+            "envelope_version >= 1", name=op.f("ck_actions_envelope_version_positive")
         ),
         sa.CheckConstraint(
             "estimated_cny IS NULL OR estimated_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
-            name="ck_actions_estimated_cny_is_fixed_point",
+            name=op.f("ck_actions_estimated_cny_is_fixed_point"),
         ),
         sa.CheckConstraint(
-            "expires_at > created_at", name="ck_actions_expiry_follows_creation"
+            "expires_at > created_at", name=op.f("ck_actions_expiry_follows_creation")
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
             ["projects.project_id"],
-            name="fk_actions_project_id_projects",
+            name=op.f("fk_actions_project_id_projects"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("action_id", name="pk_actions"),
+        sa.PrimaryKeyConstraint("action_id", name=op.f("pk_actions")),
         sa.UniqueConstraint(
-            "project_id", "idempotency_key", name="one_action_per_idempotency_key"
+            "project_id", "idempotency_key", name=op.f("one_action_per_idempotency_key")
         ),
     )
     op.create_index(
@@ -165,25 +165,25 @@ def upgrade() -> None:
         sa.Column("pause_reason", sa.Text(), nullable=True),
         sa.Column("overrun_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "currency = 'CNY'", name="ck_budget_accounts_currency_is_cny"
+            "currency = 'CNY'", name=op.f("ck_budget_accounts_currency_is_cny")
         ),
         sa.CheckConstraint(
             "limit_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
-            name="ck_budget_accounts_limit_is_fixed_point",
+            name=op.f("ck_budget_accounts_limit_is_fixed_point"),
         ),
         sa.CheckConstraint(
             "(paused_at IS NULL) = (pause_reason IS NULL)",
-            name="ck_budget_accounts_pause_has_a_reason",
+            name=op.f("ck_budget_accounts_pause_has_a_reason"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
             ["projects.project_id"],
-            name="fk_budget_accounts_project_id_projects",
+            name=op.f("fk_budget_accounts_project_id_projects"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("account_id", name="pk_budget_accounts"),
+        sa.PrimaryKeyConstraint("account_id", name=op.f("pk_budget_accounts")),
         sa.UniqueConstraint(
-            "project_id", "cluster", name="one_account_per_project_cluster"
+            "project_id", "cluster", name=op.f("one_account_per_project_cluster")
         ),
     )
     op.create_index("ix_budget_accounts_project", "budget_accounts", ["project_id"])
@@ -207,42 +207,42 @@ def upgrade() -> None:
         sa.Column("released_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "status IN ('RESERVED', 'UNKNOWN', 'SETTLED', 'RELEASED')",
-            name="ck_budget_reservations_status_is_known",
+            name=op.f("ck_budget_reservations_status_is_known"),
         ),
         sa.CheckConstraint(
             "(status = 'SETTLED') = (settled_at IS NOT NULL)",
-            name="ck_budget_reservations_settled_timestamp_matches_status",
+            name=op.f("ck_budget_reservations_settled_timestamp_matches_status"),
         ),
         sa.CheckConstraint(
             "status <> 'SETTLED' OR actual_cost_cny IS NOT NULL",
-            name="ck_budget_reservations_settled_has_actual_cost",
+            name=op.f("ck_budget_reservations_settled_has_actual_cost"),
         ),
         sa.CheckConstraint(
             "(status = 'RELEASED') = (released_at IS NOT NULL)",
-            name="ck_budget_reservations_released_timestamp_matches_status",
+            name=op.f("ck_budget_reservations_released_timestamp_matches_status"),
         ),
         sa.CheckConstraint(
             "estimated_cost_cny IS NULL OR estimated_cost_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
-            name="ck_budget_reservations_estimated_cost_is_fixed_point",
+            name=op.f("ck_budget_reservations_estimated_cost_is_fixed_point"),
         ),
         sa.CheckConstraint(
             "actual_cost_cny IS NULL OR actual_cost_cny ~ '^[0-9]+(\\.[0-9]+)?$'",
-            name="ck_budget_reservations_actual_cost_is_fixed_point",
+            name=op.f("ck_budget_reservations_actual_cost_is_fixed_point"),
         ),
         sa.ForeignKeyConstraint(
             ["project_id"],
             ["projects.project_id"],
-            name="fk_budget_reservations_project_id_projects",
+            name=op.f("fk_budget_reservations_project_id_projects"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["action_id"],
             ["actions.action_id"],
-            name="fk_budget_reservations_action_id_actions",
+            name=op.f("fk_budget_reservations_action_id_actions"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("reservation_id", name="pk_budget_reservations"),
-        sa.UniqueConstraint("action_id", name="one_reservation_per_action"),
+        sa.PrimaryKeyConstraint("reservation_id", name=op.f("pk_budget_reservations")),
+        sa.UniqueConstraint("action_id", name=op.f("one_reservation_per_action")),
     )
     op.create_index(
         "ix_budget_reservations_project_status",
@@ -261,17 +261,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index(
         "ix_budget_reservations_project_cluster",
-        table_name="budget_reservations",
+        table_name=op.f("budget_reservations"),
     )
     op.drop_index(
-        "ix_budget_reservations_project_status", table_name="budget_reservations"
+        "ix_budget_reservations_project_status", table_name=op.f("budget_reservations")
     )
     op.drop_table("budget_reservations")
-    op.drop_index("ix_budget_accounts_project", table_name="budget_accounts")
+    op.drop_index("ix_budget_accounts_project", table_name=op.f("budget_accounts"))
     op.drop_table("budget_accounts")
-    op.drop_index("one_live_mail_per_message_id", table_name="actions")
-    op.drop_index("one_live_compute_per_submission_key", table_name="actions")
-    op.drop_index("ix_actions_expires_at", table_name="actions")
-    op.drop_index("ix_actions_project_kind_status", table_name="actions")
-    op.drop_index("ix_actions_project_status", table_name="actions")
+    op.drop_index("one_live_mail_per_message_id", table_name=op.f("actions"))
+    op.drop_index("one_live_compute_per_submission_key", table_name=op.f("actions"))
+    op.drop_index("ix_actions_expires_at", table_name=op.f("actions"))
+    op.drop_index("ix_actions_project_kind_status", table_name=op.f("actions"))
+    op.drop_index("ix_actions_project_status", table_name=op.f("actions"))
     op.drop_table("actions")
