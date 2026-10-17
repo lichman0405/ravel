@@ -78,7 +78,11 @@ def test_premium_task_entrypoint_is_refused_while_lock_held(
         )
     output = result.stdout + result.stderr
     assert result.returncode != 0
-    assert "timed out waiting for database test lock" in output
+    assert '"failed_commands": [1]' in output
+    evidence = Path(environment["RAVEL_PREMIUM_EVIDENCE_ROOT"]) / "T04"
+    run_dir = max(evidence.iterdir(), key=lambda path: path.stat().st_mtime)
+    child_log = (run_dir / "cmd-01.txt").read_text(encoding="utf-8")
+    assert "timed out waiting for database test lock" in child_log
 
 
 def test_release_gate_entrypoint_is_refused_while_lock_held(
