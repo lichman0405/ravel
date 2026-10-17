@@ -1,0 +1,59 @@
+# RAVEL's Research Gateway, as a service.
+#
+# One of three, and the three are the same shape on purpose: gateway,
+# supervisor and Temporal worker are all "a process that should always be
+# running", and a deployment that had to remember a different rule for each
+# would be a deployment whose differences nobody could explain.
+#
+# ── What an installer changes ─────────────────────────────────────────────
+#
+# Two things, and they are the two that cannot be guessed: the user the
+# service runs as, and where the checkout lives. `scripts/install_services.sh`
+# rewrites both from its own arguments and installs the result; this file stays
+# concrete rather than templated so that `systemd-analyze verify` can read it
+# as the unit it will be. A placeholder would make the file that is checked and
+# the file that is installed different files.
+#
+# ── Restart ──────────────────────────────────────────────────────────────
+#
+# `Restart=always`, so a crash and an operator's `systemctl stop` are told
+# apart by systemd rather than by the service: a stopped unit stays stopped,
+# and anything else comes back five seconds later. There is no start limit
+# above the defaults, which means a service that cannot start never stays
+# down — it comes back, fails, and comes back. That is deliberate: the row
+# this process writes carries `started_at`, so a restart loop shows up as a
+# start time that keeps moving, which is a better answer than a unit that gave
+# up and left an operator to notice.
+#
+# ── Shutdown ─────────────────────────────────────────────────────────────
+#
+# `KillSignal=SIGTERM` is the default and is written out because it is load
+# bearing here: the application's lifespan records the shutdown when it
+# receives one, and that row is what makes a deploy legible as a deploy rather
+# than as a death. `TimeoutStopSec` is the window before systemd escalates to
+# `SIGKILL` — a kill that skips the lifespan — and it is generous because the
+# Gateway may be closing harness runtimes and a database pool.
+
+[Unit]
+Description=RAVEL Research Gateway
+Documentation=file:///opt/ravel/DEPLOYMENT.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ravel
+Group=ravel
+WorkingDirectory=/opt/ravel
+EnvironmentFile=/opt/ravel/.env
+ExecStart=/opt/ravel/.venv/bin/python /opt/ravel/scripts/run_gateway.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ravel-gateway
+
+[Install]
+WantedBy=multi-user.target

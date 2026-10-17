@@ -24,6 +24,7 @@ from ravel.domain.enums import (
     JobState,
     TerminationStatus,
 )
+from ravel.domain.preparation import PreparationOutcome, PreparationRefusal
 
 
 class RunInput(BaseModel):
@@ -65,6 +66,15 @@ class RunPlan(BaseModel):
     required_outputs: tuple[str, ...] = ()
     allowed_retries: int = 0
     task_spec: dict[str, object] = Field(default_factory=dict)
+    #: Whether this run's contract names an environment that has to be built
+    #: before any work is handed to a backend. It travels in the plan rather
+    #: than being re-read because the workflow decides from it whether to ask
+    #: for preparation at all, and a workflow that re-read the database to
+    #: decide would be reading it again on every replay.
+    #:
+    #: False is the ordinary case, and it is what keeps a contract that names
+    #: no environment running exactly as it did before preparation existed.
+    requires_preparation: bool = False
     #: The run limits, carried rather than read. A workflow that read
     #: `Settings` would be reading a file, and a file can change between a run
     #: and its replay — after which the two would disagree about how long to
@@ -129,6 +139,31 @@ class AttemptSummary(BaseModel):
     note: str = ""
 
 
+class PreparationReport(BaseModel):
+    """What preparing this run's environment produced, or why it could not.
+
+    The activity writes the `PreparationRecord` and, on a refusal, parks the
+    node — so this is a report of something already recorded rather than an
+    instruction to record it. The workflow reads one field of it: whether the
+    run may go ahead.
+
+    The workspace and the entry point are here as well as in the record so
+    that a reader of the history can see what was built without opening a
+    table, and so that the refusal a run ended on is in the history beside the
+    ending rather than only in PostgreSQL.
+    """
+
+    preparation_id: str
+    outcome: PreparationOutcome
+    workspace_path: str = ""
+    materializer: str = ""
+    materializer_version: str = ""
+    required_outputs: tuple[str, ...] = ()
+    execution_metadata: dict[str, str] = Field(default_factory=dict)
+    refusal: PreparationRefusal | None = None
+    reason: str = ""
+
+
 class RunOutcome(BaseModel):
     """How the run ended, and what the workflow is handing back.
 
@@ -136,12 +171,22 @@ class RunOutcome(BaseModel):
     to "why did this run only once when the backend said the failure was
     retryable", and the person asking that is reading the record, not a
     timeline.
+
+    **A run that ended before it began has no execution to report on.** A
+    contract that could not be materialized never handed work to a backend, so
+    there is no Execution Record, no termination status, and no completeness
+    verdict — `termination_status` and `completeness` are `None` and
+    `execution_id` is empty. What it has instead is `preparation_id`, which
+    names the refusal Master has to read, and `refusal`, which says which of
+    Master's tools the situation calls for. The alternative was to give the
+    refusal a termination status, and every member of that vocabulary
+    describes an execution that happened.
     """
 
-    execution_id: str
     node_id: str
-    termination_status: TerminationStatus
-    completeness: CompletenessVerdict
+    execution_id: str = ""
+    termination_status: TerminationStatus | None = None
+    completeness: CompletenessVerdict | None = None
     delivered_outputs: tuple[str, ...] = ()
     missing_outputs: tuple[str, ...] = ()
     attempts: tuple[AttemptSummary, ...] = ()
@@ -152,3 +197,7 @@ class RunOutcome(BaseModel):
     #: started the run can find what stopped it without reading the record —
     #: and so a caller that sees `DEVIATION` knows which record to open.
     deviation_id: str | None = None
+    #: The preparation that refused this run, when one did. Set only on the
+    #: ending the fields above cannot describe: nothing executed.
+    preparation_id: str | None = None
+    refusal: PreparationRefusal | None = None

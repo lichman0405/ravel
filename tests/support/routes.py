@@ -33,12 +33,12 @@ from typing import Any
 from fastapi import FastAPI
 
 #: Fewer routes than this means the enumeration has broken again rather than
-#: that the application shrank. The Gateway declares thirty-odd; a change that
-#: removed half of them would be a deliberate rewrite with a test to update, and
+#: that the application shrank. The Gateway declares forty-nine; a change that
+#: removed nine of them would be a deliberate rewrite with a test to update, and
 #: this number being wrong is a much louder failure than a probe that silently
 #: examines nothing. Raise it when routes are added; never lower it to make a
 #: test pass.
-EXPECTED_ROUTE_FLOOR = 30
+EXPECTED_ROUTE_FLOOR = 45
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +135,32 @@ def effective_routes(app: FastAPI) -> list[ProbedRoute]:
     return found
 
 
+#: The stand-in a probe uses for a path placeholder whose real value it does
+#: not have: a record identifier that is well-formed and absent, so the route
+#: runs and refuses rather than being skipped.
+#:
+#: Here rather than in each probe, and that is the whole point of the table.
+#: There are two probes — `tests/integration/gateway/test_projects.py` and
+#: `tests/e2e/test_tui.py` — and they enumerate the same application over
+#: different transports. When the laboratory package route was added with a
+#: `{document}` placeholder, one of them was taught the name and the other was
+#: not, so the e2e probe failed on a route the integration probe had been
+#: updated for. A placeholder taught in one place is taught in both.
+ABSENT_PLACEHOLDERS: dict[str, str] = {
+    "artifact_id": "an-artifact-that-does-not-exist",
+    "approval_id": "an-approval-that-does-not-exist",
+    # A name the package does not hold, which is the interesting probe for that
+    # route anyway: what a probe asserts is that the DAG did not move, and a
+    # document read that succeeded would have gone through the manifest.
+    "document": "a-document-that-does-not-exist",
+    # A user identifier, which the membership routes address. The value is
+    # deliberately one nobody holds: a probe asserts that the DAG did not move,
+    # and a withdrawal that *succeeded* would have moved something else.
+    "user_id": "a-user-who-does-not-exist",
+    "version": "1",
+}
+
+
 def fill(path: str, **values: str) -> str:
     """A route path with its placeholders replaced, for probing.
 
@@ -149,4 +175,32 @@ def fill(path: str, **values: str) -> str:
     return filled
 
 
-__all__ = ["EXPECTED_ROUTE_FLOOR", "ProbedRoute", "effective_routes", "fill"]
+def probe_path(path: str, **values: str) -> str:
+    """A route path a probe can actually request, or an assertion that it cannot.
+
+    `fill`, with the absent stand-ins applied, and with the leftover check that
+    every caller of `fill` used to write itself. A path with a `{name}` still in
+    it is a route the probe was not taught to address, and every request it made
+    would have gone to a URL nothing serves — a 404 that reads exactly like a
+    refusal. That is how the integration probe passed while probing nothing, so
+    the check belongs next to the table that decides it.
+
+    Callers pass the placeholders whose value is *their* fixture's — a real
+    project, a real node — and everything else comes from `ABSENT_PLACEHOLDERS`.
+    """
+    filled = fill(path, **ABSENT_PLACEHOLDERS, **values)
+    assert "{" not in filled, (
+        f"cannot address {path!r}; teach this probe its placeholders, in "
+        f"`ABSENT_PLACEHOLDERS` if the value is a stand-in"
+    )
+    return filled
+
+
+__all__ = [
+    "ABSENT_PLACEHOLDERS",
+    "EXPECTED_ROUTE_FLOOR",
+    "ProbedRoute",
+    "effective_routes",
+    "fill",
+    "probe_path",
+]

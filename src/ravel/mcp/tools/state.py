@@ -14,12 +14,22 @@ from typing import Any
 
 from ravel.domain.contracts import BudgetLimits, ProjectSuccessContract, ResearchContract
 from ravel.domain.decisions import ReviewRecord
-from ravel.domain.enums import DecisionType, NodeStatus, ProjectOutcome
+from ravel.domain.enums import (
+    DecisionType,
+    JobState,
+    NodeStatus,
+    ProjectOutcome,
+    ReviewOutcome,
+)
 from ravel.domain.identity import MasterCheckpoint
+from ravel.domain.preparation import PreparationRecord
+from ravel.domain.reconciliation import RunReconciliation
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import SEATED_NODE_TYPES, unexecutable_reason
 from ravel.master.service import ENDING_DECISION, MasterService
 from ravel.mcp.context import ToolContext, as_json, require_master
 from ravel.mcp.registry import tools_for
+from ravel.mcp.tools.research_results import completed_research
 from ravel.state.outbox import last_event_seq
 from ravel.state.repositories.contracts import ResearchContractRepository
 from ravel.state.repositories.identity import (
@@ -27,7 +37,9 @@ from ravel.state.repositories.identity import (
     ApprovalRepository,
     CheckpointRepository,
 )
+from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.projects import ProjectRegistry, RoadmapRepository
+from ravel.state.repositories.reconciliation import RunReconciliationRepository
 from ravel.state.repositories.records import RecordRepositories
 from ravel.state.services.dag import DagMutationService, DecisionDraft
 
@@ -56,6 +68,32 @@ def whoami(context: ToolContext) -> Any:
         }
 
     return whoami
+
+
+def _state_name(state: JobState | None) -> str | None:
+    """A job state as it is reported, or nothing for a run that had no job.
+
+    `None` rather than a word, because the two are different: a run that died
+    before `start_job` recorded anything had no job, and "unknown" would read
+    as a job nobody could identify. A reader who wants to know which ran out of
+    the two looks at `job_id`, which is null in exactly the same case.
+    """
+    return state.value if state is not None else None
+
+
+def _refusal_kind(preparation: PreparationRecord) -> str:
+    """Which kind of refusal stopped the node, in the record's own words.
+
+    The domain pairs the two — a `REFUSED` outcome always names a class and a
+    sentence, and the validator refuses a record that does not — so a record
+    read here has one. The fallback is written out rather than asserted because
+    this is a projection: Master's read is not the place a data fault should
+    surface, and a record that somehow lacked the class would be better
+    reported as the outcome it does carry than raised over.
+    """
+    if preparation.refusal is not None:
+        return preparation.refusal.value
+    return preparation.outcome.value
 
 
 def read_project_state(context: ToolContext) -> Any:
@@ -101,7 +139,50 @@ def read_project_state(context: ToolContext) -> Any:
             latest: dict[str, ReviewRecord] = {}
             for review in RecordRepositories(session, context.project_id).reviews.all():
                 latest[review.node_id] = review
+            # The third reason a node is waiting, and the one with no author:
+            # a run of it was lost, and RAVEL parked it here rather than decide
+            # what that meant. The record is what says so — without it the node
+            # reads as a question with no question in it, and the one role that
+            # may answer would be asked to answer nothing.
+            #
+            # Keyed by node rather than by run, because a node is what this read
+            # reports about and a node can lose more than one run. The newest is
+            # kept, which is `for_node`'s ordering: a reconciliation written
+            # later is about a revision of the terms, and it is the one that
+            # says where the node is now.
+            lost: dict[str, RunReconciliation] = {}
+            for reconciliation in RunReconciliationRepository(
+                session, context.project_id
+            ).all():
+                lost[reconciliation.node_id] = reconciliation
+            # The fourth reason, and the one with no author outside RAVEL's own
+            # preparation layer: a run was ordered, RAVEL could not build the
+            # environment its contract named, and the node was parked rather
+            # than failed. Wrote the refusal, so the answer exists — and
+            # without this read Master is asked to decide about a node whose
+            # record reads as empty. A live run was asked exactly that: it
+            # spent three turns establishing that "the state records no verdict
+            # from a seat, no run reconciliation from RAVEL, and no
+            # unexecutability reason", concluded the work was UNRESOLVED, and
+            # the reason it could not see was written down the whole time.
+            refused: dict[str, PreparationRecord] = {}
+            preparations = PreparationRepository(session, context.project_id)
+            for node in nodes:
+                refusal = preparations.stopping_refusal(node.node_id)
+                if refusal is not None:
+                    refused[node.node_id] = refusal
             seq = last_event_seq(session, context.project_id)
+            # What research has handed over, which is the half of the project a
+            # Master with no memory of earlier turns cannot otherwise find: a
+            # result is written by another seat, in another session, and the DAG
+            # summary counts its node among the REVIEWING ones and says nothing
+            # about what is in it. Reports the summary and not the contents —
+            # `read_research_result` is where the claims are read, and a state
+            # read that carried them would put a project's whole evidence base
+            # through the model's context every turn.
+            research = completed_research(
+                session, context.project_id, nodes, reviews=latest
+            )
 
         counts: dict[str, int] = {}
         for node in nodes:
@@ -141,12 +222,39 @@ def read_project_state(context: ToolContext) -> Any:
             # plan changes — and it has no verdict, which is itself the answer:
             # a node whose dependencies cannot all be satisfied was stopped by
             # the graph rather than by anyone's judgement.
+            #
+            # The third reason is a node nothing will ever run, and it is in
+            # this list because it is the same question from Master's side:
+            # `needs_decision` asks Master about it, so a read that left it out
+            # asked Master about something it did not name. Two live runs took
+            # that for a mistake — one reasoned at length about a READY node
+            # that never moved, the other spent a turn discovering that the
+            # file a DECISION node owed was one no role could write — and
+            # neither had to (KNOWN_LIMITATIONS L-27).
             "stopped": [
                 {
                     "node": node.display_id,
                     "node_type": node.node_type.value,
                     "status": node.status.value,
                     "objective": node.objective,
+                    # Why this node is not work, for the one case where the
+                    # status does not say it: READY reads as progress, and a
+                    # node of a type no execution seat is given has none.
+                    "unexecutable": (
+                        unexecutable_reason(node.node_type)
+                        if node.status is NodeStatus.READY
+                        and node.node_type not in SEATED_NODE_TYPES
+                        else None
+                    ),
+                    # Only a verdict that *withheld* something is a reason a
+                    # node stopped. A PASS is the clearance a node needed to
+                    # enter RUNNING, and a node that ran and was then parked —
+                    # by a lost run, by a deviation — still has that PASS as its
+                    # latest review, so reporting it here would answer "why did
+                    # this stop" with a document saying it was allowed to go.
+                    # Observed rather than theorised: the first version of this
+                    # read did exactly that, and the acceptance case that reads
+                    # it back caught it.
                     "verdict": (
                         {
                             "checkpoint": latest[node.node_id].checkpoint.value,
@@ -155,12 +263,86 @@ def read_project_state(context: ToolContext) -> Any:
                             "recommendations": list(latest[node.node_id].recommendations),
                         }
                         if node.node_id in latest
+                        and latest[node.node_id].outcome is not ReviewOutcome.PASS
+                        else None
+                    ),
+                    # Why RAVEL stopped it, when RAVEL is the one that did.
+                    # Every value is a report from somewhere else — Temporal's
+                    # word for the run, the job's state, the class RAVEL read
+                    # off both — so Master can see that a queue was lost without
+                    # being told anything about the science.
+                    "run_reconciliation": (
+                        {
+                            "reconciliation_id": lost[node.node_id].reconciliation_id,
+                            "failure_class": lost[node.node_id].failure_class.value,
+                            "observed": lost[node.node_id].observed.value,
+                            "workflow_id": lost[node.node_id].workflow_id,
+                            "execution_contract_version": (
+                                lost[node.node_id].execution_contract_version
+                            ),
+                            "job_id": lost[node.node_id].job_id,
+                            "job_state_before": _state_name(
+                                lost[node.node_id].job_state_before
+                            ),
+                            "job_state_after": _state_name(
+                                lost[node.node_id].job_state_after
+                            ),
+                            "detail": lost[node.node_id].detail,
+                            "detected_by": lost[node.node_id].detected_by,
+                            "created_at": lost[node.node_id].created_at.isoformat(),
+                        }
+                        if node.node_id in lost
+                        else None
+                    ),
+                    # Why preparation stopped it, which is the answer RAVEL
+                    # itself owes and the one a reader is least able to infer.
+                    # A refusal is a fact about this deployment and this
+                    # contract — the environment named is not one RAVEL builds
+                    # here, or a parameter the materializer was not given — and
+                    # none of it is on the node, in its contract's text, or in
+                    # any review. Master is asked to decide about the node, so
+                    # the reason has to be here; the live run described above
+                    # shows what the alternative costs.
+                    #
+                    # Every value is RAVEL's own record of what it tried, so
+                    # this reports a limit of the deployment rather than a
+                    # judgement about the work — which is exactly what Master
+                    # needs in order to choose between revising the terms and
+                    # redirecting the node.
+                    "preparation_refusal": (
+                        {
+                            "preparation_id": refused[node.node_id].preparation_id,
+                            "refusal": _refusal_kind(refused[node.node_id]),
+                            "reason": refused[node.node_id].reason,
+                            "materializer": refused[node.node_id].materializer,
+                            "execution_contract_version": (
+                                refused[node.node_id].execution_contract_version
+                            ),
+                            "workspace_path": refused[node.node_id].workspace_path,
+                            "required_outputs": list(
+                                refused[node.node_id].required_outputs
+                            ),
+                            "created_at": refused[node.node_id].created_at.isoformat(),
+                        }
+                        if node.node_id in refused
                         else None
                     ),
                 }
                 for node in nodes
                 if node.status in (NodeStatus.WAITING_DECISION, NodeStatus.BLOCKED)
+                or (
+                    node.status is NodeStatus.READY
+                    and node.node_type not in SEATED_NODE_TYPES
+                )
             ],
+            # The research tasks that have handed a result over, each with what
+            # it holds and the verdict it was given. This is the pointer, not
+            # the evidence: a Master reading the state learns which tasks have
+            # something to read back and calls `read_research_result` for the
+            # one a decision turns on. Without it, the only way to act on what a
+            # task found would be to have been the session that was told, which
+            # a replacement session is by definition not.
+            "completed_research": research,
             # Whether the project has stated its own question, reported here
             # because this is the read a session starts from: a contract that
             # is missing is the first thing to write, and a session that had to

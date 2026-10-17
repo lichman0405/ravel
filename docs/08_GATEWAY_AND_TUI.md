@@ -55,6 +55,30 @@ It does not:
 - upload artifact
 - receive updated instruction
 
+The lab screen is served by `/projects/{project_id}/lab/*`, and its shape is the
+execution contract's rather than a table of its own: the task is the node, the
+instruction is the frozen contract, and the allowed ranges and required
+deliverables are read out of it rather than restated. An *updated instruction* is
+therefore a new contract version, which is why every response carries the version
+and the freeze time.
+
+Once a run has been handed to a bench, the same task carries the **package** the
+bench was given — the documents preparation wrote, their hashes, and the
+materializer that produced them — read back from the prepared directory rather
+than re-rendered from the contract, so the protocol a bench worked from does not
+change under it when a materializer is improved. Each document is served by a
+name the package's manifest listed, and any other name is refused with the list
+of what the package does hold.
+
+The two writes are the two things a person at a bench can contribute that nobody
+else can: **the file they were asked for** (`POST .../uploads?output=<name>`),
+filed against a named output and refused if the handover owes no such name, and
+**the observation that the plan and the bench disagreed**
+(`POST .../deviations`). Both are recorded first and then delivered to the
+waiting run, and a delivery that could not be made is reported in the response
+rather than raised — everything is already on the record by then, and telling a
+lab user their upload failed because a scheduler was down would be false.
+
 ### Admin
 - DSH health
 - Temporal health

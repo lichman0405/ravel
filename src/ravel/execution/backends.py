@@ -48,6 +48,17 @@ class JobRequest:
     objective: str
     task_spec: dict[str, object] = field(default_factory=dict)
     required_outputs: tuple[str, ...] = ()
+    #: Where the work happens: the directory preparation built for this
+    #: contract version, and the file in it that starts the work. Empty for a
+    #: run whose contract named no environment, which is every run that needs
+    #: nothing built — a backend that requires one and finds it empty must say
+    #: so rather than inventing a directory to work in.
+    #:
+    #: A backend is told the path rather than handed the files because the
+    #: workspace is on the machine that will run the work, and the backend is
+    #: the thing that can put it there.
+    workspace_path: str = ""
+    entrypoint: str = ""
     #: True when this attempt exists only because the previous one failed
     #: retryably. A backend that treats a retry as a first attempt would, for
     #: example, re-charge a lab for the same run.
@@ -96,6 +107,17 @@ class DeviationReport:
     value: float | None = None
     #: The substitution the backend was asked about, as `(given, instead)`.
     substitution: tuple[str, str] | None = None
+    #: The deviation record this report *is*, when there is already one.
+    #:
+    #: Most reports are the backend's own observation, and the record of them is
+    #: raised by the Worker that adjudicates. A laboratory is different: the
+    #: report is a person's, written by the route they reported through, and it
+    #: exists before anything adjudicates it. Naming it here is how the Worker
+    #: stops a run *against that record* instead of raising a second one for the
+    #: same sentence — two rows for one observation, one attributed to the
+    #: person and one to the backend, is the sort of duplication that makes an
+    #: audit trail read as two events.
+    deviation_id: str | None = None
 
 
 @dataclass(frozen=True)

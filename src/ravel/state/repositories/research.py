@@ -436,6 +436,40 @@ class ArtifactRepository(ProjectScopedRepository[Artifact]):
         ).scalar_one_or_none()
         return int(highest or 0)
 
+    def newest_with_filename(self, filename: str) -> ArtifactVersion | None:
+        """The newest version this project holds under a filename, if any.
+
+        This is how a contract's `inputs` are resolved: a contract names files,
+        not artifact ids, because a plan is written about the work rather than
+        about RAVEL's tables — and the file a plan names has to be findable by
+        the name it gave.
+
+        The newest wins, which is the rule a person would use and the one that
+        makes a re-registered file the one a later run reads. A project that
+        holds two *different* artifacts under one filename therefore resolves
+        to whichever was registered last, and the manifest records the version
+        that was read, so which one it was is a fact on record rather than a
+        silent choice. The ordering is total — creation time, then version id —
+        so the same project resolves the same way every time.
+        """
+        row = (
+            self.session.execute(
+                select(ArtifactVersionRow)
+                .where(
+                    ArtifactVersionRow.project_id == self.project_id,
+                    ArtifactVersionRow.filename == filename,
+                )
+                .order_by(
+                    ArtifactVersionRow.created_at.desc(),
+                    ArtifactVersionRow.version_id.desc(),
+                )
+                .limit(1)
+            )
+            .scalars()
+            .one_or_none()
+        )
+        return from_row(ArtifactVersion, row) if row is not None else None
+
     def verify(self, version: ArtifactVersion) -> bool:
         """Whether the stored bytes still hash to what the record claims."""
         return self._store().verify(version.storage_key, version.content_hash)

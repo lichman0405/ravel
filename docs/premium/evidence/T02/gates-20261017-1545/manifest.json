@@ -1,0 +1,84 @@
+{
+  "run_id": "gates-20261017-1545",
+  "task_id": "T02",
+  "acceptance_map": {
+    "T02-AC1": [
+      "unit",
+      "integration",
+      "e2e",
+      "phase11 acceptance"
+    ],
+    "T02-AC2": [
+      "migrations (manual-20261017-1525)"
+    ],
+    "T02-AC3": [
+      "enums + tests"
+    ],
+    "T02-AC4": [
+      "lint",
+      "unit",
+      "integration",
+      "e2e",
+      "phase11 acceptance",
+      "release-gate pending"
+    ]
+  },
+  "started_at": "2026-10-17 15:35 Asia/Shanghai",
+  "completed_at": "2026-10-17 15:45 Asia/Shanghai",
+  "source_commit": "54303ccf074311fc52e32a1b80e471c166fb65b5",
+  "source_digest": "4054200df4d1acc7f8c2b10e0651785ef7365646de6f9312a9940bdbd8108fc1",
+  "platform": "Ubuntu 24.04 canonical container",
+  "dependencies": {
+    "python": "3.12.3",
+    "postgres": "16",
+    "temporal": "1.25.2",
+    "s3": "LocalStack 3.8 (SIMULATED_S3)",
+    "pyright": "1.1.414"
+  },
+  "commands": [
+    {
+      "command": "make lint",
+      "exit_code": 0
+    },
+    {
+      "command": "pytest tests/unit",
+      "exit_code": 0,
+      "tests": 1106,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    {
+      "command": "pytest tests/integration",
+      "exit_code": 0,
+      "tests": 709
+    },
+    {
+      "command": "pytest tests/e2e",
+      "exit_code": 0,
+      "tests": 27
+    },
+    {
+      "command": "make phase11-acceptance",
+      "exit_code": 0,
+      "items_demonstrated": 11,
+      "failed": 0
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T02",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs\\premium\\evidence\\T02\\gates-20261017-1545\\commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs\\premium\\evidence\\T02\\gates-20261017-1545\\commands.txt",
+      "sha256": "6316ae6007a54fd5ffaa212a8e9ef48656555ba589a8d1deeb362625ea73a32b",
+      "size": 1076
+    }
+  ],
+  "data_mode": "REAL for PostgreSQL/Temporal; SIMULATED_S3 for object storage",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": "release-gate final verdict pending; real MinIO absent; systemd service row skipped in container"
+}

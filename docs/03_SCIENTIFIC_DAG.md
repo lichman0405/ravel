@@ -19,7 +19,7 @@ It is not:
 
 ## 2. Node types
 
-V0 allowed node types:
+V0's node-type vocabulary:
 
 - `RESEARCH`
 - `HYPOTHESIS`
@@ -28,7 +28,22 @@ V0 allowed node types:
 - `REVIEW`
 - `DECISION`
 
-Optional control metadata may express waiting/approval but must not invent arbitrary scientific node types in V0.
+Five of the six may be planned. `REVIEW` may not: a review is not a kind of
+work the plan contains but a checkpoint *on* a node that runs, and RAVEL asks
+for it through that node's own status — a `COMPUTATION` or `EXPERIMENT` node is
+cleared to run by a `PRE_RUN` verdict, and every node that ran holds at
+`REVIEWING` until a `FINAL` verdict moves it. Planning a node of that type asked
+for a second copy of a question already being asked, and nothing was ever
+dispatched to one; `KNOWN_LIMITATIONS.md` L-27 is the record. The value stays in
+the vocabulary so that a node written before the change can still be read.
+
+`HYPOTHESIS` and `DECISION` are Master's control nodes: the plan holds a claim
+or a decision the rest of it depends on, the loop puts such a node to Master for
+as long as it is unfinished rather than handing it to an execution seat, and
+cancelling it or replacing it with work that runs is the ordinary ending.
+`RESEARCH`, `COMPUTATION` and `EXPERIMENT` are the three a seat carries out.
+
+Optional control metadata may express waiting/approval but must not invent arbitrary scientific node types in V0. `ravel.domain.state_machines.PLANNABLE_NODE_TYPES` is the set a node may be created as, and `DagNode.create` refuses anything outside it.
 
 ## 3. Rolling horizon
 

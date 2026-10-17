@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 15:12 Asia/Shanghai",
+  "updated_at": "2026-10-17 15:50 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
@@ -42,18 +42,21 @@
       "note": "T01 DONE：独立AC1-AC4复核APPROVE；最终门禁run-20261017-150746 PASS；集成候选7cae892与任务tip f525ceb tree一致，Reviewer确认；ff-only合入cc/ravel-premium-v1。"
     },
     "T02": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
+      "status": "INTEGRATING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T02",
+      "base_sha": "b79fd5287c42ced28d80137e5f3f16e5c9487998",
+      "head_sha": "54303ccf074311fc52e32a1b80e471c166fb65b5",
+      "source_digest": "4054200df4d1acc7f8c2b10e0651785ef7365646de6f9312a9940bdbd8108fc1",
+      "review_ref": "reviews/T02/1.json",
+      "gate_refs": [
+        "evidence/T02/manual-20261017-1525/manifest.json",
+        "evidence/T02/gates-20261017-1545/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 15:50 Asia/Shanghai",
+      "note": "独立AC1-AC4复核APPROVE；lint/unit 1106/0/2/integration 709/e2e 27/phase11 acceptance 11-11均通过；两处acceptance竞态修复；release-gate PATH重跑与真实MinIO为P3缺口。等待集成候选复核。"
     },
     "T03": {
       "status": "TODO",

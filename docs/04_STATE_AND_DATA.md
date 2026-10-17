@@ -28,6 +28,10 @@ Graph-like relationships are represented using typed rows and references. If fut
 - DecisionRecord
 - ReviewRecord
 - ExecutionRecord
+- PreparationRecord — the workspace a contract was materialized into, or the
+  refusal to materialize it, with the manifest of what was read and written
+- LabHandover — what a bench was given, and what it owes back
+- RunReconciliation — why RAVEL ended a run it could no longer see
 - AgentIdentity
 - AgentSessionBinding
 - MasterCheckpoint

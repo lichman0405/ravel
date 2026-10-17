@@ -47,8 +47,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ravel.domain.dag import DagNode
-from ravel.domain.enums import NodeStatus
+from ravel.domain.enums import NodeStatus, NodeType
 from ravel.domain.roles import AgentRole
+from ravel.domain.state_machines import (
+    HANDED_OVER_NODE_STATUSES,
+    unexecutable_reason,
+)
 from ravel.dsh.pool import DshRuntimePool
 from ravel.dsh.runtime import RoleRuntime, TurnOutcome
 from ravel.execution.loop import Situation
@@ -202,6 +206,11 @@ class HarnessAgent(RoleSession):
         waiting = self._waiting_on_master(situation)
         lines.extend(waiting or ["Nothing in the DAG is waiting on a decision."])
 
+        results = self._research_results(situation)
+        if results:
+            lines.extend(["", "* Research that has handed a result over"])
+            lines.extend(results)
+
         if situation.open_deviations:
             lines.extend(["", "* The escalations themselves"])
             lines.extend(self._deviation_lines(situation))
@@ -301,14 +310,31 @@ class HarnessAgent(RoleSession):
     @staticmethod
     def _waiting_on_master(situation: Situation) -> list[str]:
         waiting: list[str] = []
+        # First, because it is the one question whose subject this list used to
+        # leave out: `needs_decision` asks Master about a node no seat can run,
+        # and until L-27 was resolved neither this prompt nor `read_project_state`
+        # named one — so the round put a question to Master with nothing under
+        # "what is waiting on you", which is a prompt that reads as a mistake
+        # and was, twice, taken for one.
+        for node in situation.unexecutable:
+            waiting.append(
+                f"- {node.display_id} {node.node_type.value} is READY and cannot "
+                f"run: {unexecutable_reason(node.node_type)}"
+            )
         for node in situation.nodes:
             if node.status is NodeStatus.WAITING_DECISION:
                 waiting.append(
                     f"- {node.display_id} stopped and is waiting on your decision "
-                    f"about what happens to it next. Why it stopped is the verdict "
-                    f"that stopped it: `read_project_state` reports it under "
-                    f"`stopped`, and a node a Worker's contract stopped and a node "
-                    f"a Review would not clear are different problems."
+                    f"about what happens to it next. Why it stopped is under "
+                    f"`stopped` in `read_project_state`, in one of three fields: a "
+                    f"`verdict` means a seat stopped it — a Worker's contract "
+                    f"refused something, or a Review withheld the clearance; a "
+                    f"`run_reconciliation` means RAVEL did, because the run "
+                    f"holding the node was lost; and a `preparation_refusal` means "
+                    f"RAVEL could not build the environment the contract named, "
+                    f"which is a limit of this deployment rather than a fault in "
+                    f"the work. The three are different problems and a decision "
+                    f"that treats one as another will not fit."
                 )
             elif node.status is NodeStatus.BLOCKED:
                 waiting.append(
@@ -323,6 +349,38 @@ class HarnessAgent(RoleSession):
                 f"asked for {deviation.requested_action!r}"
             )
         return waiting
+
+    @staticmethod
+    def _research_results(situation: Situation) -> list[str]:
+        """The research tasks whose results are readable, said in one line each.
+
+        A tool nobody is told about is a tool nobody calls, and this one is the
+        difference between a decision made from the record and a decision made
+        from a recollection of it: the record was written by another seat, in
+        another session, and a Master that has just been rebuilt has no memory
+        of the turn it arrived in. The line names the node and what to read it
+        with; the counts and the verdict are the state read's, so this stays a
+        pointer rather than a second summary that could disagree with it.
+        """
+        handed_over = [
+            node
+            for node in situation.nodes
+            if node.node_type is NodeType.RESEARCH
+            and node.status in HANDED_OVER_NODE_STATUSES
+        ]
+        if not handed_over:
+            return []
+        return [
+            f"- {node.display_id} has handed a result over and is {node.status.value}: "
+            f"{node.objective}"
+            for node in handed_over
+        ] + [
+            "Read one with `read_research_result` before planning anything that "
+            "depends on what it found, and read the record rather than your memory "
+            "of it: the claims, the sources behind them and the verdict are rows, "
+            "and a decision that cites evidence nobody recorded is a decision made "
+            "from nothing."
+        ]
 
     @staticmethod
     def _deviation_lines(situation: Situation) -> list[str]:

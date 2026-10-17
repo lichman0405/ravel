@@ -35,12 +35,19 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: The tables where `UPDATE` is a legitimate operation. Everything else in
 #: RAVEL is append-only.
 #:
-#: Seven of these carry a life cycle — a project's status, a node's status, an
+#: Most of these carry a life cycle — a project's status, a node's status, an
 #: agent's last-seen time, an approval's resolution, a contract's freeze, a
-#: backend job's state — and each is moved by a domain method with a state
-#: machine behind it. The eighth is the event counter, which is infrastructure
+#: backend job's state, a handover's — and each is moved by a domain method with
+#: a state machine behind it. One is the event counter, which is infrastructure
 #: rather than a record: it holds one integer and is advanced by
 #: `UPDATE ... RETURNING`.
+#:
+#: `project_memberships` is here for its two revocation columns, and it is the
+#: one entry in the list whose UPDATE is not a transition: a membership does
+#: not move through states, it is live and then it is withdrawn. The identity
+#: trigger below is what keeps that the only thing that may change — in
+#: particular `role`, so that a role change is a new row rather than an edit to
+#: the one that says who granted what.
 #:
 #: The two contract tables are here for one column only. A contract's terms are
 #: fixed the moment it is written; `frozen_at` records *when* they became
@@ -60,6 +67,13 @@ from ravel.domain.state_machines import NODE_TRANSITIONS, PROJECT_TRANSITIONS
 #: deviation *asked for* is as fixed as any other record's contents; what may
 #: change is which decision answered it, and the identity trigger below is what
 #: keeps that the only thing.
+#:
+#: `runtime_services` is the one entry that is not a record at all. It holds a
+#: process's account of itself — when it started, when it last spoke — and the
+#: whole row is meant to be rewritten on every beat, so it is here because
+#: `UPDATE` is its only write. What the identity trigger protects is the row's
+#: *name*, so that a process cannot make a dead service look alive by beating
+#: on its row.
 UPDATABLE_TABLES: frozenset[str] = frozenset(
     {
         "projects",
@@ -69,8 +83,11 @@ UPDATABLE_TABLES: frozenset[str] = frozenset(
         "acceptance_contracts",
         "execution_contracts",
         "backend_jobs",
+        "lab_handovers",
         "deviation_records",
+        "project_memberships",
         "project_event_counters",
+        "runtime_services",
     }
 )
 
@@ -133,6 +150,32 @@ BACKEND_JOB_IDENTITY_COLUMNS: tuple[str, ...] = (
     "submitted_at",
 )
 
+#: Columns on `lab_handovers` that a state change may not touch. `handover_id`
+#: is first because it is what the trigger names the row by.
+#:
+#: The mutable columns are `state`, `detail` and `closed_at` — a bench finishes,
+#: or RAVEL gives up waiting — and what is absent from this list is the point.
+#: `required_outputs` is what a delivery is checked against, so a handover whose
+#: owed outputs could be rewritten after the bench delivered would let the
+#: check be made to agree with whatever arrived. `execution_contract_version`
+#: is what makes the run identifiable; `preparation_id` is the package the
+#: bench was actually given, which is what makes a result traceable to a
+#: document rather than to whichever preparation happened to be newest.
+LAB_HANDOVER_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "handover_id",
+    "project_id",
+    "node_id",
+    "attempt",
+    "backend",
+    "execution_contract_ref",
+    "execution_contract_version",
+    "preparation_id",
+    "workspace_path",
+    "protocol",
+    "required_outputs",
+    "handed_over_at",
+)
+
 #: Columns on `deviation_records` that its one permitted UPDATE may not touch.
 #: `deviation_id` is first because it is what the trigger names the row by.
 #:
@@ -153,6 +196,37 @@ DEVIATION_IDENTITY_COLUMNS: tuple[str, ...] = (
     "raised_by",
     "raised_at",
 )
+
+#: Columns on `project_memberships` that its one permitted UPDATE may not
+#: touch. `membership_id` is first because it is what the trigger names the row
+#: by.
+#:
+#: The mutable columns are `revoked_at` and `revoked_by`, and the absence of
+#: `role` from this list is the design. A role change is a revocation and a
+#: grant rather than an edit: a row rewritten from LAB_USER to PROJECT_OWNER
+#: would let one row stand for two different grants of authority, and the
+#: `MEMBER_ADDED` in the stream would no longer say what was actually given.
+#: `granted_by` is fixed for the same reason in the other direction — who
+#: conferred the authority is part of what happened.
+MEMBERSHIP_IDENTITY_COLUMNS: tuple[str, ...] = (
+    "membership_id",
+    "project_id",
+    "user_id",
+    "role",
+    "granted_at",
+    "granted_by",
+)
+
+#: The one column on `runtime_services` a heartbeat may not touch.
+#:
+#: Everything else on the row is the reporting process's own account of itself
+#: — which instance it is, when it started, when it last spoke — and all of it
+#: is meant to be rewritten on every beat, which is why this list is one name
+#: long rather than the usual "everything except the state columns". `service`
+#: is the row's identity, so protecting it is what stops a process from taking
+#: over *another* service's row and making a dead supervisor look alive by
+#: writing `temporal-worker`'s beat onto it.
+RUNTIME_SERVICE_IDENTITY_COLUMNS: tuple[str, ...] = ("service",)
 
 _TRANSITION_TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS ravel_node_transitions (
@@ -264,7 +338,10 @@ _NODE_TRANSITION_TRIGGER = "ravel_dag_nodes_transition"
 _PROJECT_TRANSITION_TRIGGER = "ravel_projects_transition"
 _DAG_NODE_IDENTITY_TRIGGER = "ravel_dag_nodes_identity"
 _BACKEND_JOB_IDENTITY_TRIGGER = "ravel_backend_jobs_identity"
+_LAB_HANDOVER_IDENTITY_TRIGGER = "ravel_lab_handovers_identity"
 _DEVIATION_IDENTITY_TRIGGER = "ravel_deviation_records_identity"
+_MEMBERSHIP_IDENTITY_TRIGGER = "ravel_project_memberships_identity"
+_RUNTIME_SERVICE_IDENTITY_TRIGGER = "ravel_runtime_services_identity"
 _APPEND_ONLY_TRIGGER = "ravel_append_only"
 _NO_DELETE_TRIGGER = "ravel_no_delete"
 _CONTRACT_FREEZE_TRIGGER = "ravel_contract_freeze"
@@ -278,7 +355,10 @@ GUARD_TRIGGERS: tuple[str, ...] = (
     _PROJECT_TRANSITION_TRIGGER,
     _DAG_NODE_IDENTITY_TRIGGER,
     _BACKEND_JOB_IDENTITY_TRIGGER,
+    _LAB_HANDOVER_IDENTITY_TRIGGER,
     _DEVIATION_IDENTITY_TRIGGER,
+    _MEMBERSHIP_IDENTITY_TRIGGER,
+    _RUNTIME_SERVICE_IDENTITY_TRIGGER,
     _APPEND_ONLY_TRIGGER,
     _NO_DELETE_TRIGGER,
     _CONTRACT_FREEZE_TRIGGER,
@@ -413,6 +493,17 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
             )
         )
 
+    if "lab_handovers" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_LAB_HANDOVER_IDENTITY_TRIGGER,
+                table="lab_handovers",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=LAB_HANDOVER_IDENTITY_COLUMNS,
+            )
+        )
+
     if "deviation_records" in existing:
         statements.append(
             _trigger_ddl(
@@ -421,6 +512,28 @@ def install(bind: Any, table_names: frozenset[str] | None = None) -> None:
                 function="ravel_protect_identity",
                 events="UPDATE",
                 arguments=DEVIATION_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "project_memberships" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_MEMBERSHIP_IDENTITY_TRIGGER,
+                table="project_memberships",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=MEMBERSHIP_IDENTITY_COLUMNS,
+            )
+        )
+
+    if "runtime_services" in existing:
+        statements.append(
+            _trigger_ddl(
+                name=_RUNTIME_SERVICE_IDENTITY_TRIGGER,
+                table="runtime_services",
+                function="ravel_protect_identity",
+                events="UPDATE",
+                arguments=RUNTIME_SERVICE_IDENTITY_COLUMNS,
             )
         )
 

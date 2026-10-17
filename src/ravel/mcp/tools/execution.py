@@ -41,6 +41,7 @@ from ravel.execution.worker_rules import adjudicate
 from ravel.mcp.context import ToolContext, as_json, require_worker
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
+from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import RecordRepositories
 
 #: The statuses a Worker may stop. A task is live while it is waiting to run or
@@ -262,6 +263,12 @@ def _contract(contract: ExecutionContract) -> dict[str, Any]:
         "resource_limits": dict(contract.resource_limits),
         "acceptance_contract_ref": contract.acceptance_contract_ref,
         "is_frozen": contract.is_frozen,
+        # What the work needs in order to run at all — `{"software": "raspa"}`,
+        # `{"lab": "bench-chemistry"}` — or empty, which is the ordinary case and
+        # means the run needs nothing built for it. A Worker reads this to know
+        # which environment it has been given rather than guessing from the
+        # procedure prose.
+        "execution_requirements": dict(contract.execution_requirements),
     }
 
 
@@ -283,6 +290,23 @@ def read_execution_status(context: ToolContext) -> Any:
         `messages` is what this task has said to the lab. Together they are the
         honest answer to "what is this task waiting on", which is a different
         question from "what is it doing".
+
+        `prepared_workspace` is the directory the run happens in and
+        `preparation` is the record of how it was built — which files, from
+        which inputs, under which terms. They are two fields rather than one
+        because they answer the two questions a Worker asks separately: *where
+        does the work run* and *why is it this and not something else*. An
+        empty `prepared_workspace` on a contract that names an environment means
+        nothing was built, and `preparation` then says what refused — read it
+        rather than working around it. On a contract that names no environment
+        both are absent, and that is not a fault: some work needs no files
+        prepared for it.
+
+        **A refusal is Master's to answer.** A node parked at `WAITING_DECISION`
+        with a refused preparation is waiting on a contract that RAVEL could not
+        turn into a workspace. There is nothing here a Worker may fix: choosing
+        a parameter or an environment is a scientific decision, and this is
+        exactly the case the separation of powers exists for.
         """
         require_worker(context, "read_execution_status")
         with context.read() as session:
@@ -299,6 +323,12 @@ def read_execution_status(context: ToolContext) -> Any:
             contract = ExecutionContractRepository(session, context.project_id).for_node(
                 node_id
             )
+            # Asked of the run in progress — this node's contract version — the
+            # same way `start_job` asks it, so what a Worker is told it may run
+            # in is what the job it is watching was actually given.
+            preparations = PreparationRepository(session, context.project_id)
+            prepared = preparations.prepared_for_run(node_id, contract.version)
+            latest = preparations.latest_for_run(node_id, contract.version)
         return {
             "node_status": node.status.value,
             "contract_version": contract.version,
@@ -310,6 +340,14 @@ def read_execution_status(context: ToolContext) -> Any:
             ],
             "messages": as_json(messages),
             "required_outputs": list(contract.required_outputs),
+            "execution_requirements": dict(contract.execution_requirements),
+            "prepared_workspace": prepared.workspace_path if prepared is not None else "",
+            "prepared_entrypoint": (
+                prepared.execution_metadata.get("entrypoint", "")
+                if prepared is not None
+                else ""
+            ),
+            "preparation": as_json(latest) if latest is not None else None,
         }
 
     return read_execution_status

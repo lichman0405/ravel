@@ -8,8 +8,14 @@ rejecting.
 
 **The database is a dedicated one, and that is enforced.** Teardown truncates
 every table, so pointing these tests at a developer's working database would
-destroy real projects. `_test_settings` refuses to run if the configured
+destroy real projects. `integration_settings` refuses to run if the configured
 database name does not end in `_test`.
+
+**And so is the queue.** The database interlock stops a test writing where a
+deployment reads; the queue interlock stops it putting work in front of a
+deployment's Execution Worker. Both are the same failure — a test's coordinates
+quietly being a deployment's — and both are refused rather than trusted to the
+configuration.
 
 **And it is checked for staleness.** `create_all` creates missing tables and
 leaves existing ones exactly as they are, so a rule added to a model after its
@@ -21,10 +27,12 @@ which reads as an unguarded column rather than as an old table.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import CheckConstraint, inspect, text
@@ -80,17 +88,55 @@ TEST_DATABASE_SUFFIX = "_test"
 def integration_settings() -> Settings:
     """Settings pointed at the dedicated test database.
 
+    **The name comes from the environment when it is set**, because every test
+    in this suite truncates on the way in and two suites therefore cannot share
+    one database: a second run — a live acceptance suite, say — would empty the
+    tables under the first, and the symptom is a `NotFound` for a row the other
+    run had just written. `RAVEL_TEST_DB` is how a second database is named so
+    that two runs can proceed at once; the suffix check below still applies to
+    whatever it says, so the interlock is not weakened by being configurable.
+
+    **And pointed at a queue no deployment polls**, for the same reason the DSN
+    override is nulled out: `Settings()` reads this repository's `.env`, which
+    names `ravel-v0` — the queue `scripts/run_temporal_worker.py` polls in a
+    deployment. Anything built straight from these settings without an override
+    would be configured to put work in front of that worker. The name is per
+    process, so two suites running at once do not take each other's workflows
+    either. Everything that actually starts a run goes through
+    `execution_settings`, which narrows this further to one queue per test; this
+    is the floor under it, for the settings that never reach that fixture.
+
     Raises:
-        RuntimeError: The configured database is not a test database.
+        RuntimeError: The configured database is not a test database, or the
+            configured queue is the one a deployment polls.
     """
     # The DSN override is addressed by its alias, which is the name pydantic
     # actually accepts: an ambient RAVEL_POSTGRES_DSN must not redirect a
     # suite that truncates every table.
-    settings = Settings(env="test", postgres_db="ravel_test", RAVEL_POSTGRES_DSN=None)
+    settings = Settings(
+        env="test",
+        postgres_db=os.environ.get("RAVEL_TEST_DB", "ravel_test"),
+        temporal_task_queue=f"ravel-v0-test-{uuid4().hex}",
+        RAVEL_POSTGRES_DSN=None,
+    )
     if not settings.postgres_db.endswith(TEST_DATABASE_SUFFIX):
         raise RuntimeError(
             f"integration tests truncate every table and refuse to run against "
             f"{settings.postgres_db!r}; the name must end in {TEST_DATABASE_SUFFIX!r}"
+        )
+    # Belt and braces, and it is worth being honest that it is: the line above
+    # makes this unreachable while it stands. It is here so that deleting the
+    # override is refused rather than passing quietly. A deployment's queue is
+    # whatever `Settings()` says, and the comparison is against that settings
+    # object rather than against the literal `"ravel-v0"`, because a deployment
+    # that renamed its queue is still the deployment.
+    deployment_queue = Settings().temporal_task_queue
+    if settings.temporal_task_queue == deployment_queue:
+        raise RuntimeError(
+            f"integration tests refuse to be configured with {deployment_queue!r}, "
+            f"the task queue a deployment's Execution Worker polls; work started "
+            f"by a test would be handed to it and answered against a database the "
+            f"test does not own"
         )
     return settings
 
@@ -352,6 +398,11 @@ def build_prepared(
     with_acceptance: bool = True,
     freeze_acceptance: bool = True,
     cleared: bool = True,
+    parameter_targets: dict[str, str] | None = None,
+    resource_limits: dict[str, str] | None = None,
+    inputs: tuple[str, ...] = (),
+    execution_requirements: dict[str, str] | None = None,
+    procedure: str = "",
 ) -> Prepared:
     """Build a READY node with frozen contracts, the way production does.
 
@@ -417,11 +468,20 @@ def build_prepared(
         project_id=project_id,
         node_id=node.node_id,
         objective="Measure the conductivity of each sample.",
+        # Empty by default, which is what a contract that names an environment
+        # but no method is: `requires_preparation` is about
+        # `execution_requirements`, so a caller that states one has to state
+        # this too or the materializer refuses — see `LabMaterializer`.
+        procedure=procedure,
         allowed_actions=allowed_actions,
         allowed_ranges=allowed_ranges or {},
         allowed_substitutions=allowed_substitutions,
         required_outputs=required_outputs,
         allowed_retries=allowed_retries,
+        parameter_targets=dict(parameter_targets or {}),
+        resource_limits=dict(resource_limits or {}),
+        inputs=inputs,
+        execution_requirements=dict(execution_requirements or {}),
     )
     contracts = ExecutionContractRepository(session, project_id)
     contracts.add(contract)

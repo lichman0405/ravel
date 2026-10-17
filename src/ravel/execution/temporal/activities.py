@@ -23,13 +23,15 @@ connection and any row locks it had taken for the duration.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ravel.config import Settings
+from ravel.domain.artifacts import ArtifactVersion
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.enums import (
     CompletenessVerdict,
@@ -46,9 +48,15 @@ from ravel.domain.execution import (
     WorkerMessage,
 )
 from ravel.domain.ids import new_id
+from ravel.domain.preparation import (
+    PreparationOutcome,
+    PreparationRecord,
+    PreparationRefusal,
+)
 from ravel.domain.roles import AgentRole
 from ravel.execution.backends import (
     BackendRegistry,
+    DeviationReport,
     ExternalDelivery,
     JobOutputs,
     JobRequest,
@@ -60,15 +68,29 @@ from ravel.execution.temporal.contracts import (
     AttemptSummary,
     ExternalResult,
     JobSnapshot,
+    PreparationReport,
     RunInput,
     RunOutcome,
     RunPlan,
 )
 from ravel.execution.worker_rules import adjudicate, on_incomplete_delivery
+from ravel.preparation import (
+    AcceptanceTerms,
+    MaterializationRefused,
+    MaterializerRegistry,
+    PreparationContext,
+    PreparedInput,
+)
 from ravel.state.database import Database
-from ravel.state.repositories.contracts import ExecutionContractRepository
+from ravel.state.repositories.contracts import (
+    AcceptanceContractRepository,
+    ExecutionContractRepository,
+)
 from ravel.state.repositories.dag import DagRepository
+from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import RecordRepositories
+from ravel.state.repositories.research import ArtifactRepository
+from ravel.state.store import ArtifactStore, ArtifactStoreError
 
 #: RAVEL's word for a job, mapped to the word an Execution Record uses. Two
 #: vocabularies because they answer different questions: `JobState` is where the
@@ -93,6 +115,15 @@ class NodeRunActivities:
     settings: Settings
     database: Database
     registry: BackendRegistry
+    #: The environments this deployment can build. Empty by default, which is
+    #: what a deployment that prepares nothing gets: a contract naming an
+    #: environment then refuses with `UNSUPPORTED_ENVIRONMENT`, which is a
+    #: truthful answer rather than a run started in a directory nobody built.
+    materializers: MaterializerRegistry = field(default_factory=MaterializerRegistry)
+    #: Where artifact bytes are read from, for the inputs a contract names.
+    #: `None` is allowed and is not an error until a contract actually names an
+    #: input: a node whose work reads nothing from the project never needs it.
+    store: ArtifactStore | None = None
 
     # ── Beginning ───────────────────────────────────────────────────────────
 
@@ -167,7 +198,304 @@ class NodeRunActivities:
                 deadline_seconds=limits.deadline.total_seconds(),
                 external_wait_seconds=limits.external_wait.total_seconds(),
                 activity_timeout_seconds=limits.activity_timeout.total_seconds(),
+                requires_preparation=contract.requires_preparation,
             )
+
+    # ── Preparing ───────────────────────────────────────────────────────────
+
+    @activity.defn
+    async def prepare_execution(self, plan: RunPlan) -> PreparationReport:
+        """Build the directory this run happens in, or record why it cannot be.
+
+        This is where a frozen contract becomes files. It reads the contract,
+        resolves the inputs it names to bytes, asks the materializer for that
+        environment to write a workspace, and records what was built — or, when
+        the contract cannot be materialized, records the refusal and parks the
+        node at WAITING_DECISION, where the role that wrote the contract is
+        asked.
+
+        **The refusal is recorded, not raised.** A contract that does not state
+        a temperature is not an infrastructure fault and retrying it produces
+        the same answer; what it is, is a fact about the terms that Master has
+        to see. So the activity returns rather than fails, and the workflow
+        ends the run on that report.
+
+        **The record and the node move are one transaction.** A node waiting on
+        Master with no explanation of what was wrong with its contract is a
+        state RAVEL cannot reach: either both are written or neither is.
+
+        **Reading the contract is by reference, not by node.** `for_node` would
+        answer with the *newest* version, and Master may have revised the terms
+        while this run was beginning — but this run was ordered under the
+        version in its plan, and a workspace built from any other terms would
+        be a run executing a contract nobody ordered it under.
+
+        Idempotent in the sense that matters: a retried call writes the same
+        files with the same digests and adds a second record of the same
+        preparation, which is history rather than duplication. A node already
+        parked by an earlier refusal is left where it is.
+
+        Raises:
+            ApplicationError: The plan and the contract disagree about whether
+                an environment is needed, or the workspace root is not under
+                the runtime directory. Non-retryable in both cases: neither is
+                a condition that time will fix.
+        """
+        workspace_root = self._workspace_root(plan)
+        with self.database.read_only() as session:
+            contract = ExecutionContractRepository(session, plan.project_id).get(
+                contract_id=plan.execution_contract_ref
+            )
+            if not contract.requires_preparation:
+                raise ApplicationError(
+                    f"run of {plan.display_id} was ordered with preparation and "
+                    f"contract {contract.contract_id} names no environment to "
+                    "prepare; nothing was built",
+                    non_retryable=True,
+                )
+            resolved = self._resolve_inputs(session, contract)
+            acceptance = self._acceptance_terms(session, plan)
+
+        try:
+            inputs = tuple(self._read_inputs(plan, resolved))
+            prepared = self.materializers.materialize(
+                PreparationContext(
+                    project_id=plan.project_id,
+                    node_id=plan.node_id,
+                    node_display_id=plan.display_id,
+                    contract=contract,
+                    workspace_root=workspace_root,
+                    inputs=inputs,
+                    acceptance=acceptance,
+                )
+            )
+        except MaterializationRefused as refused:
+            return self._record_refusal(
+                plan, refused, contract=contract, workspace_path=str(workspace_root)
+            )
+
+        record = PreparationRecord(
+            project_id=plan.project_id,
+            node_id=plan.node_id,
+            execution_contract_ref=plan.execution_contract_ref,
+            execution_contract_version=plan.execution_contract_version,
+            outcome=PreparationOutcome.PREPARED,
+            materializer=prepared.materializer,
+            materializer_version=prepared.materializer_version,
+            workspace_path=prepared.workspace_path,
+            required_outputs=prepared.required_outputs,
+            manifest=prepared.manifest,
+            checks=prepared.checks,
+            execution_metadata=prepared.execution_metadata,
+        )
+        with self.database.transaction() as session:
+            PreparationRepository(session, plan.project_id).record(record)
+
+        return PreparationReport(
+            preparation_id=record.preparation_id,
+            outcome=PreparationOutcome.PREPARED,
+            workspace_path=prepared.workspace_path,
+            materializer=prepared.materializer,
+            materializer_version=prepared.materializer_version,
+            required_outputs=prepared.required_outputs,
+            execution_metadata=prepared.execution_metadata,
+        )
+
+    def _workspace_root(self, plan: RunPlan) -> Path:
+        """Where this contract version's workspace lives.
+
+        One directory per node and contract version, under the runtime root:
+        which is what makes "isolated" structural rather than a convention two
+        runs agree to observe. A version is frozen, so the files in it are the
+        files every attempt of this run reads — a retried preparation writes
+        the same bytes rather than moving the work to a new directory.
+
+        Raises:
+            ApplicationError: A path component would escape the runtime root.
+                The ids come from the database rather than from a model, so
+                this is a deployment whose runtime directory is misconfigured,
+                and it is not retryable.
+        """
+        try:
+            return self.settings.runtime_path(
+                "prepared",
+                plan.project_id,
+                plan.node_id,
+                f"v{plan.execution_contract_version}",
+            )
+        except ValueError as error:
+            raise ApplicationError(
+                f"node {plan.display_id}'s workspace cannot be placed under the "
+                f"runtime directory: {error}",
+                non_retryable=True,
+            ) from error
+
+    def _resolve_inputs(
+        self, session: Session, contract: ExecutionContract
+    ) -> tuple[tuple[str, ArtifactVersion | None], ...]:
+        """Which artifact version each of the contract's inputs resolves to.
+
+        Resolved here, in the transaction that read the contract, and read as
+        bytes outside it: what the input *is* is a fact about the project, and
+        what it *contains* is a fact about the object store, and holding a
+        database transaction open across an object-store read would hold it for
+        as long as the store takes to answer.
+
+        The newest version under a filename wins, which is the rule a person
+        would use. The manifest records the version that was read, so a project
+        that holds two files under one name leaves a trace of which one this
+        run used rather than a silent choice.
+        """
+        artifacts = ArtifactRepository(session, contract.project_id, self.store)
+        return tuple(
+            (name, artifacts.newest_with_filename(name)) for name in contract.inputs
+        )
+
+    def _acceptance_terms(
+        self, session: Session, plan: RunPlan
+    ) -> AcceptanceTerms | None:
+        """The criteria this node's delivery will be measured against.
+
+        Read by *reference*, from the node's own binding, and not by asking for
+        the newest: the binding is what the node was committed with, and the
+        point of freezing criteria is that the run and the judgement agree on
+        one document. A node bound to nothing gets `None` rather than an
+        exception — most nodes are, and a node type that cannot be judged has
+        no criteria to be missing.
+
+        Handed to the materializer rather than left for it to fetch, because
+        what a package states the delivery must contain and what Review will
+        measure it by have to be the same document, and a materializer reading
+        the project itself would be a second reader free to read a different
+        version of it.
+        """
+        node = DagRepository(session, plan.project_id).node(plan.node_id)
+        if not node.acceptance_contract_ref:
+            return None
+        contract = AcceptanceContractRepository(session, plan.project_id).get(
+            contract_id=node.acceptance_contract_ref
+        )
+        return AcceptanceTerms(
+            contract_id=contract.contract_id,
+            version=contract.version,
+            criteria=contract.criteria,
+        )
+
+    def _read_inputs(
+        self, plan: RunPlan, resolved: tuple[tuple[str, ArtifactVersion | None], ...]
+    ) -> list[PreparedInput]:
+        """The bytes of the inputs that were found.
+
+        An input that resolves to nothing is left out rather than refused here:
+        whether a missing input can be worked around is a question about the
+        environment being built — a materializer that never reads that file
+        does not care — and the materializer is the layer that knows.
+
+        **The store is required by a resolved input, not by a named one.** A
+        contract's `inputs` is a list of names the plan wrote, and resolving a
+        name is a database query against the project's artifacts; a name the
+        project holds nothing under — a plan naming the research contract, or a
+        file the run is meant to produce itself — resolves to `None`, and there
+        are no bytes to fetch for it. Refusing those because the deployment has
+        no store would refuse a run whose inputs are *all* absent, which is a
+        fact about the project rather than about this host, and it is the
+        materializer's to answer.
+
+        Raises:
+            MaterializationRefused: This deployment cannot read artifact bytes
+                it was asked for. Raised rather than returned so that the caller
+                records it the same way it records every other reason a
+                contract could not be prepared.
+        """
+        wanted = [(name, version) for name, version in resolved if version is not None]
+        if self.store is None and wanted:
+            raise MaterializationRefused(
+                PreparationRefusal.ENVIRONMENT_UNAVAILABLE,
+                f"node {plan.display_id}'s contract names inputs "
+                f"{[name for name, _ in wanted]} and this deployment has no "
+                "object store configured to read them from; the bytes of an "
+                "artifact live in object storage and never in PostgreSQL",
+            )
+        found: list[PreparedInput] = []
+        for name, version in resolved:
+            if version is None:
+                continue
+            # The check above: a resolved version is exactly what makes the
+            # store required, so this branch cannot be reached without one.
+            assert self.store is not None
+            try:
+                data = self.store.get(version.storage_key)
+            except ArtifactStoreError as error:
+                raise MaterializationRefused(
+                    PreparationRefusal.ENVIRONMENT_UNAVAILABLE,
+                    f"input {name!r} is registered as artifact "
+                    f"{version.artifact_id} version {version.version} and its "
+                    f"bytes could not be read from the object store: {error}",
+                ) from error
+            found.append(
+                PreparedInput(
+                    name=name,
+                    data=data,
+                    source=f"{version.artifact_id}/v{version.version}",
+                )
+            )
+        return found
+
+    def _record_refusal(
+        self,
+        plan: RunPlan,
+        refused: MaterializationRefused,
+        *,
+        contract: ExecutionContract,
+        workspace_path: str,
+    ) -> PreparationReport:
+        """Write the refusal and park the node, in one transaction.
+
+        Parking rather than failing the run is the whole shape of this: the
+        contract is what is wrong, Master is the only role that may revise it,
+        and WAITING_DECISION is the state that asks Master a question. A run
+        that ended in FAILED would say the work was tried and did not work,
+        which is not what happened — nothing was tried.
+
+        A node something else has already moved is left where it is: Master may
+        have answered while this was running, and re-parking a node that was
+        resumed would undo an answer already given.
+
+        **The contract comes in beside the plan because the record keeps what
+        the run owed.** `required_outputs` means the same thing on a refusal as
+        on a preparation — what this contract asked the work to deliver — and a
+        reader that had to open the contract for it on one outcome and not the
+        other would be reading a field whose meaning depended on which row it
+        was in. Master is the reader: a refusal that reported no required
+        outputs would describe a node that owed nothing.
+        """
+        record = PreparationRecord(
+            project_id=plan.project_id,
+            node_id=plan.node_id,
+            execution_contract_ref=plan.execution_contract_ref,
+            execution_contract_version=plan.execution_contract_version,
+            outcome=PreparationOutcome.REFUSED,
+            refusal=refused.refusal,
+            reason=refused.reason,
+            workspace_path=workspace_path,
+            required_outputs=contract.required_outputs,
+        )
+        with self.database.transaction() as session:
+            PreparationRepository(session, plan.project_id).record(record)
+            dag = DagRepository(session, plan.project_id)
+            if dag.node(plan.node_id).status is NodeStatus.RUNNING:
+                dag.transition_node(
+                    plan.node_id,
+                    NodeStatus.WAITING_DECISION,
+                    actor_id="preparation",
+                )
+        return PreparationReport(
+            preparation_id=record.preparation_id,
+            outcome=PreparationOutcome.REFUSED,
+            workspace_path=workspace_path,
+            refusal=refused.refusal,
+            reason=refused.reason,
+        )
 
     # ── Handing work over ───────────────────────────────────────────────────
 
@@ -195,20 +523,42 @@ class NodeRunActivities:
         arrived. Both are recovered the same way, by calling `submit` again,
         and that is safe only because the port requires `submit` to be
         idempotent in `(project_id, node_id, attempt)`. See `WorkBackend`.
+
+        **The node follows the job from the handover, not only from a poll.**
+        A backend may answer `WAITING_EXTERNAL` at submission — the laboratory
+        one always does, because a person at a bench has the work the moment
+        it is handed over and RAVEL can see nothing about them afterwards — and
+        a run that waits on a person for a week must not spend that week
+        reading `RUNNING`. It would be a claim about an observation nobody made,
+        and it is the specific disguise the wait must not wear. The poll loop
+        never corrects it either: `_watch` enters the durable wait precisely
+        *because* the state is `WAITING_EXTERNAL`, so `check_job` is not called
+        again until the answer arrives. So the mirroring `check_job` does is
+        done here as well, and for the same reason.
         """
         backend = self.registry.named(plan.backend)
         with self.database.transaction() as session:
             job = RecordRepositories(session, plan.project_id).jobs.start(
                 _pending_job(plan, backend, attempt)
             )
+            # Read in the same transaction as the job row, so the workspace a
+            # job is submitted with is the workspace that existed when the job
+            # was created rather than whatever a later preparation wrote.
+            prepared = PreparationRepository(
+                session, plan.project_id
+            ).prepared_for_run(plan.node_id, plan.execution_contract_version)
         if job.backend_job_ref is not None:
             # A previous call got as far as the backend and recorded what it
             # got back. Asking is the only safe move: a second `submit` would
             # be relying on the backend's idempotency when a plain status read
-            # answers the question outright.
+            # answers the question outright. The node is moved to match the
+            # state that *was* recorded, because this is the call that would
+            # otherwise leave a recovered handover reading as a run.
+            with self.database.transaction() as session:
+                _follow_node_status(session, job)
             return _snapshot(job, backend.status(job.backend_job_ref))
 
-        handle = backend.submit(_request(plan, attempt))
+        handle = backend.submit(_request(plan, attempt, prepared))
         with self.database.transaction() as session:
             stored = RecordRepositories(session, plan.project_id).jobs.record_state(
                 job.job_id,
@@ -217,6 +567,7 @@ class NodeRunActivities:
                 backend_job_ref=handle.backend_job_ref,
                 detail=f"submitted to {backend.name}",
             )
+            _follow_node_status(session, stored)
             return _snapshot(stored)
 
     @activity.defn
@@ -290,9 +641,31 @@ class NodeRunActivities:
            **in one transaction**, so a deviation that exists always has a job
            that was stopped because of it.
 
-        The node is deliberately not moved here. Where it ends up is decided
-        once, by `finish_node_run`, after the workflow has settled how the run
-        ended — the same rule the rest of the node's status path follows.
+        **A report that is already on the record is not recorded again.** Most
+        reports are the backend's own observation and the row here is the first
+        the project hears of it. A laboratory is the other case: the person at
+        the bench reported through the Gateway, that route wrote the deviation
+        with their name on it, and the report travelling up the signal names
+        the row it is about. Raising a second one would put two rows in the
+        project for one sentence — one attributed to a person and one to a
+        backend — and Master would be asked the same question twice. So the
+        existing row is what the run stops against, and what the Worker made of
+        it goes where the Worker's reading always goes: the message and the job
+        detail.
+
+        **The node is brought back, and where it ends up is still not decided
+        here.** Two different statements, and the difference is the state
+        machine's: a wait ends by *resuming*, and the node that resumes is what
+        `finish_node_run` takes to `WAITING_DECISION` once the workflow has
+        settled how the run ended. The stop above leaves the job `CANCELLED`,
+        so resuming is what `_follow_node_status` computes — the same call the
+        ordinary poll makes, for the same reason. Skipping it is not an
+        option: a bench's node is `WAITING_EXTERNAL` from the handover, so a
+        deviation from one would otherwise reach `finish_node_run` as a node
+        that is still waiting, which the DAG refuses — correctly, since a wait
+        that has not ended is not a run that has. A deviation is the one report
+        that ends a run without the job ever resuming, and `abandon_job` is the
+        other path with that shape; both move the node themselves.
         """
         report = status.deviation
         assert report is not None  # the caller checked
@@ -316,16 +689,8 @@ class NodeRunActivities:
 
         with self.database.transaction() as session:
             records = RecordRepositories(session, project_id)
-            deviation = records.deviations.raise_(
-                DeviationRecord(
-                    project_id=project_id,
-                    node_id=job.node_id,
-                    execution_contract_ref=job.execution_contract_ref,
-                    requested_action=verdict.requested_action,
-                    description=verdict.reason,
-                    permitted=False,
-                    raised_by=f"backend:{job.backend}",
-                )
+            deviation_id = self._deviation_row(
+                records, project_id, job, report, verdict.requested_action, verdict.reason
             )
             records.messages.record(
                 WorkerMessage(
@@ -344,7 +709,44 @@ class NodeRunActivities:
                     "the work has stopped pending Master's decision"
                 ),
             )
-            return _snapshot(stored, deviation_id=deviation.deviation_id)
+            # The job is CANCELLED now, so a node that was waiting resumes.
+            # `finish_node_run` is what takes it from there.
+            _follow_node_status(session, stored)
+            return _snapshot(stored, deviation_id=deviation_id)
+
+    def _deviation_row(
+        self,
+        records: RecordRepositories,
+        project_id: str,
+        job: BackendJob,
+        report: DeviationReport,
+        requested_action: str,
+        reason: str,
+    ) -> str:
+        """The row this report is about, raising one only if there is none.
+
+        The lookup is by identifier and it also checks the row belongs to the
+        node this job is running: an identifier is a value that arrived from
+        outside RAVEL, and a report naming a deviation raised about some other
+        node would otherwise be able to attribute this run's stop to it.
+        """
+        named = report.deviation_id
+        if named:
+            existing = records.deviations.find(named)
+            if existing is not None and existing.node_id == job.node_id:
+                return existing.deviation_id
+        raised = records.deviations.raise_(
+            DeviationRecord(
+                project_id=project_id,
+                node_id=job.node_id,
+                execution_contract_ref=job.execution_contract_ref,
+                requested_action=requested_action,
+                description=reason,
+                permitted=False,
+                raised_by=f"backend:{job.backend}",
+            )
+        )
+        return raised.deviation_id
 
     @activity.defn
     async def deliver_external_result(
@@ -356,6 +758,15 @@ class NodeRunActivities:
         restart in between. This is what makes the result a fact: the signal
         that carried it lived in the workflow's memory, and memory does not
         survive the process that holds it.
+
+        **A delivery can carry a report as well as files**, and that is the only
+        way a person's report reaches a waiting run. A job in `WAITING_EXTERNAL`
+        is never polled — the workflow is blocked in a durable wait, and
+        `check_job` is not called until the wait ends — so a lab user who says
+        the plan and the bench disagree has to be heard through the door their
+        delivery comes through. It is handled before anything is recorded, for
+        the reason `check_job` handles it first: its answer decides whether
+        there is any work left at all.
         """
         with self.database.transaction() as session:
             job = RecordRepositories(session, project_id).jobs.get(job_id=job_id)
@@ -368,6 +779,11 @@ class NodeRunActivities:
 
         backend = self.registry.named(job.backend)
         status = backend.deliver(job.backend_job_ref, _delivery(result))
+        if status.deviation is not None:
+            stopped = await self._stop_for_deviation(project_id, job, status, backend)
+            if stopped is not None:
+                return stopped
+
         with self.database.transaction() as session:
             stored = RecordRepositories(session, project_id).jobs.record_state(
                 job_id,
@@ -552,12 +968,20 @@ class NodeRunActivities:
 # ── Building the values that cross between the two layers ───────────────────
 
 
-def _request(plan: RunPlan, attempt: int) -> JobRequest:
+def _request(
+    plan: RunPlan, attempt: int, prepared: PreparationRecord | None
+) -> JobRequest:
     """The frozen contract's content, as the work being asked for.
 
     `is_retry` is derived rather than passed in, so it cannot disagree with the
     attempt it describes: work numbered above the run's first attempt has, by
     definition, been tried before.
+
+    The workspace is the one preparation recorded as *prepared* for these
+    terms, which is not always the newest thing recorded about them: an
+    attempt that prepared a workspace and a later one that could not build
+    another are two facts, and the run does not stop having a directory
+    because the second attempt failed to write a second one.
     """
     return JobRequest(
         project_id=plan.project_id,
@@ -568,6 +992,12 @@ def _request(plan: RunPlan, attempt: int) -> JobRequest:
         objective=plan.objective,
         task_spec=plan.task_spec,
         required_outputs=plan.required_outputs,
+        workspace_path=prepared.workspace_path if prepared is not None else "",
+        entrypoint=(
+            prepared.execution_metadata.get("entrypoint", "")
+            if prepared is not None
+            else ""
+        ),
         is_retry=attempt > plan.attempt,
     )
 

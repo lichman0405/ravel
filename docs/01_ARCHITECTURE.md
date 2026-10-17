@@ -24,7 +24,7 @@ flowchart TB
 
     CW --> CB[Compute Backend]
     CB --> MOCKC[MockComputeBackend]
-    CB -.future.-> SLURM[Slurm/HPC]
+    CB --> SLURM[SlurmComputeBackend -- real cluster over SSH]
 
     EW --> EB[Experiment Backend]
     EB --> MOCKL[MockLabBackend]

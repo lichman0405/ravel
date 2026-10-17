@@ -156,7 +156,7 @@ make tui         # 纯 TUI 客户端（需 Gateway 已在运行）
 |---|---|
 | **Worker Agent** | 持有某个角色工具的 DSH session，即 Compute Worker Agent 与 Experimental Worker Agent。它按冻结的 Execution Contract 执行，不做任何科研决策。 |
 | **Temporal Execution Worker** | 托管 Temporal activity 的进程（`make worker`）。属于基础设施，没有任何权限，不属于五类 Agent。 |
-| **Backend** | 真正干活的东西。V0 里两个都是 mock：`MockComputeBackend` 与 `MockLabBackend`。 |
+| **Backend** | 真正干活的东西。默认部署是两个 mock：`MockComputeBackend` 与 `MockLabBackend`。compute 侧另有一个真实的 `SlurmComputeBackend`（`make worker` 加 `--compute-backend slurm` 才启用，见 `.env.example` 的 `RAVEL_SLURM_*`）；lab 侧的真实实现随 P11-06 到来。 |
 
 ### 服务与端口（全部绑在 127.0.0.1）
 
@@ -268,7 +268,7 @@ Lab User 只能看到分配的实验任务；Admin 看到 DSH/Temporal/Runtime �
 
 ### Worker 的后端场景
 
-V0 的 compute 和 lab 都是 mock，通过 scenario 决定行为：
+默认部署里 compute 和 lab 都是 mock，通过 scenario 决定行为：
 
 ```bash
 make worker ARGS="--compute-scenario COMPUTE_SCIENTIFIC_FAILURE --lab-scenario LAB_DEVIATION_PRESSURE"
@@ -281,6 +281,22 @@ make worker ARGS="--compute-scenario COMPUTE_SCIENTIFIC_FAILURE --lab-scenario L
 ```
 
 默认是 `COMPUTE_SUCCESS` / `LAB_SUCCESS`。mock 产生的所有 artifact 都会被标记为 simulated，不能作为 Evidence Ledger 的真实证据。
+
+compute 侧可以换成真实的 cluster（默认关闭，需要 `RAVEL_SLURM_*` 配置）：
+
+```bash
+make worker ARGS="--compute-backend slurm"
+```
+
+没有 host 或 username 时这个开关会在启动时被拒绝，而不是等到第一个节点排到队列才卡住。集群密码只由 worker 进程读取，见 `.env.example` 与 `KNOWN_LIMITATIONS.md` L-22。
+
+lab 侧可以换成真实的 bench —— 也就是把准备好的 package 交给一个人（默认关闭）：
+
+```bash
+make worker ARGS="--lab-backend human-lab"
+```
+
+这个开关不需要任何 credential 或 host，因为它需要的是一个人：没人站在 bench 前时，实验就停在 `WAITING_EXTERNAL` 等，而不是报错。人通过 Gateway 上传文件、报告 deviation，两者都先写进 record 再投递给等待中的 run。RAVEL 看不到也无法叫停一个 bench，见 `KNOWN_LIMITATIONS.md` L-29。
 
 ---
 
@@ -360,7 +376,7 @@ make test
 - 默认所有服务端口只绑 `127.0.0.1`；不要改成 `0.0.0.0`。
 - `.env` 是 git-ignored，永远不要提交。
 - V0 的 compute/lab 是 mock，research 是真实的，绝不允许 mock web evidence。
-- 没有用户级撤销（deactivation/revocation）路径；authority 一旦 grant 就只能等 project 结束。
+- 没有账号级撤销（deactivation）路径；membership 可以被 PROJECT_OWNER 撤销（`POST /projects/{id}/members/{user_id}/revoke`），撤销立即生效，但账号本身仍然存在。
 - V0 没有 scheduler，loop 是进程不是服务。
 
 ---

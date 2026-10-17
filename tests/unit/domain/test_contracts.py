@@ -145,6 +145,89 @@ def test_freezing_an_execution_contract_is_idempotent() -> None:
     assert frozen.is_frozen and frozen.freeze() is frozen
 
 
+# ── The environment a contract requires ─────────────────────────────────────
+
+
+def test_a_contract_that_names_no_environment_requires_no_preparation() -> None:
+    """The compatibility rule, as a property rather than as a promise.
+
+    Every contract written before the field existed names no environment, and
+    a node whose contract names none is run the way it always was: nothing is
+    materialized, and the Worker executes under the terms it has. If this
+    ever stopped being true, every existing node in every project would be
+    waiting on a workspace.
+    """
+    assert _execution().execution_requirements == {}
+    assert not _execution().requires_preparation
+    assert _execution().requires_preparation is False
+
+
+@pytest.mark.parametrize(
+    ("kind", "name"),
+    [("software", "raspa"), ("lab", "bench-chemistry")],
+)
+def test_a_contract_may_require_either_kind_of_environment(kind: str, name: str) -> None:
+    contract = ExecutionContract(
+        project_id="proj-a",
+        node_id="n1",
+        objective="Run the simulation.",
+        execution_requirements={kind: name},
+    )
+    assert contract.requires_preparation
+    assert contract.execution_requirements == {kind: name}
+
+
+def test_a_requirement_of_an_unknown_kind_is_refused_where_it_is_written() -> None:
+    """A typo must not become a run started in a workspace nothing prepared.
+
+    The kind is a closed list, so `softwre` is refused at the moment the plan
+    is written rather than discovered by a Worker that is handed a node whose
+    environment nobody built. This is the same rule `allowed_ranges` and
+    `allowed_substitutions` are checked by, and for the same reason.
+    """
+    with pytest.raises(ValidationError) as refused:
+        ExecutionContract(
+            project_id="proj-a",
+            node_id="n1",
+            objective="Run the simulation.",
+            execution_requirements={"softwre": "raspa"},
+        )
+    assert "softwre" in str(refused.value)
+    assert "software" in str(refused.value), (
+        "the refusal does not name the kinds that would have been accepted, so "
+        "the model reading it cannot correct itself"
+    )
+
+
+def test_a_requirement_that_names_nothing_is_refused() -> None:
+    """`{"software": ""}` reads as a requirement and names nothing to prepare."""
+    with pytest.raises(ValidationError) as refused:
+        ExecutionContract(
+            project_id="proj-a",
+            node_id="n1",
+            objective="Run the simulation.",
+            execution_requirements={"software": "   "},
+        )
+    assert "names nothing" in str(refused.value)
+
+
+def test_a_requirement_may_name_an_environment_ravel_has_no_materializer_for() -> None:
+    """Which package RAVEL can build for is a deployment fact, not a domain one.
+
+    `vasp` is a real request a Master may make. Whether this deployment can
+    serve it is answered by the preparation layer — with a refusal Master
+    decides on — rather than by the contract's schema, which has no way to
+    know what is installed.
+    """
+    contract = ExecutionContract(
+        project_id="proj-a",
+        node_id="n1",
+        objective="Relax the cell.",
+        execution_requirements={"software": "vasp"},
+    )
+    assert contract.requires_preparation
+
+
 # ── Authority envelope ──────────────────────────────────────────────────────
 
 

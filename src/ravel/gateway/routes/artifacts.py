@@ -33,7 +33,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
-from ravel.gateway.deps import GatewayStateDep, PrincipalDep
+from ravel.gateway.deps import GatewayState, GatewayStateDep, PrincipalDep
 from ravel.state.repositories.research import ArtifactRepository
 from ravel.state.store import ArtifactStore, ArtifactStoreError, S3ArtifactStore
 
@@ -51,8 +51,14 @@ MAX_UPLOAD_BYTES = 256 * 1024 * 1024
 CHUNK_BYTES = 1 << 20
 
 
-def _store(state: GatewayStateDep) -> ArtifactStore:
-    """The project's object store.
+def artifact_store(state: GatewayState) -> ArtifactStore:
+    """The object store this deployment writes artifacts to.
+
+    Public, and used by the laboratory upload route as well as by the artifact
+    routes here: both doors put bytes in the same bucket, and a second copy of
+    this would be a second place for the deployment's storage configuration to
+    be read — which is how one door comes to write to a bucket the other cannot
+    find.
 
     Raises:
         HTTPException: 503, and the message says which half is missing. A
@@ -190,7 +196,7 @@ async def upload(
             detail=f"this deployment accepts uploads up to {MAX_UPLOAD_BYTES} bytes",
         )
 
-    store = _store(state)
+    store = artifact_store(state)
     try:
         with state.database.transaction() as session:
             repository = ArtifactRepository(session, standing.project_id, store)
@@ -272,7 +278,7 @@ def download(
     if request.headers.get("if-none-match") in {etag, chosen.content_hash}:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
 
-    store = _store(state)
+    store = artifact_store(state)
     try:
         # Opened here rather than inside the generator so that a store which
         # refuses is a 502 the caller can act on, rather than a 200 whose body
@@ -303,4 +309,4 @@ def download(
     )
 
 
-__all__ = ["CHUNK_BYTES", "MAX_UPLOAD_BYTES", "router"]
+__all__ = ["CHUNK_BYTES", "MAX_UPLOAD_BYTES", "artifact_store", "router"]

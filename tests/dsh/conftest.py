@@ -18,12 +18,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import inspect
 
 from ravel.config import Settings
 from ravel.domain.events import ActorType
 from ravel.dsh.pool import DshRuntimePool
-from ravel.state.database import Database
+from ravel.state.database import Database, create_db_engine
 from ravel.state.repositories.projects import ProjectRegistry
+from ravel.state.tables import Base
 
 
 @pytest.fixture(scope="session")
@@ -51,7 +53,48 @@ def live_settings(tmp_path_factory: pytest.TempPathFactory, model_credential: st
     behind in the checkout.
     """
     scratch = tmp_path_factory.mktemp("dsh-spike")
-    return Settings(runtime_dir=scratch / "runtime")
+    settings = Settings(runtime_dir=scratch / "runtime")
+    _refuse_an_unmigrated_database(settings)
+    return settings
+
+
+def _refuse_an_unmigrated_database(settings: Settings) -> None:
+    """Fail before the first live turn if the database is behind the models.
+
+    These cases run against the database `.env` names, not the test one. Every
+    other suite here is pointed at `ravel_test` and builds its schema with
+    `create_all`, so a model added with a table is there without anybody
+    running a migration. This suite is not: it is the deployment path, and the
+    database it reads is migrated by `make migrate` or not at all. A table the
+    models declare and the database lacks therefore does not fail as a missing
+    table — it fails inside a tool, and the agent reports `Error executing tool
+    read_project_state` and answers honestly that it cannot read the state.
+    The case then fails on a sentence about the model, which is wrong about
+    both the model and the fault.
+
+    Checked once per session, because the answer cannot change under a suite
+    that never writes DDL. It compares table *names* only; whether a table that
+    exists still carries every constraint the models declare is the question
+    `tests/integration/conftest.py` asks of the database it creates itself.
+
+    Raises:
+        RuntimeError: A table the models declare is absent from the database.
+    """
+    engine = create_db_engine(settings)
+    try:
+        present = set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+    missing = sorted(set(Base.metadata.tables) - present)
+    if missing:
+        raise RuntimeError(
+            "the database this suite is pointed at is older than the models, "
+            "so these tables are missing: "
+            + ", ".join(missing)
+            + f". It is {settings.postgres_db!r}, which the live suites share "
+            "with a real deployment and nothing here migrates; run "
+            "`make migrate`."
+        )
 
 
 @pytest.fixture

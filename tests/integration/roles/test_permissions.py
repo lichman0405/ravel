@@ -187,6 +187,55 @@ async def test_master_commits_a_node_through_its_own_server(
     assert call.payload["node_id"] in decisions[0].affected_nodes.created
 
 
+async def test_a_review_node_is_refused_at_planning_and_the_plan_keeps_nothing(
+    role_environment: RoleEnvironment, project: Any, database: Any
+) -> None:
+    """L-27: the one DAG tool that let a planner ask for work nobody performs.
+
+    Master is the only role that may change the plan, so the refusal has to be
+    Master's own tool saying no — and it has to say *why* in terms a planner can
+    act on, because the alternative is what the live runs did: nine REVIEW nodes
+    across one project, every one of them cancelled, and a Master that spent
+    forty-three minutes working out that no seat was ever going to be given one.
+
+    Asserted at the server rather than at `DagNode.create` because the claim is
+    about what a live session experiences: the sentence reaches the model. The
+    domain refuses it too, and that is what makes the roster of paths closed
+    rather than one tool being careful.
+    """
+    register_roadmap(database, project, *STAGES)
+    result = await probe(
+        role_environment.for_project(project, AgentRole.MASTER),
+        calls=(
+            (
+                "add_dag_node",
+                {
+                    "node_type": "REVIEW",
+                    "objective": "Review the conductivity series before the fit.",
+                    "rationale": "The fit should not rest on an unchecked measurement.",
+                },
+            ),
+        ),
+    )
+
+    call = result.calls[0]
+    assert call.failed, f"a REVIEW node was committed: {call.payload}"
+    error = call.error or ""
+    assert "Error executing tool add_dag_node" in error
+    reason = error.split("add_dag_node", 1)[1].lstrip(": ")
+    assert "REVIEW node is not a kind of work" in reason, (
+        "the refusal is a bare tool error rather than something a planner can act "
+        f"on: {error}"
+    )
+    assert "criteria" in reason, (
+        f"the refusal does not say where the checking goes instead: {error}"
+    )
+
+    with database.read_only() as session:
+        assert DagRepository(session, project.project_id).nodes() == []
+        assert DecisionRepository(session, project.project_id).all() == []
+
+
 async def test_master_expands_a_stage_and_the_siblings_depend_on_each_other(
     role_environment: RoleEnvironment, project: Any, database: Any
 ) -> None:
@@ -268,7 +317,7 @@ async def test_a_stage_beyond_the_horizon_is_refused_with_a_readable_reason(
                 {
                     "phase": STAGES[3],
                     "rationale": "Planning the last stage now.",
-                    "nodes": [{"node_type": "REVIEW", "objective": "Review everything."}],
+                    "nodes": [{"node_type": "RESEARCH", "objective": "Look it up."}],
                 },
             ),
         ),

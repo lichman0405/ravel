@@ -44,10 +44,15 @@ pytestmark = pytest.mark.integration
 #: line earlier is delivered by the next read.
 FAST = Cadence(poll_seconds=0.01, heartbeat_seconds=0.05)
 
-#: Creating a project emits `PROJECT_CREATED`, so a fresh project's stream
-#: holds one event before any test writes anything. The count below starts from
-#: there rather than from zero; `test_stream.py` argues why that is right.
-BORN = 1
+#: Where the stream stands once a test's own setup is behind it, which is what
+#: the counts below are relative to; `test_stream.py` argues why starting from
+#: the creation rather than from zero is the honest thing to do. Opening a
+#: project writes two events — `PROJECT_CREATED` and the `MEMBER_ADDED` that
+#: says who owns it — and every test here then adds one account through
+#: `account`, which is a third. A test that followed the setup with a second
+#: membership would need this to move, and if it ever does, the assertion that
+#: fails names a sequence rather than passing quietly.
+BORN = 3
 
 
 @pytest.fixture
@@ -108,10 +113,11 @@ def test_an_owner_follows_the_stream_and_sees_it_move(
     """The whole route, end to end: anchor, replay, and then live.
 
     The three phases are read in order and each is asserted, because they are
-    three different mechanisms that happen to share a socket. The creation
-    event was in the record before the connection opened and arrives as replay;
-    the note is written after the anchor was read and arrives because the feed
-    noticed the record change.
+    three different mechanisms that happen to share a socket. The three events
+    that were in the record before the connection opened arrive as replay —
+    the project, its owner, and the account this test adds — and the note,
+    written after the anchor was read, arrives because the feed noticed the
+    record change.
     """
     account(database, username="ada", role=UserRole.PROJECT_OWNER, project=project)
     headers = bearer(sign_in(streamer, "ada")["access_token"])
@@ -124,7 +130,14 @@ def test_an_owner_follows_the_stream_and_sees_it_move(
         assert anchor["project_id"] == project.project_id
         assert anchor["head_seq"] == BORN
 
-        assert socket.receive_json()["event_type"] == ProjectEventType.PROJECT_CREATED.value
+        replayed = [socket.receive_json()["event_type"] for _ in range(BORN)]
+        assert replayed == [
+            ProjectEventType.PROJECT_CREATED.value,
+            # The fixture's owner, then the account this test adds: authority
+            # conferred is a fact the stream carries like any other.
+            ProjectEventType.MEMBER_ADDED.value,
+            ProjectEventType.MEMBER_ADDED.value,
+        ]
 
         _note(database, project, "somebody moved a node")
 
@@ -141,8 +154,9 @@ def test_a_reconnecting_client_is_replayed_from_where_it_stopped(
 ) -> None:
     """`after_seq` on the query string, which is `docs/08` §7's reconnect.
 
-    A client that drops, reconnects and asks for everything after sequence 2 is
-    sent 3 and onward — the events it missed, and not the ones it already drew.
+    A client that drops, reconnects and asks for everything after the head it
+    was holding is sent what came next — the events it missed, and not the ones
+    it already drew.
     """
     account(database, username="ada", role=UserRole.PROJECT_OWNER, project=project)
     headers = bearer(sign_in(streamer, "ada")["access_token"])
@@ -304,5 +318,12 @@ def test_closing_the_socket_stops_the_feed(
         # From the beginning of the stream, including what the dead connection
         # had already been sent: a new connection is a new reader, and nothing
         # the old one had got to survives it.
-        assert socket.receive_json()["event_type"] == ProjectEventType.PROJECT_CREATED.value
-        assert socket.receive_json()["payload"] == {"note": "after they left"}
+        replayed = [socket.receive_json() for _ in range(BORN + 1)]
+
+    assert [frame["event_type"] for frame in replayed] == [
+        ProjectEventType.PROJECT_CREATED.value,
+        ProjectEventType.MEMBER_ADDED.value,
+        ProjectEventType.MEMBER_ADDED.value,
+        ProjectEventType.MASTER_CHECKPOINTED.value,
+    ]
+    assert replayed[-1]["payload"] == {"note": "after they left"}

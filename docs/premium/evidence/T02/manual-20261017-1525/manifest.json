@@ -1,0 +1,86 @@
+{
+  "run_id": "manual-20261017-1525",
+  "task_id": "T02",
+  "acceptance_map": {
+    "T02-AC1": [
+      "tests/unit",
+      "tests/integration (pending)",
+      "merge 7cca83e"
+    ],
+    "T02-AC2": [
+      "empty DB upgrade",
+      "Phase10 snapshot upgrade",
+      "alembic heads"
+    ],
+    "T02-AC3": [
+      "enums/reconcile inspection",
+      "Phase11 tests"
+    ],
+    "T02-AC4": [
+      "make lint",
+      "unit 1106/0/2",
+      "integration pending"
+    ]
+  },
+  "started_at": "2026-10-17 15:20 Asia/Shanghai",
+  "completed_at": "2026-10-17 15:25 Asia/Shanghai",
+  "source_commit": "7cca83e4bddffb2fa4017267c63e136c0ca15baa",
+  "source_digest": "dd77b4720d5480b8df312ce3079b03581859c3faa0d42df66fda3ddc8c2dd459",
+  "platform": "Ubuntu 24.04 canonical container (ravel-premium-ubuntu24)",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "29.1.3",
+    "compose": "2.40.3",
+    "pyright": "1.1.414",
+    "postgres": "16",
+    "temporal": "1.25.2",
+    "s3": "LocalStack 3.8 (SIMULATED_S3)"
+  },
+  "commands": [
+    {
+      "command": "make lint",
+      "exit_code": 0
+    },
+    {
+      "command": "pytest tests/unit",
+      "exit_code": 0,
+      "tests": 1106,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    {
+      "command": "alembic upgrade head (empty DB)",
+      "exit_code": 0,
+      "version": "d1f7a40c8e21"
+    },
+    {
+      "command": "alembic upgrade head (Phase10 snapshot)",
+      "exit_code": 0,
+      "version": "d1f7a40c8e21"
+    },
+    {
+      "command": "alembic heads",
+      "exit_code": 0,
+      "heads": [
+        "d1f7a40c8e21"
+      ]
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T02",
+  "exit_code": 0,
+  "junit_path": null,
+  "log_path": "docs\\premium\\evidence\\T02\\manual-20261017-1525\\commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs\\premium\\evidence\\T02\\manual-20261017-1525\\commands.txt",
+      "sha256": "f52047f5602e5ebe001a48e4097f2c1cad3e162d84338a5e0d05179a7e1f0595",
+      "size": 1412
+    }
+  ],
+  "data_mode": "REAL for migrations/unit; SIMULATED_S3 for LocalStack integration (separate run)",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": "integration/e2e final gate and real MinIO are not part of this manual record"
+}

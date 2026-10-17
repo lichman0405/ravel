@@ -673,8 +673,15 @@ def test_an_event_serialises_for_the_wire() -> None:
 
 
 def test_the_event_vocabulary_is_closed() -> None:
-    """A new event type is a product decision, not an implementation detail."""
-    assert len(ProjectEventType) == 23
+    """A new event type is a product decision, not an implementation detail.
+
+    Twenty-five, and the two Phase 11 added are the first that are about the
+    *people* in a project rather than about the work: a membership granted and
+    a membership withdrawn. They are events rather than a row written quietly
+    because membership is where authority comes from, and the stream is where
+    the question "who could direct this project, and when" is answered.
+    """
+    assert len(ProjectEventType) == 25
     assert ProjectEventType.PROJECT_CREATED in set(ProjectEventType)
     with pytest.raises(ValueError):
         ProjectEventType("SOMETHING_ELSE")

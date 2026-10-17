@@ -35,6 +35,7 @@ import httpx
 from ravel.config import Settings
 from ravel.domain.enums import AccessStatus
 from ravel.research import addressing
+from ravel.research.deepread import html_text
 from ravel.research.leads import Retrieval
 from ravel.state.store import hash_chunks
 
@@ -489,27 +490,14 @@ def excerpt_of(body: bytes, media_type: str | None) -> str:
     Verbatim is the whole point: an excerpt that a later reader can search for
     in the stored snapshot is checkable, and a summary is not. Tags are
     stripped only to make the text readable, never rewritten or completed.
+
+    This is the *first* `EXCERPT_CHARS` of the same rendering
+    `ravel.research.deepread` produces for a whole document, which is what
+    makes an excerpt checkable against a read: the passage a session is shown
+    when it opens a source is a prefix of the passage it gets when it reads the
+    source back by region. The body is cut to half a megabyte before the text
+    is taken, because an excerpt is not worth a pass over a large page.
     """
     if not body or media_type not in ("text/html", "application/xhtml+xml"):
         return ""
-    text = body[: 512 * 1024].decode("utf-8", errors="replace")
-    for tag in ("script", "style", "noscript"):
-        while (start := text.find(f"<{tag}")) != -1:
-            end = text.find(f"</{tag}>", start)
-            text = text[:start] + (" " if end == -1 else text[end + len(tag) + 3 :])
-    stripped = " ".join(strip_tags(text).split())
-    return stripped[:EXCERPT_CHARS]
-
-
-def strip_tags(text: str) -> str:
-    out: list[str] = []
-    inside = False
-    for character in text:
-        if character == "<":
-            inside = True
-        elif character == ">":
-            inside = False
-            out.append(" ")
-        elif not inside:
-            out.append(character)
-    return "".join(out)
+    return html_text(body[: 512 * 1024].decode("utf-8", errors="replace"))[:EXCERPT_CHARS]
