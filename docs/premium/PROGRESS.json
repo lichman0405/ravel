@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 18:40 Asia/Shanghai",
+  "updated_at": "2026-10-17 19:40 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "21d660b881eb9172d019f50385b36cee71b12cae",
+  "integration_head_sha": "53771de139df62c144305163986e3020f7ea923f",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -93,18 +93,18 @@
       "note": "T04 重开修复后DONE：per-binding brief文件 + tool server启动快照，18个科研/执行副作用入口require_current_lease；独立复审AC1-AC4 PASS（P2 TOCTOU作为非阻塞hardening记录）；T04 12 passed、candidate gate run-20261017-180741 PASS；候选17d855d与tip tree一致，ff-only合入。历史0e75a91保留。"
     },
     "T05": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T05",
+      "base_sha": "b5ad0cad6fe787a4517b44875f6f5f79e0b22174",
+      "head_sha": "9930db5",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-17 19:40 Asia/Shanghai",
+      "note": "T05 RUNNING：持久 retry_episodes 表/迁移、RetryPolicy/Store、loop turn timeout/并发上限、supervisor operator_retry/pending_escalations；35 tests + migration gate PASS；等待独立 Review。"
     },
     "T06": {
       "status": "TODO",
