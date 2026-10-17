@@ -39,6 +39,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -65,6 +66,9 @@ from ravel.domain.enums import (
     WorkerMessageKind,
 )
 from ravel.domain.events import ActorType, ProjectEventType
+from ravel.domain.lab import HANDOVER_STATES
+from ravel.domain.preparation import PreparationOutcome, PreparationRefusal
+from ravel.domain.reconciliation import RunFailureClass, WorkflowLiveness
 from ravel.domain.roles import AgentRole
 
 #: Deterministic constraint names. Without this, PostgreSQL invents names and
@@ -153,11 +157,24 @@ class ProjectMembershipRow(Base):
 
     `role` lives here rather than on a token so that a revoked membership takes
     effect on the next request instead of at token expiry.
+
+    **Uniqueness is per live membership, not per row.** The constraint this
+    table used to carry — one row per `(project, user)` — would have made a
+    second grant after a revocation impossible, and the row cannot be deleted
+    to make room for it. The partial index says what the rule always meant: a
+    user holds at most one *live* role in a project, and the revoked rows
+    behind it are history.
     """
 
     __tablename__ = "project_memberships"
     __table_args__ = (
-        UniqueConstraint("project_id", "user_id", name="uq_project_memberships_one_role"),
+        Index(
+            "uq_project_memberships_one_active_role",
+            "project_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
         _enum_constraint("role", UserRole),
         Index("ix_project_memberships_user_id", "user_id"),
     )
@@ -172,6 +189,8 @@ class ProjectMembershipRow(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     granted_by: Mapped[str | None] = mapped_column(REF)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(REF)
 
 
 class AgentIdentityRow(Base):
@@ -620,6 +639,9 @@ class ExecutionContractRow(Base):
         JSONB, nullable=False, default=list
     )
     resource_limits: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    execution_requirements: Mapped[dict[str, str]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
     acceptance_contract_ref: Mapped[str | None] = mapped_column(REF)
@@ -1096,6 +1118,231 @@ class WorkerMessageRow(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class RunReconciliationRow(Base):
+    """A run RAVEL found dead, and what it did about it.
+
+    **This table is append-only, and that is enforced rather than intended.**
+    It is not in `guards.UPDATABLE_TABLES`, so the guard triggers give it the
+    same `ravel_reject_write` and `ravel_reject_delete` every other record
+    table has. A reconciliation is a statement about what RAVEL observed at a
+    moment; a row that could be edited afterwards would be a statement about
+    what somebody later preferred it to say.
+
+    `one_reconciliation_per_run` is the second half of the idempotency the
+    reconciler needs, and it is keyed by the same triple the run is:
+    `(project_id, node_id, execution_contract_version)`. A scan that runs twice
+    finds the first record instead of writing a second, and a node whose terms
+    Master revised and whose second run is also lost still gets its own record
+    — because that run is a different run under different terms, and collapsing
+    the two would hide the second loss behind the first recovery.
+
+    `workflow_id` is stored rather than derived. It could be rebuilt from the
+    node and the version, and deriving it in a reader is exactly how the two
+    would come to disagree: the id is what a person pastes into the Temporal
+    UI to ask about the run, and a record of a lost run should carry the name
+    it was lost under.
+
+    **`job_id` carries no foreign key, and the omissions are deliberate.** The
+    project and the node are containers — this record lives and dies with them
+    — while a job is not: it is what the record *quotes* from the moment it
+    looked, the way an event's payload quotes an id without owning it. A
+    cascading key would let the evidence disappear with the thing it is
+    evidence about, and a restricting one would make a job row undeletable for
+    the sake of a record that merely mentions it.
+    """
+
+    __tablename__ = "run_reconciliations"
+    __table_args__ = (
+        _enum_constraint("observed", WorkflowLiveness),
+        _enum_constraint("failure_class", RunFailureClass),
+        _enum_constraint("node_status_before", NodeStatus),
+        _enum_constraint("node_status_after", NodeStatus),
+        _enum_constraint("job_state_before", JobState),
+        _enum_constraint("job_state_after", JobState),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        UniqueConstraint(
+            "project_id",
+            "node_id",
+            "execution_contract_version",
+            name="one_reconciliation_per_run",
+        ),
+        Index("ix_run_reconciliations_node_created", "node_id", "created_at"),
+    )
+
+    reconciliation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    workflow_id: Mapped[str] = mapped_column(REF, nullable=False)
+    observed: Mapped[str] = mapped_column(String(32), nullable=False)
+    failure_class: Mapped[str] = mapped_column(String(32), nullable=False)
+    node_status_before: Mapped[str] = mapped_column(String(32), nullable=False)
+    node_status_after: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: Nullable, and null together: a run that died before `start_job` recorded
+    #: a job has no job to describe, and a row that named one anyway would send
+    #: a reader to a row that does not exist.
+    job_id: Mapped[str | None] = mapped_column(ID)
+    job_state_before: Mapped[str | None] = mapped_column(String(32))
+    job_state_after: Mapped[str | None] = mapped_column(String(32))
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detected_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PreparationRow(Base):
+    """One contract materialized into a workspace, or one refusal to materialize it.
+
+    **Append-only, enforced rather than intended.** This table is not in
+    `guards.UPDATABLE_TABLES`, so it carries the same `ravel_reject_write` and
+    `ravel_reject_delete` triggers as every other record table. What RAVEL built
+    for a run — and the hashes it built it from — is what makes a result
+    traceable to its inputs, and a row that could be rewritten afterwards would
+    be a trace that follows whatever was last written rather than what was run.
+
+    **No unique constraint, unlike `run_reconciliations`.** A reconciliation is
+    written by a scan that will look at the same stranded run again, so it has
+    to be deduplicated by PostgreSQL. Preparation is written once per run by an
+    activity that runs before the job starts, and the interesting case is the
+    one a unique constraint would hide: an attempt that refused and the
+    attempt after it that prepared, or two preparations whose manifests differ
+    because the host changed under them. Both are history worth keeping, and
+    the newest row is the one a reader wants — `PreparationRepository` sorts
+    and finds them.
+
+    `execution_contract_ref` carries no foreign key, for the reason
+    `ExecutionRecordRow`'s does not: the row quotes the contract version it
+    read, and the contract is not deleted out from under a record of what was
+    built from it.
+    """
+
+    __tablename__ = "execution_preparations"
+    __table_args__ = (
+        _enum_constraint("outcome", PreparationOutcome),
+        # Nullable, and the constraint is written so that NULL passes: a
+        # preparation that succeeded has no refusal class, which is not a
+        # violation of a closed vocabulary.
+        _enum_constraint("refusal", PreparationRefusal),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        Index("ix_execution_preparations_node_created", "node_id", "created_at"),
+    )
+
+    preparation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    materializer: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    materializer_version: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    workspace_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    required_outputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    checks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    execution_metadata: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    refusal: Mapped[str | None] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+#: The states a lab handover may be in, as SQL literals, derived from the
+#: domain's own tuple so a state added there cannot leave this constraint
+#: behind. Narrower than `JobState` on purpose: a handover is never `SUBMITTED`
+#: or `RUNNING`, and the constraint is where that stops being a convention.
+_HANDOVER_STATES_SQL = ", ".join(f"'{state.value}'" for state in HANDOVER_STATES)
+
+
+class LabHandoverRow(Base):
+    """One piece of work handed to a laboratory, while it is in their hands.
+
+    **This is a cluster job's `submission.json`, in the database.** A Slurm run
+    is found again by reading the note the backend uploaded next to it; a bench
+    has nowhere to upload a note to, so the same fact lives here — which work
+    was handed over, under which contract version, out of which prepared
+    package, and what it owed. `HumanLabBackend` is handed a reference and
+    nothing else, so without this row it would have to reassemble its own work
+    out of four tables that can move under it.
+
+    **`one_handover_per_attempt` is what makes handing work over idempotent.**
+    The requirement is the port's, on every backend: a worker killed between the
+    backend accepting work and the job reference being recorded is retried, and
+    the retry must find the handover it already made. Enforced by the database
+    rather than by a check-then-insert, so two activities racing produce one row
+    and one conflict rather than two handovers with the same bench.
+
+    **Mutable for its state columns only.** It is in `guards.UPDATABLE_TABLES`
+    with an identity trigger, like `backend_jobs`: a handover moves from waiting
+    to one of its endings while the bench works, and everything describing what
+    was handed over is fixed at the handover. `required_outputs` is the column
+    that matters most here — it is what a delivery is checked against, and a
+    list that could be edited after the fact would let the check be made to
+    agree with whatever arrived.
+
+    `execution_contract_ref` carries no foreign key, for the reason
+    `ExecutionRecordRow`'s does not: the row quotes the contract version the
+    bench was handed, and the contract is not deleted out from under the record
+    of what was asked for.
+    """
+
+    __tablename__ = "lab_handovers"
+    __table_args__ = (
+        CheckConstraint(
+            f"state IN ({_HANDOVER_STATES_SQL})", name="state_is_a_handover_state"
+        ),
+        CheckConstraint("attempt >= 1", name="attempt_is_positive"),
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        CheckConstraint(
+            f"(state = '{JobState.WAITING_EXTERNAL.value}') = (closed_at IS NULL)",
+            name="closing_is_all_or_nothing",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "node_id",
+            "execution_contract_version",
+            "attempt",
+            name="uq_lab_handovers_attempt",
+        ),
+        Index("ix_lab_handovers_project_node", "project_id", "node_id"),
+    )
+
+    handover_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    backend: Mapped[str] = mapped_column(String(64), nullable=False)
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    preparation_id: Mapped[str] = mapped_column(REF, nullable=False, default="")
+    workspace_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    protocol: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    required_outputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    handed_over_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 # ── The event stream ────────────────────────────────────────────────────────
 
 
@@ -1143,6 +1390,51 @@ class ProjectEventCounterRow(Base):
         ID, ForeignKey("projects.project_id", ondelete="CASCADE"), primary_key=True
     )
     next_seq: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+
+
+class RuntimeServiceRow(Base):
+    """A long-running process saying it is still there.
+
+    **One row per service, not one per process start.** This is not a record of
+    what happened — the log is — it is the *current* answer to "is the thing
+    that drives projects actually running", which is a question about now. So
+    `service` is the key and everything else is overwritten on every beat: a
+    process that restarts takes its own row over with a new `instance` and a
+    new `started_at`, and there is never more than one supervisor row to
+    reconcile. A table of restarts would answer a question nobody asks on this
+    screen and would have to be pruned.
+
+    **`heartbeat_at` is the only column that has to keep moving**, and that is
+    what makes this table worth having rather than inferring liveness from the
+    work: a supervisor that died leaves a project that is merely idle looking
+    exactly like one that is being driven. Nothing about the project's own
+    state distinguishes the two, and no amount of reading the DAG will.
+
+    `detail` is JSONB for the reason every aggregate's inside is: it is a
+    process's own summary of itself — which projects it holds, how many
+    runtimes are open — and it is never queried on its own. Note that it is
+    *not* project-scoped and must not be handed out as it stands: the routes
+    that read this filter it to the project the caller is asking about.
+    """
+
+    __tablename__ = "runtime_services"
+
+    service: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: Which process, as `host:pid`. A restart changes it, which is how a
+    #: reader tells "the supervisor has been up for six hours" from "the
+    #: supervisor came back a minute ago".
+    instance: Mapped[str] = mapped_column(String(255), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: When the process itself recorded that it was stopping. Null while it is
+    #: running — including after a restart, because a process that came back
+    #: overwrites the whole row. A row that is silent *and* null is a process
+    #: that died; a row with a time is one that was shut down, and the two want
+    #: different things from whoever is reading.
+    stopped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 def _install_guards(_target: Any, connection: Any, **_: Any) -> None:

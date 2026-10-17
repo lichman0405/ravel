@@ -17,16 +17,23 @@ against the domain types alone:
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import delete, update
+from sqlalchemy.exc import IntegrityError
 
 from ravel.domain.enums import ApprovalStatus, UserRole
+from ravel.domain.events import ActorType, ProjectEventType
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.state.database import Database
+from ravel.state.outbox import events_since
+from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.identity import (
     ApprovalRepository,
     MembershipRepository,
     UserRepository,
+    memberships_of,
 )
+from ravel.state.tables import ProjectMembershipRow
 
 pytestmark = pytest.mark.integration
 
@@ -137,6 +144,344 @@ def test_an_owner_may_grant_what_it_holds(database: Database, project: Project) 
         )
 
     assert membership.granted_by == owner
+
+
+def test_an_owner_may_confer_the_operational_role(
+    database: Database, project: Project
+) -> None:
+    """`ADMIN` is the one role the ranking would refuse and the check allows.
+
+    The ranking exists so authority cannot be *escalated*: a user who holds
+    less may not confer more. Administering a runtime is a different authority
+    from directing research — `may_direct_project` excludes it — so an owner
+    handing it over parts with nothing they had, and the check that governs
+    managing members is that method rather than the comparison. What the
+    comparison still refuses is a lab user reaching for a rank above its own,
+    which the test above pins.
+    """
+    owner = _owner_id(database)
+    with database.transaction() as session:
+        membership = MembershipRepository(session, project.project_id).grant(
+            user_id=_a_user(database, "operator"),
+            role=UserRole.ADMIN,
+            granted_by=owner,
+        )
+
+    assert membership.role is UserRole.ADMIN
+    assert membership.may_direct_project is False, (
+        "the operational role was conferred and it must not carry the scientific one"
+    )
+
+
+# ── Membership: a role is withdrawn, never deleted or edited ────────────────
+
+
+def _granted(database: Database, project: Project, username: str, role: UserRole) -> str:
+    """Account and live membership, granted by the fixture's owner."""
+    user_id = _a_user(database, username)
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).grant(
+            user_id=user_id, role=role, granted_by=_owner_id(database)
+        )
+    return user_id
+
+
+def test_a_withdrawn_membership_is_history_and_not_a_deletion(
+    database: Database, project: Project
+) -> None:
+    """The row stays, the authority goes, and both are readable afterwards.
+
+    Deleting the row would make "this person was in the project and was
+    removed" indistinguishable from "this person was never here", which is the
+    first question an inquiry into a project's decisions asks. So the read that
+    authorization is made from returns nothing, and the read that answers the
+    other question returns the row with the name of whoever withdrew it.
+    """
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with database.transaction() as session:
+        repository = MembershipRepository(session, project.project_id)
+        withdrawn = repository.revoke(lab_user, revoked_by=owner)
+
+    assert withdrawn.revoked_by == owner
+    assert withdrawn.revoked_at is not None
+    assert withdrawn.is_active is False
+    assert withdrawn.role is UserRole.LAB_USER, "the role they held is still on the row"
+
+    with database.read_only() as session:
+        repository = MembershipRepository(session, project.project_id)
+        assert repository.for_user(lab_user) is None, (
+            "a withdrawn membership is still answering the question authorization asks"
+        )
+        assert [membership.role for membership in repository.active()] == [
+            UserRole.PROJECT_OWNER
+        ]
+        history = repository.history_for_user(lab_user)
+    assert [membership.is_active for membership in history] == [False]
+
+
+def test_a_withdrawal_is_on_the_record(database: Database, project: Project) -> None:
+    """Membership is where authority comes from, so both directions of it are
+    events: an authority that appeared or vanished with nothing in the stream
+    would be one an inquiry could not reconstruct."""
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            lab_user, revoked_by=owner
+        )
+
+    with database.read_only() as session:
+        events = events_since(session, project.project_id)
+
+    assert [event.event_type for event in events] == [
+        ProjectEventType.PROJECT_CREATED,
+        # The fixture's owner, then the lab user this test granted.
+        ProjectEventType.MEMBER_ADDED,
+        ProjectEventType.MEMBER_ADDED,
+        ProjectEventType.MEMBER_REVOKED,
+    ]
+    added, revoked = events[2], events[3]
+    assert added.payload == {
+        "membership_id": revoked.payload["membership_id"],
+        "user_id": lab_user,
+        "role": UserRole.LAB_USER.value,
+    }
+    assert revoked.actor_type is ActorType.USER
+    assert revoked.actor_id == owner, "the record does not say who withdrew it"
+
+
+def test_a_lab_user_cannot_withdraw_a_membership(database: Database, project: Project) -> None:
+    """Administering set-up is not directing the project, and the check is the
+    one that draws that line rather than the ranking — a lab user outranks
+    nobody, and the refusal has to say so for the right reason."""
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with pytest.raises(PermissionError, match="managing membership"), (
+        database.transaction()
+    ) as session:
+        MembershipRepository(session, project.project_id).revoke(
+            owner, revoked_by=lab_user
+        )
+
+
+def test_an_administrator_cannot_withdraw_a_membership(
+    database: Database, project: Project
+) -> None:
+    """The case the rank comparison would have got wrong.
+
+    `ADMIN` outranks `PROJECT_OWNER` in the domain's ordering, so a check
+    written as "at least as much authority as the role you are touching" would
+    let an administrator remove the owner of a project it does not direct. The
+    authority to run a runtime is not the authority to decide who is in a
+    project.
+    """
+    admin = _granted(database, project, "operator", UserRole.ADMIN)
+
+    with pytest.raises(PermissionError, match="managing membership"), (
+        database.transaction()
+    ) as session:
+        MembershipRepository(session, project.project_id).revoke(
+            _owner_id(database), revoked_by=admin
+        )
+
+
+def test_a_project_keeps_its_last_owner(database: Database, project: Project) -> None:
+    """Nothing in RAVEL can repair a project nobody may direct.
+
+    Memberships are granted by owners, so an owner who removes the last one
+    leaves a project that no request can open — there is no operator-side
+    recovery to fall back on. A second owner is what makes the first one's
+    withdrawal a handover rather than an ending, so both halves are asserted.
+    """
+    owner = _owner_id(database)
+    second = _granted(database, project, "second-owner", UserRole.PROJECT_OWNER)
+
+    # A handover: with two owners, either may step down and the project still
+    # has one.
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            owner, revoked_by=second
+        )
+
+    with pytest.raises(PermissionError, match="last owner"), (
+        database.transaction()
+    ) as session:
+        MembershipRepository(session, project.project_id).revoke(
+            second, revoked_by=second
+        )
+
+    with database.read_only() as session:
+        owners = MembershipRepository(session, project.project_id).owners()
+    assert [membership.user_id for membership in owners] == [second], (
+        "the refusal did not leave the project with the owner it had"
+    )
+
+
+def test_a_withdrawn_user_is_refused_on_the_next_request(
+    database: Database, project: Project
+) -> None:
+    """Authority is re-read, so a withdrawal does not wait for a token to expire.
+
+    This is the claim the domain's own docstring makes, and it is a claim about
+    the repository rather than about tokens: `for_user` returns live rows, so
+    the very next authorization decision sees the withdrawal. A cached
+    membership would keep answering until something else invalidated it, and
+    what invalidates a cache is exactly what an emergency removal cannot wait
+    for.
+    """
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with database.read_only() as session:
+        assert MembershipRepository(session, project.project_id).for_user(
+            lab_user
+        ) is not None
+
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            lab_user, revoked_by=owner
+        )
+
+    with database.read_only() as session:
+        assert MembershipRepository(session, project.project_id).for_user(
+            lab_user
+        ) is None
+        assert (
+            MembershipRepository(session, project.project_id).may_direct(lab_user)
+            is False
+        )
+
+
+def test_a_withdrawn_membership_is_not_a_project_the_user_belongs_to(
+    database: Database, project: Project
+) -> None:
+    """The read the project list is built from, which has to mean *live* too.
+
+    `memberships_of` answers a different question from `for_user` — not "may
+    this user do this here" but "which projects may this user open at all" —
+    and it is what the Gateway's project list and `/auth/me` are both assembled
+    from. It filtered on the user and not on the revocation, and that was
+    correct only for as long as no membership could be withdrawn: with
+    withdrawal it offers a client a project whose every other route refuses it,
+    which is a door handed over that cannot be walked through.
+
+    Asserted against the owner's own list as well, because the cheap way to make
+    the first half pass is to filter away everything.
+    """
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with database.read_only() as session:
+        assert [m.project_id for m in memberships_of(session, lab_user)] == [
+            project.project_id
+        ]
+
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            lab_user, revoked_by=owner
+        )
+
+    with database.read_only() as session:
+        assert memberships_of(session, lab_user) == []
+        assert [m.project_id for m in memberships_of(session, owner)] == [
+            project.project_id
+        ], "the withdrawal took somebody else's membership with it"
+
+
+def test_a_withdrawn_user_may_be_granted_again(
+    database: Database, project: Project
+) -> None:
+    """The partial index is what makes the second grant possible, and it is the
+    reason the constraint had to become partial rather than the rows being
+    deleted: (project, user) is unique among *live* memberships."""
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            lab_user, revoked_by=owner
+        )
+
+    with database.transaction() as session:
+        again = MembershipRepository(session, project.project_id).grant(
+            user_id=lab_user, role=UserRole.LAB_USER, granted_by=owner
+        )
+
+    with database.read_only() as session:
+        repository = MembershipRepository(session, project.project_id)
+        live = repository.for_user(lab_user)
+        history = repository.history_for_user(lab_user)
+
+    assert live is not None, "the second grant is not in force"
+    assert live.membership_id == again.membership_id
+    assert len(history) == 2, "the first grant is history, not something to overwrite"
+    assert [membership.is_active for membership in history] == [False, True]
+
+
+def test_a_live_membership_is_refused_rather_than_edited(
+    database: Database, project: Project
+) -> None:
+    """A role change is a withdrawal and a grant, so that both are on the record.
+
+    An `UPDATE` of `role` would leave the `MEMBER_ADDED` event describing a
+    grant that is no longer anywhere on the record — which is the reason the
+    column is in the identity trigger's list as well.
+    """
+    owner = _owner_id(database)
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with pytest.raises(PermissionError, match="withdrawing it and granting"), (
+        database.transaction()
+    ) as session:
+        MembershipRepository(session, project.project_id).grant(
+            user_id=lab_user, role=UserRole.PROJECT_OWNER, granted_by=owner
+        )
+
+
+def test_a_membership_that_is_not_there_cannot_be_withdrawn(
+    database: Database, project: Project
+) -> None:
+    """A withdrawal is a change to something that exists, and the answer for
+    "there is nothing here to change" is that, rather than a quiet success."""
+    with pytest.raises(NotFound), database.transaction() as session:
+        MembershipRepository(session, project.project_id).revoke(
+            _a_user(database, "stranger"), revoked_by=_owner_id(database)
+        )
+
+
+def test_a_membership_cannot_be_deleted(database: Database, project: Project) -> None:
+    """The guard that makes "withdrawn, never deleted" a property of the
+    database rather than of the code that happens to write it today."""
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with pytest.raises(IntegrityError, match="never deleted"), (
+        database.transaction()
+    ) as session:
+        session.execute(
+            delete(ProjectMembershipRow).where(
+                ProjectMembershipRow.user_id == lab_user,
+                ProjectMembershipRow.project_id == project.project_id,
+            )
+        )
+
+
+def test_a_role_cannot_be_edited_in_place(database: Database, project: Project) -> None:
+    """The identity trigger's half of the same rule: only `revoked_at` and
+    `revoked_by` may move, so a role change has to be the two events."""
+    lab_user = _granted(database, project, "lab-user", UserRole.LAB_USER)
+
+    with pytest.raises(IntegrityError, match="immutable"), (
+        database.transaction()
+    ) as session:
+        session.execute(
+            update(ProjectMembershipRow)
+            .where(ProjectMembershipRow.user_id == lab_user)
+            .values(role=UserRole.PROJECT_OWNER.value)
+        )
 
 
 # ── Approvals: only a person with standing may answer ───────────────────────

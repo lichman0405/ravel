@@ -93,14 +93,17 @@ make up
 
 That is `scripts/run_v0.sh`, and it: starts the containers and waits for real
 readiness, applies migrations to head, runs the Gateway, runs the execution
-worker, and opens the console. Quitting the console stops the three processes it
-started. The containers are left running; `make dev-down` stops those.
+worker, runs the supervisor, and opens the console. **Closing the console does
+not stop RAVEL** — that is the point of the supervisor, and leaving the console
+is what a person does after creating a project. Ctrl-C stops the four processes
+the script started; the containers are left running, and `make dev-down` stops
+those.
 
 Variants:
 
 ```bash
 scripts/run_v0.sh --no-tui              # a server with no console attached
-scripts/run_v0.sh --project <id>        # also drive that project's loop
+scripts/run_v0.sh --project <id>        # drive only that project, by hand
 make gateway                            # the Gateway alone, with reload
 make worker                             # the execution worker alone
 make tui                                # the console alone (needs the Gateway)
@@ -108,19 +111,68 @@ make tui                                # the console alone (needs the Gateway)
 
 The three services, and what each is for:
 
-- **Gateway** (`make gateway`) — the only HTTP surface. Serves the console,
-  authenticates people, enforces project membership, and holds the one route a
-  person has to Master. It creates no DSH runtime until somebody needs one.
-- **Execution worker** (`make worker`) — polls the Temporal task queue and runs
-  nodes. It holds nothing in memory that matters: kill it mid-run and a
-  replacement resumes the same workflow, because the history is in Temporal and
-  the job is in PostgreSQL. **V0 registers `MockComputeBackend` and
-  `MockLabBackend`**; both are mocks and everything they produce is recorded as
-  simulated.
-- **Project loop** (`make project PROJECT=<id>`) — sequences one project:
-  reads state, starts runs, notices endings, and asks Master or Review to decide
-  what needs deciding. It is not started automatically, because there is no
-  scheduler in V0 and which projects run is an operator's decision.
+- **Gateway** — the only HTTP surface. Serves the console, authenticates people,
+  enforces project membership, and holds the one route a person has to Master.
+  It creates no DSH runtime until somebody needs one. Start it through
+  `scripts/run_gateway.py`: `uvicorn`'s own logging configuration replaces the
+  root handler, which would drop the `service` field from every line.
+- **Execution worker** — polls the Temporal task queue and runs nodes. It holds
+  nothing in memory that matters: kill it mid-run and a replacement resumes the
+  same workflow, because the history is in Temporal and the job is in
+  PostgreSQL. **V0 registers `MockComputeBackend` and `MockLabBackend`**; both
+  are mocks and everything they produce is recorded as simulated. Pass
+  `--compute-backend slurm` (with the settings in §3 filled in) to register the
+  real one instead; it refuses to start without a host and a username rather
+  than failing at the first node that reaches the queue.
+- **Supervisor** — discovers every active project in PostgreSQL and gives each
+  one a loop: reads state, starts runs, notices endings, and asks Master or
+  Review to decide what needs deciding. A replacement takes over the projects a
+  dead one was driving, from the database and Temporal alone, and re-submitting
+  work an unfinished attempt already submitted returns the same backend job
+  rather than starting a second one.
+
+### Running them under systemd
+
+The same three entry points are what `infra/systemd/*.service` start, and
+`scripts/install_services.sh` writes them:
+
+```bash
+scripts/install_services.sh --dry-run              # what would be written
+scripts/install_services.sh --user                 # ~/.config/systemd/user, this checkout
+sudo scripts/install_services.sh                   # /etc/systemd/system, /opt/ravel, user ravel
+```
+
+The installer substitutes two things — where the checkout is, and which account
+the processes run as — and nothing else. `Restart=always`, `KillSignal=SIGTERM`,
+`TimeoutStopSec` and the journal are the repository's, and
+`tests/unit/test_service_units.py` reads them out of the files rather than
+restating them. `Restart=always` rather than `on-failure` because not every
+failure is a crash: a supervisor whose loop raised and exited cleanly is a
+project that has stopped moving.
+
+The units are installed, not started: whether a deployment wants these three
+running is that deployment's decision.
+
+```bash
+systemctl start ravel-gateway ravel-supervisor ravel-temporal-worker
+systemctl stop ravel-supervisor      # says so on the way out, see below
+journalctl -u ravel-supervisor -f    # the same lines the console's panel reads
+```
+
+Set `RAVEL_LOG_FORMAT=json` for a collector; the default is `text` for a person.
+Each line carries `ts`, `level`, `service`, `logger` and `message`, so one
+journal holding all three services is still readable.
+
+**A stop and a kill are told apart in the record.** A process that receives
+`SIGTERM` writes `stopped_at` as it goes and stops beating; one that is killed
+says nothing and its last beat simply recedes. Both are silence, and for two
+poll intervals the console cannot tell them apart — so if you are looking at a
+supervisor that is not beating, read `GET /projects/{id}/runtime/services` or
+the operator's panel before concluding it crashed. A service that has never
+reported is a third answer, and it means the deployment never started it.
+
+A user unit runs only while its owner has a session. For a machine that should
+keep running after the last login: `sudo loginctl enable-linger <user>`.
 
 Ports, all bound to loopback:
 

@@ -56,7 +56,20 @@ _USER_ROLE_RANK: dict[UserRole, int] = {
 
 
 class ProjectMembership(Record):
-    """What one user may do in one project."""
+    """What one user may do in one project.
+
+    **A membership can be withdrawn, and withdrawal is not deletion.** The row
+    stays: `revoked_at` and `revoked_by` say who took the authority away and
+    when, so the history of who could direct a project is readable long after
+    the fact. The alternative — deleting the row — would make a revoked
+    membership indistinguishable from one that never existed, which is exactly
+    the question an inquiry into a project's decisions starts from.
+
+    A revoked membership is not a membership for any purpose: the reads that
+    answer "what may this user do here" return only live rows, and a role change
+    is a revocation followed by a grant rather than an edit, so what a row says
+    is what was true while it was live.
+    """
 
     membership_id: str = Field(default_factory=new_id)
     project_id: str
@@ -64,6 +77,22 @@ class ProjectMembership(Record):
     role: UserRole
     granted_at: datetime = Field(default_factory=utcnow)
     granted_by: str | None = None
+    revoked_at: datetime | None = None
+    revoked_by: str | None = None
+
+    @model_validator(mode="after")
+    def _revocation_is_all_or_nothing(self) -> ProjectMembership:
+        if (self.revoked_at is None) != (self.revoked_by is None):
+            raise ValueError(
+                "a membership is revoked by somebody at a time, or it is not "
+                "revoked at all; one without the other does not say which"
+            )
+        return self
+
+    @property
+    def is_active(self) -> bool:
+        """Whether this membership still carries the authority it names."""
+        return self.revoked_at is None
 
     @property
     def is_admin(self) -> bool:
@@ -77,12 +106,21 @@ class ProjectMembership(Record):
         Admin is deliberately excluded. An administrator who could also decide
         the research route would hold both the operational and the scientific
         authority, which is what the separation exists to prevent.
+
+        Read with `is_active`: this is a statement about the role, and the
+        reads that hand a membership out return live rows only.
         """
         return self.role is UserRole.PROJECT_OWNER
 
     def satisfies(self, required: UserRole) -> bool:
         """Whether this membership carries at least the required authority."""
         return _USER_ROLE_RANK[self.role] >= _USER_ROLE_RANK[required]
+
+    def revoked(self, by: str, at: datetime | None = None) -> ProjectMembership:
+        """Return a copy recording that this membership was withdrawn."""
+        return self.model_copy(
+            update={"revoked_at": at or utcnow(), "revoked_by": by}
+        )
 
 
 class AgentIdentity(Record):

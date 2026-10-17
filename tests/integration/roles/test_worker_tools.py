@@ -26,6 +26,7 @@ both, and that no other role can reach either.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -35,12 +36,24 @@ from tests.integration.roles.conftest import RoleEnvironment
 
 from ravel.domain.enums import NodeStatus, WorkerMessageKind
 from ravel.domain.execution import DeviationRecord, WorkerMessage
+from ravel.domain.preparation import (
+    PreparationOutcome,
+    PreparationRecord,
+    PreparationRefusal,
+)
 from ravel.domain.project import Project
 from ravel.domain.roles import AgentRole
 from ravel.mcp.registry import DAG_MUTATION_TOOLS
 from ravel.state.database import Database
 from ravel.state.repositories.dag import DagRepository
+from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import RecordRepositories
+
+#: When the preparation rows these tests write were made. Chosen rather than
+#: read from the clock so that "the newest" is a fact the test decided: two
+#: records written in one test would otherwise be ordered by how fast the
+#: machine got from one line to the next.
+READ_AT = datetime(2026, 9, 23, 9, 0, tzinfo=UTC)
 
 WORKERS = (AgentRole.COMPUTE_WORKER, AgentRole.EXPERIMENTAL_WORKER)
 
@@ -78,6 +91,45 @@ TERMS: dict[str, Any] = {
     "allowed_ranges": {"temperature": "300..400"},
     "allowed_substitutions": ("Pd/C -> Pt/C",),
 }
+
+
+def _record(
+    database: Database,
+    project: Project,
+    prepared: Prepared,
+    *,
+    at: datetime,
+    outcome: PreparationOutcome,
+    workspace_path: str = "",
+    materializer: str = "",
+    execution_metadata: dict[str, str] | None = None,
+    refusal: PreparationRefusal | None = None,
+    reason: str = "",
+) -> None:
+    """Write one preparation for a node, the way preparation writes one.
+
+    Through the real repository, because what the tool reads is rows: a
+    fixture that reached into the tool's own inputs would prove nothing about
+    the lookup that decides which of several preparations a Worker is shown.
+    """
+    with database.transaction() as session:
+        PreparationRepository(session, project.project_id).record(
+            PreparationRecord(
+                project_id=project.project_id,
+                node_id=prepared.node_id,
+                execution_contract_ref=prepared.contract.contract_id,
+                execution_contract_version=prepared.contract.version,
+                outcome=outcome,
+                workspace_path=workspace_path,
+                materializer=materializer,
+                materializer_version="1" if materializer else "",
+                required_outputs=prepared.contract.required_outputs,
+                execution_metadata=dict(execution_metadata or {}),
+                refusal=refusal,
+                reason=reason,
+                created_at=at,
+            )
+        )
 
 
 def _deviations(database: Database, project_id: str) -> list[DeviationRecord]:
@@ -232,6 +284,105 @@ async def test_the_status_says_what_has_happened_not_what_was_planned(
     assert call.payload["open_deviations"] == []
     assert call.payload["messages"] == []
     assert call.payload["required_outputs"] == list(DEFAULT_OUTPUTS)
+    # Nothing has been prepared for this contract — it names no environment —
+    # and the two fields are empty rather than absent, so a Worker can tell
+    # "not built yet" from "this deployment does not report such a thing".
+    assert call.payload["execution_requirements"] == {}
+    assert call.payload["prepared_workspace"] == ""
+    assert call.payload["prepared_entrypoint"] == ""
+    assert call.payload["preparation"] is None
+
+
+async def test_the_status_says_which_workspace_the_run_was_built_in(
+    role_environment: RoleEnvironment,
+    project: Project,
+    database: Database,
+    prepare: Callable[..., Prepared],
+) -> None:
+    """A Worker reads where its work runs, and which terms it was built from.
+
+    Both rows are written through the real repository, because the tool reads
+    rows: what is under test is that the *read* finds the preparation belonging
+    to the contract version this node is bound to, and that it reports the
+    workspace and the entry point rather than making a Worker derive them.
+    """
+    prepared = prepare(
+        execution_requirements={"software": "raspa"},
+        parameter_targets={"temperature_k": "298.0"},
+    )
+    _record(
+        database,
+        project,
+        prepared,
+        at=READ_AT,
+        outcome=PreparationOutcome.PREPARED,
+        workspace_path="/var/ravel/prepared/project/node/v1",
+        materializer="raspa",
+        execution_metadata={"entrypoint": "job.slurm", "input": "simulation.input"},
+    )
+
+    result = await probe(
+        role_environment.for_project(project, AgentRole.COMPUTE_WORKER),
+        calls=(("read_execution_status", {"node_id": prepared.node_id}),),
+    )
+
+    call = result.calls[0]
+    assert not call.failed, call.error
+    assert call.payload is not None
+    assert call.payload["execution_requirements"] == {"software": "raspa"}
+    assert call.payload["prepared_workspace"] == "/var/ravel/prepared/project/node/v1"
+    assert call.payload["prepared_entrypoint"] == "job.slurm"
+    assert call.payload["preparation"]["outcome"] == "PREPARED"
+    assert call.payload["preparation"]["materializer"] == "raspa"
+
+
+async def test_a_refusal_does_not_hide_the_workspace_the_run_was_built_in(
+    role_environment: RoleEnvironment,
+    project: Project,
+    database: Database,
+    prepare: Callable[..., Prepared],
+) -> None:
+    """The newest record and the newest *prepared* record are read separately.
+
+    A run that prepared and was then prepared again by a host that could not do
+    the job has a refusal as its newest preparation. A Worker asking where to
+    run must be told the workspace that exists, and must still be able to read
+    the refusal — so the two questions are answered from two lookups rather
+    than one, which is the whole reason `prepared_for_run` exists beside
+    `latest_for_run`.
+    """
+    prepared = prepare(execution_requirements={"software": "raspa"})
+    _record(
+        database,
+        project,
+        prepared,
+        outcome=PreparationOutcome.PREPARED,
+        workspace_path="/var/ravel/prepared/project/node/v1",
+        materializer="raspa",
+        execution_metadata={"entrypoint": "job.slurm"},
+        at=READ_AT,
+    )
+    _record(
+        database,
+        project,
+        prepared,
+        outcome=PreparationOutcome.REFUSED,
+        refusal=PreparationRefusal.ENVIRONMENT_UNAVAILABLE,
+        reason="RAVEL_RASPA_DATA_DIR is unset, so no workspace can be built",
+        at=READ_AT + timedelta(minutes=1),
+    )
+
+    result = await probe(
+        role_environment.for_project(project, AgentRole.COMPUTE_WORKER),
+        calls=(("read_execution_status", {"node_id": prepared.node_id}),),
+    )
+
+    call = result.calls[0]
+    assert not call.failed, call.error
+    assert call.payload is not None
+    assert call.payload["prepared_workspace"] == "/var/ravel/prepared/project/node/v1"
+    assert call.payload["preparation"]["outcome"] == "REFUSED"
+    assert call.payload["preparation"]["refusal"] == "ENVIRONMENT_UNAVAILABLE"
 
 
 # ── Asking ──────────────────────────────────────────────────────────────────

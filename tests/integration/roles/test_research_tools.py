@@ -59,6 +59,13 @@ RESEARCH_TOOLS = frozenset(
         "search_web",
         "open_source",
         "register_source",
+        # Reading back what was opened or registered. Three tools rather than a
+        # reader plus a PDF reader plus a metadata tool per format: the format
+        # is a property of the bytes, and a roster that grew with every format
+        # RAVEL learned to read would be a roster nobody could hold in mind.
+        "source_metadata",
+        "read_source",
+        "search_source",
         "record_evidence",
         "record_conflict",
         "assess_evidence",

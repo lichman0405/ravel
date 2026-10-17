@@ -39,6 +39,18 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "list_pending_approvals": frozenset({MASTER}),
     "read_master_checkpoint": frozenset({MASTER}),
     "write_master_checkpoint": frozenset({MASTER}),
+    # Reading back what a research task produced is the last arrow of the chain
+    # this role sits at the head of: Master → Research → Evidence → Master →
+    # Decision. Without it, the only way to act on what a task found would be to
+    # have remembered the turn it was found in, which a replacement session has
+    # not. Master's alone, and reads only: a ledger-writing tool held by the
+    # role that judges the ledger is the separation this project is built on
+    # inverted. See `tools/research_results.py`, and `WRITE_AUTHORSHIP` below
+    # for the record of who authors the rows these read.
+    "list_research_results": frozenset({MASTER}),
+    "read_research_result": frozenset({MASTER}),
+    "read_evidence": frozenset({MASTER}),
+    "read_source_metadata": frozenset({MASTER}),
     # What the project is for is Master's to write and nobody else's, for the
     # reason the DAG is: it is the statement every later judgement is made
     # against. Deliberately *not* a DAG mutation — see `DAG_MUTATION_TOOLS`.
@@ -87,6 +99,13 @@ TOOL_ROLES: dict[str, frozenset[AgentRole]] = {
     "search_web": frozenset({RESEARCH}),
     "open_source": frozenset({RESEARCH}),
     "register_source": frozenset({RESEARCH}),
+    # The reading surface. Read-only, and Research's for the same reason the
+    # ledger's entrance is: what a seat may read out of a snapshot is the
+    # counterpart of what it may write into the ledger, and a source row
+    # describes bytes that only the seat which read them can quote.
+    "source_metadata": frozenset({RESEARCH}),
+    "read_source": frozenset({RESEARCH}),
+    "search_source": frozenset({RESEARCH}),
     "record_evidence": frozenset({RESEARCH}),
     "record_conflict": frozenset({RESEARCH}),
     "assess_evidence": frozenset({RESEARCH}),
@@ -183,9 +202,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "read_project_state": (
         "Read the current authoritative state of this project: its objective and status, its "
-        "roadmap and where in it the project is now, a summary of the DAG by status, and how "
-        "many approvals are waiting on a human. This is the record of truth — prefer it over "
-        "your own recollection of earlier conversation."
+        "roadmap and where in it the project is now, a summary of the DAG by status, the "
+        "nodes waiting on a decision of yours, which research tasks have handed a result "
+        "over, and how many approvals are waiting on a human. This is the record of truth — "
+        "prefer it over your own recollection of earlier conversation."
     ),
     "list_pending_approvals": (
         "List the approvals no human has answered yet, with what each is waiting on. Use it "
@@ -199,6 +219,31 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Write down where your work stands — current focus, open hypotheses, what you are "
         "waiting on, and which decisions a successor should read — so a replacement session "
         "can continue after this one is gone."
+    ),
+    "list_research_results": (
+        "List every research task in this project and what it delivered: whether a record "
+        "was submitted, the completion status and sufficiency it was judged against, how "
+        "many claims, sources and conflicts it holds, and the verdict Review gave it. Read "
+        "it before planning work that depends on what research found, then read the result "
+        "itself — the counts say how much there is, not what it says."
+    ),
+    "read_research_result": (
+        "Read what one research task found: its Research Record, the Evidence claims it was "
+        "assembled from, the sources behind them, the conflicts recorded between them, and "
+        "the verdicts given about the node. This is the evidence, as the Research seat "
+        "recorded it — read a decision against it rather than against your recollection, and "
+        "where a claim you need is missing, plan a research task for it."
+    ),
+    "read_evidence": (
+        "Read one Evidence row and the sources supporting it, when the wording of a single "
+        "claim matters to a decision. The id is the one from a claim in "
+        "`read_research_result`."
+    ),
+    "read_source_metadata": (
+        "Read one source's ledger row — where it came from, when it was retrieved, the hash "
+        "of the bytes read, its tier, and whether the content itself was obtained or only "
+        "its metadata. No text is returned: what a source says is the Research seat's to "
+        "read and quote into the ledger."
     ),
     "commit_research_contract": (
         "Write down what this project was asked for: the goal in the words it was "
@@ -311,6 +356,30 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "it and a stored copy of the bytes. This is the only way anything enters the "
         "ledger: the source is registered from the bytes RAVEL read, never from a URL and "
         "a hash you supply."
+    ),
+    "source_metadata": (
+        "Ask what RAVEL knows about one source before reading it: what it is, how big it "
+        "is, what RAVEL recorded about how it was reached, and whether it can be read at "
+        "all. Answers 'can I read this' honestly — a paywalled source, one stored without "
+        "a snapshot, and a scanned PDF each say which they are. Cheap, and it returns no "
+        "text."
+    ),
+    "read_source": (
+        "Read a bounded region of a source you have already opened or registered, and get "
+        "back the passage, where it sits in the document, and how much there is in total. "
+        "Plain text comes back verbatim; HTML, XML and JSON come back with their markup "
+        "removed and the result says so. A PDF is read by page, at most a few at a time. "
+        "Every read is checked against the hash the ledger recorded, so what you quote is "
+        "what was stored. You never get the whole paper: read the methods section, read "
+        "the paragraph around the number you need, and follow `next` for the region after "
+        "the one you just read."
+    ),
+    "search_source": (
+        "Find where a source you already have says something, and get the words around "
+        "each match. Searches the text of that one source — never the web — and reports "
+        "the offset so `read_source` can return the passage the match is in. Use it once "
+        "you have decided a document is worth reading: 'which force field did they use' "
+        "is a question about a document, and this is how a document is asked."
     ),
     "record_evidence": (
         "Record one claim and what supports it. A FACT needs sources you actually read; "

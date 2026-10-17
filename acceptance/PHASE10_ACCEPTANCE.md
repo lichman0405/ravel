@@ -197,38 +197,99 @@ fails at the tool authorization layer, not in a prompt.
 
 ## P10-17 live five-agent autonomous certification
 
-A project is driven from discovery to one of A20's four endings by five live
-agents, unattended, with every seat a real DSH session and every turn a real
-model call against a real tool server. The run leaves behind a plan, a decision,
-a verdict, and an Execution Record, and every one of the five seats took at
-least one live turn.
+The item has two cases, because the question "does the whole thing work when
+every seat is a live agent" has two halves that a live model can answer
+differently.
 
-All five seats are dispatched, which is what makes that reachable: the Research
-seat is handed a RESEARCH node exactly as a Worker seat is handed a computation
-or an experiment, and the stage the specification's unattended path names —
-`User Goal → Master → RESEARCH → Research Agent → real evidence → Master` — has
-a seat at every step of it.
+**The certification case.** A project is driven from discovery to one of A20's
+four endings by five live agents, unattended, with every seat a real DSH session
+and every turn a real model call against a real tool server. The run leaves
+behind a plan, a decision, a verdict, and an Execution Record, and every one of
+the five seats took at least one live turn. All five seats are dispatched, which
+is what makes that reachable: the Research seat is handed a RESEARCH node
+exactly as a Worker seat is handed a computation or an experiment, and the stage
+the specification's unattended path names — `User Goal → Master → RESEARCH →
+Research Agent → real evidence → Master` — has a seat at every step of it.
 
-Two things about this item are worth knowing before reading its row, because both
-were learned from runs that failed.
+**The research-driven case.** The same supervisor, the same five live seats, the
+same mock backends, under an objective that asks a *question* rather than
+ordering work. It asserts what the architecture owns and not what the science
+returns: the project reached one of the four endings, the ending is the Decision
+Record that names it, and every node that was carried out was carried out by the
+seat that owns its type — a RESEARCH node leaves a Research Record and never an
+Execution Record, a COMPUTATION or EXPERIMENT node the other way round. Any of
+the four endings passes.
+
+Four things about this item are worth knowing before reading its rows, because
+all four were learned from runs that failed.
 
 The first is what a live run *cannot* end as. V0's backends are mocks, a mock's
 artifacts are marked `simulated`, and a live Review reads that mark and refuses to
 let such a result satisfy criteria written against real work — correctly, and
 `P10-W10`/`P10-W11` are what say so. So a project whose criteria describe a real
-computation can end FAILED, INCONCLUSIVE or CANCELLED, and not COMPLETED. The item
-is written for that: a run that ended FAILED with a verdict behind it shows as
-much about the architecture as one that ended COMPLETED, and what it is *not*
-allowed to do is fail because a seat was never reached.
+computation can end FAILED, INCONCLUSIVE or CANCELLED, and not COMPLETED. The
+certification is written for that: a run that ended FAILED with a verdict behind
+it shows as much about the architecture as one that ended COMPLETED, and what it
+is *not* allowed to do is fail because a seat was never reached.
 
-The second is why the objective is shaped the way it is. It used to make the
-laboratory half wait on the computational half — compute the series, then confirm
-the leading candidate — and that put the fifth seat out of reach by construction:
-no computation can pass under mock backends, so no candidate is ever nominated, so
-an experiment to confirm one would measure nothing, so a live Master declines to
-commit one and says why in a Decision Record. The item then failed on a plan that
-was *right*. The objective now states the two benches as two deliverables that do
-not wait on each other, which is the item asking for what it actually tests.
+The second is why the certification's objective is a work order. It was a
+question twice, and each wording failed the item for its own reason — which is
+what the two-case split settles. The first made the laboratory half wait on the
+computational half — compute the series, then confirm the leading candidate —
+and that put the fifth seat out of reach by construction: no computation can pass
+under mock backends, so no candidate is ever nominated, so an experiment to
+confirm one would measure nothing, so a live Master declines to commit one and
+says why in a Decision Record. The item then failed on a plan that was *right*.
+The second stated the two benches as independent deliverables and kept the
+question — "establish whether niobium doping raises the conductivity of TiO2 by
+at least 15%" — and a live Master planned the literature first, read research
+records reporting that the protocols could not be fixed from what was
+retrievable, and concluded INCONCLUSIVE in writing. That ending was correct:
+the evidence did not settle the question, so there was nothing left to compute or
+measure, and the run had reached three seats.
+
+The difference between those two failures is the difference between a question
+and a work order, and it is not about how a plan is staged. A question has one
+deliverable — the answer — so a run that cannot produce it is *finished*, and
+ending there is right. A work order has three, so stopping after the first is an
+incomplete delivery rather than a result. The certification's requester therefore
+asks for three pieces of work, one per work seat, each with the input that bench
+needs written into the objective: the composition grid and reference value for
+the computation, the specimen and conditions for the measurement. No bench's
+inputs depend on what the literature did or did not yield, so the run's coverage
+of the five seats does not depend on that either. Master still decides the plan —
+which seat does what, in what order — and nothing in the objective or the test
+says otherwise.
+
+The third wording failure came later, in a re-run of the case that had just
+passed, and one level down. The objective described the specimen as
+"characterised" without saying that it already was, and a live Master read the
+adjective as a precondition nobody had established: "Deliverable (3) needs a
+physical specimen and an instrument, and the project has no evidence yet that
+either exists. Committing a measurement node blind would either sit unexecutable
+in the plan or invite a value to be filled in from literature." It spent a
+research task establishing availability instead, and ended INCONCLUSIVE with four
+nodes and no experimental seat. Nothing about that reading is wrong — a work
+order that leaves a bench's readiness to be discovered invites exactly that check
+— and that is why the fix belongs in the objective rather than in Master: the
+requester has a bench, so the requester says so, and says too that no deliverable
+is gated on another's findings. What the run does with the premise is still
+Master's to decide, and the next run shows it deciding: the reworded objective
+produced a Master that committed "three dependency-free root nodes in a single
+decision — a RESEARCH node for the literature route, a COMPUTATION node for the
+anchored series values, and an EXPERIMENT node for the bench measurement", all
+three of which were carried out by their seats, in a run that ended
+INCONCLUSIVE in 10:45. The item has now passed twice and failed once.
+
+The fourth is what the second case is for. Reaching all five seats is a claim
+about the plan, and a plan's shape is a live model's judgement; asserting it
+under a question-shaped objective would be asserting that a live model must find
+an answer, which is not a property of the architecture, and the ending such a
+test demanded would be the one it got whether or not the evidence supported it.
+So the two halves are separated: coverage is asserted where the objective asks
+for coverage, and the ending is left to the science where the objective asks a
+question. Neither case mocks Research, relaxes Review, hides an evidence gap
+from Master, or asks any seat to behave unscientifically to make a row pass.
 
 ## P10-18 real Research provenance
 
