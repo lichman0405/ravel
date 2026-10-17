@@ -381,3 +381,93 @@ class RetryQuestion(StrEnum):
     PRE_FLIGHT = "pre-flight"
     VERDICT = "verdict"
     ENDING = "ending"
+
+
+class ActionKind(StrEnum):
+    """The only four side-effecting operations an Action may stand for.
+
+    Every external effect RAVEL can cause is one of these, whether it is a
+    Slurm submission, a mail send, a human-lab handover, or a sandbox command.
+    Keeping the vocabulary closed is what lets approval, idempotency and
+    budget policy be one implementation rather than four that resemble each
+    other.
+    """
+
+    COMPUTE_SUBMIT = "COMPUTE_SUBMIT"
+    MAIL_SEND = "MAIL_SEND"
+    LAB_HANDOVER = "LAB_HANDOVER"
+    SANDBOX_EXEC = "SANDBOX_EXEC"
+
+
+class ActionStatus(StrEnum):
+    """Where an Action stands.
+
+    `ACCEPTED` means only that the external system accepted the work. It is
+    not scientific success and, for mail, not delivery to a human. `UNKNOWN`
+    is a real state rather than a zero or an empty success: the external
+    outcome is not known and must be reconciled. Mail projects the same fact
+    as `UNKNOWN_DELIVERY` on the wire, which is a projection and not a second
+    internal state.
+    """
+
+    DRAFT = "DRAFT"
+    AWAITING_APPROVAL = "AWAITING_APPROVAL"
+    READY = "READY"
+    CLAIMED = "CLAIMED"
+    ACCEPTED = "ACCEPTED"
+    COMPLETED = "COMPLETED"
+    UNKNOWN = "UNKNOWN"
+    FAILED_CONFIRMED = "FAILED_CONFIRMED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class BudgetReservationStatus(StrEnum):
+    """The life of one budget reservation.
+
+    The names are the ones `schemas/premium/budget_reservation.schema.json`
+    publishes. `RESERVED` is money or resource-hours promised to an approved
+    Action and not yet spent. `UNKNOWN` is the same promise when the external
+    system did not tell us the actual cost: the reservation stays held until a
+    person or a reliable provider reconciles it, which is why it is *not* a
+    synonym for zero. `SETTLED` has a known actual amount; `RELEASED` is a
+    known cancellation or confirmed non-execution.
+    """
+
+    RESERVED = "RESERVED"
+    UNKNOWN = "UNKNOWN"
+    SETTLED = "SETTLED"
+    RELEASED = "RELEASED"
+
+
+class ActionAttemptOutcome(StrEnum):
+    """How one claim of an Action ended, in the Action schema's vocabulary."""
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    UNKNOWN = "UNKNOWN"
+    FAILED_CONFIRMED = "FAILED_CONFIRMED"
+
+
+class ActionEvent(StrEnum):
+    """Internal audit labels for an Action's transitions.
+
+    These are not `ProjectEventType` values: the public event vocabulary is
+    closed and versioned, and adding Action values to it would change a
+    contract this task does not own. Action history is nonetheless
+    reconstructible from the immutable Action row, its attempts and its budget
+    reservation, which is the state the task's acceptance tests read.
+    """
+
+    CREATED = "CREATED"
+    APPROVAL_REQUESTED = "APPROVAL_REQUESTED"
+    APPROVAL_RESOLVED = "APPROVAL_RESOLVED"
+    CLAIMED = "CLAIMED"
+    ACCEPTED = "ACCEPTED"
+    UNKNOWN = "UNKNOWN"
+    FAILED_CONFIRMED = "FAILED_CONFIRMED"
+    COMPLETED = "COMPLETED"
+    RELEASED = "RELEASED"
+    OVERRUN = "OVERRUN"
+

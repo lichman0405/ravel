@@ -14,7 +14,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ravel.domain.enums import JobState, JoinPolicy, NodeStatus, NodeType, ProjectStatus
+from ravel.domain.enums import (
+    ActionStatus,
+    JobState,
+    JoinPolicy,
+    NodeStatus,
+    NodeType,
+    ProjectStatus,
+)
 from ravel.domain.roles import AgentRole
 
 #: Node status -> the statuses it may move to.
@@ -269,6 +276,90 @@ JOB_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
 }
 
 
+#: Action status -> the statuses it may move to.
+#:
+#: The shape from `CONTRACTS.md` section 4: a proposal waits for whatever
+#: approval its envelope requires, then is claimed exactly once, then reports
+#: what the external system said. `UNKNOWN` is reachable only after a claim,
+#: because before a claim there is nothing external to be uncertain about; and
+#: an `UNKNOWN` result can only be *resolved* into one of the two outcomes
+#: reconciliation can establish. It cannot be completed or cancelled: cancelling
+#: a message that may already have been delivered would record a fact nobody
+#: knows.
+#:
+#: `ACCEPTED -> COMPLETED` is the ordinary ending. `ACCEPTED -> UNKNOWN` is for
+#: the mail case specifically: SMTP accepted the message, which says the server
+#: took it and not that a person received it, so a later signal may move it into
+#: uncertainty. All terminal statuses are empty.
+ACTION_TRANSITIONS: dict[ActionStatus, frozenset[ActionStatus]] = {
+    ActionStatus.DRAFT: frozenset(
+        {
+            ActionStatus.AWAITING_APPROVAL,
+            ActionStatus.READY,
+            ActionStatus.CANCELLED,
+            ActionStatus.EXPIRED,
+        }
+    ),
+    ActionStatus.AWAITING_APPROVAL: frozenset(
+        {
+            ActionStatus.READY,
+            ActionStatus.REJECTED,
+            ActionStatus.EXPIRED,
+            ActionStatus.CANCELLED,
+        }
+    ),
+    ActionStatus.READY: frozenset(
+        {
+            ActionStatus.CLAIMED,
+            ActionStatus.EXPIRED,
+            ActionStatus.CANCELLED,
+        }
+    ),
+    ActionStatus.CLAIMED: frozenset(
+        {
+            ActionStatus.ACCEPTED,
+            ActionStatus.UNKNOWN,
+            ActionStatus.FAILED_CONFIRMED,
+        }
+    ),
+    ActionStatus.ACCEPTED: frozenset(
+        {
+            ActionStatus.COMPLETED,
+            ActionStatus.UNKNOWN,
+            ActionStatus.FAILED_CONFIRMED,
+        }
+    ),
+    ActionStatus.UNKNOWN: frozenset(
+        {ActionStatus.ACCEPTED, ActionStatus.FAILED_CONFIRMED}
+    ),
+    ActionStatus.COMPLETED: frozenset(),
+    ActionStatus.FAILED_CONFIRMED: frozenset(),
+    ActionStatus.REJECTED: frozenset(),
+    ActionStatus.EXPIRED: frozenset(),
+    ActionStatus.CANCELLED: frozenset(),
+}
+
+#: The statuses an Action can never leave.
+TERMINAL_ACTION_STATUSES: frozenset[ActionStatus] = frozenset(
+    status for status, allowed in ACTION_TRANSITIONS.items() if not allowed
+)
+
+#: The statuses in which an Action still promises budget.
+#:
+#: A released reservation is not an Action status: the promise is held from the
+#: moment the Action becomes READY until it completes, fails in a confirmed way,
+#: or is released by a known cancellation. `AWAITING_APPROVAL` and `DRAFT` do
+#: not hold budget yet — an unapproved proposal has not been promised anything.
+BUDGET_HOLDING_ACTION_STATUSES: frozenset[ActionStatus] = frozenset(
+    {
+        ActionStatus.READY,
+        ActionStatus.CLAIMED,
+        ActionStatus.ACCEPTED,
+        ActionStatus.UNKNOWN,
+    }
+)
+
+
 class TransitionError(ValueError):
     """A requested state change is not legal."""
 
@@ -349,6 +440,32 @@ def can_transition_job(current: JobState, target: JobState) -> TransitionCheck:
         reachable = ", ".join(sorted(s.value for s in allowed))
         return TransitionCheck(
             False, f"{current.value} may not become {target.value}; allowed: {reachable}"
+        )
+    return TransitionCheck(True, f"{current.value} -> {target.value}")
+
+
+def can_transition_action(current: ActionStatus, target: ActionStatus) -> TransitionCheck:
+    """Whether an Action may move from `current` to `target`.
+
+    Re-asserting the current status is allowed for the same reason it is for a
+    node and a job: a retried activity that reports the state it already reached
+    must not fail. Every other move is read from `ACTION_TRANSITIONS`.
+    """
+    if current == target:
+        return TransitionCheck(True, f"{current.value} is already the Action's status")
+
+    allowed = ACTION_TRANSITIONS[current]
+    if target not in allowed:
+        if not allowed:
+            return TransitionCheck(
+                False,
+                f"{current.value} is terminal; an Action that ended this way is "
+                f"history and cannot become {target.value}",
+            )
+        reachable = ", ".join(sorted(s.value for s in allowed))
+        return TransitionCheck(
+            False,
+            f"{current.value} may not become {target.value}; allowed: {reachable}",
         )
     return TransitionCheck(True, f"{current.value} -> {target.value}")
 

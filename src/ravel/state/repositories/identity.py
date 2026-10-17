@@ -26,11 +26,13 @@ from ravel.domain.identity import (
     ProjectMembership,
     User,
 )
+from ravel.domain.ids import new_id
 from ravel.domain.roles import AgentRole
 from ravel.state.mapping import from_row
 from ravel.state.outbox import emit
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.tables import (
+    ActionRow,
     AgentIdentityRow,
     ApprovalRequestRow,
     MasterCheckpointRow,
@@ -448,6 +450,127 @@ class ApprovalRepository(ProjectScopedRepository[ApprovalRequest]):
             payload={"approval_id": approval.approval_id, "action": action},
         )
         return approval
+
+    def request_bound(
+        self,
+        *,
+        action_id: str,
+        payload_hash: str,
+        requested_by: str,
+        action: str,
+        rationale: str = "",
+        required_role: UserRole = UserRole.PROJECT_OWNER,
+        payload: dict[str, Any] | None = None,
+        approval_id: str | None = None,
+    ) -> ApprovalRequest:
+        """Raise the approval an AuthorityEnvelope requires for one Action.
+
+        A different act from `request`, and narrower on purpose. `request` is
+        Master *deciding* to ask a human and is therefore Master-only.
+        This one happens because a stored envelope already says the Action may
+        not proceed without an answer; refusing it to the role that discovered
+        the requirement would leave the requirement unenforceable.
+
+        The freedom that removes is fenced by the database rather than by the
+        caller's word. The Action must already exist in this project, its
+        stored `payload_hash` must be the one named here, its
+        `required_approval_ref` must name this approval, and the payload must
+        be the snapshot of *that* Action. A caller cannot use this method to
+        raise an arbitrary question, and cannot bind an approval to content
+        that was never recorded.
+
+        Raises:
+            NotFound: The project has no such Action.
+            PermissionError: The Action's stored hash or approval reference
+                does not match, or the snapshot names a different Action.
+            ValueError: The payload is not an Action approval snapshot.
+        """
+        row = (
+            self.session.execute(
+                select(ActionRow).where(
+                    ActionRow.project_id == self.project_id,
+                    ActionRow.action_id == action_id,
+                )
+            )
+            .scalars()
+            .one_or_none()
+        )
+        if row is None:
+            raise NotFound(
+                f"no Action {action_id!r} in project {self.project_id!r}"
+            )
+        if row.payload_hash != payload_hash:
+            raise PermissionError(
+                "an Action-bound approval must name the Action's stored "
+                "payload_hash; binding it to any other content would approve "
+                "something nobody recorded"
+            )
+        chosen_id = approval_id or new_id()
+        if row.required_approval_ref not in (None, chosen_id):
+            raise PermissionError(
+                f"Action {action_id} already names approval "
+                f"{row.required_approval_ref!r}, not {chosen_id!r}"
+            )
+        body = dict(payload or {})
+        if body.get("action_id") != action_id:
+            raise ValueError("an Action approval's payload must name its action_id")
+        if body.get("payload_hash") != payload_hash:
+            raise ValueError(
+                "an Action approval's payload must name the payload_hash it covers"
+            )
+        approval = ApprovalRequest(
+            approval_id=chosen_id,
+            project_id=self.project_id,
+            requested_by=requested_by,
+            action=action,
+            rationale=rationale,
+            required_role=required_role,
+            payload=body,
+        )
+        self.add(approval)
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.APPROVAL_REQUESTED,
+            actor_type=ActorType.AGENT,
+            actor_id=requested_by,
+            payload={"approval_id": approval.approval_id, "action": action},
+        )
+        return approval
+
+    def expire(self, approval_id: str, *, note: str = "") -> ApprovalRequest:
+        """Close a pending request because its Action's window elapsed.
+
+        Time, not a human, ended this one. It still writes `resolved_by` so the
+        row never claims an answer that did not happen: the value names the
+        system fact rather than a person. A request that is not pending is
+        returned unchanged, which makes a repeated sweep harmless.
+        """
+        approval = self.get(approval_id=approval_id)
+        if not approval.is_pending:
+            return approval
+        expired = approval.resolve(
+            ApprovalStatus.EXPIRED,
+            resolved_by="system:expiry",
+            note=note or "the Action's approval window elapsed",
+        )
+        row = self.session.get(ApprovalRequestRow, approval_id)
+        assert row is not None
+        for column in ("status", "resolved_by", "resolution_note", "resolved_at"):
+            setattr(row, column, getattr(expired, column))
+        emit(
+            self.session,
+            project_id=self.project_id,
+            event_type=ProjectEventType.APPROVAL_RESOLVED,
+            actor_type=ActorType.SYSTEM,
+            actor_id="system:expiry",
+            payload={
+                "approval_id": approval_id,
+                "status": expired.status.value,
+                "action": approval.action,
+            },
+        )
+        return expired
 
     def resolve(
         self,
