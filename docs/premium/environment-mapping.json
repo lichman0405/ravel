@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "task_id": "T01",
+  "observed_at": "2026-10-17 13:45 Asia/Shanghai",
+  "target_repo_windows": "C:/Users/lishi/code/ravel",
+  "worktree_windows": "C:/Users/lishi/code/ravel-worktrees/T01",
+  "worktree_wsl": "/mnt/c/Users/lishi/code/ravel-worktrees/T01",
+  "container": {
+    "image": "ravel-premium-ubuntu24:latest",
+    "base": "ubuntu:24.04",
+    "workdir_host_mount": "/workspace",
+    "workdir": "/workspace/ravel-worktrees/T01",
+    "os": "Ubuntu 24.04 x86_64",
+    "python": "3.12.3",
+    "docker_cli": "29.1.3",
+    "docker_compose": "2.40.3",
+    "node": "18.19.1",
+    "pyright": "1.1.414",
+    "git": "2.43.0",
+    "venv": "/workspace/ravel-worktrees/T01/.venv",
+    "venv_storage": "named Docker volume ravel-premium-venv-t01 mounted over the worktree .venv",
+    "run_command": "docker run --rm --network host -v /mnt/c/Users/lishi/code:/workspace -v ravel-premium-venv-t01:/workspace/ravel-worktrees/T01/.venv -v /var/run/docker.sock:/var/run/docker.sock -w /workspace/ravel-worktrees/T01 ravel-premium-ubuntu24:latest bash -lc '<command>'"
+  },
+  "host": {
+    "windows": "Windows 11",
+    "wsl_distro": "Ubuntu 26.04 LTS",
+    "wsl_python": "3.14.4 (host) / 3.12.13 via uv",
+    "note": "Host is not canonical; canonical gates run in the Ubuntu 24.04 container. Host use is limited to editing, Git plumbing, and Docker orchestration."
+  },
+  "git": {
+    "main_repo": "C:/Users/lishi/code/ravel/.git",
+    "worktree_gitdir": "relative: ../../ravel/.git/worktrees/T01",
+    "why_relative": "The absolute Windows gitdir cannot be followed by WSL or the Linux container. The relative path resolves in Windows, WSL, and the /workspace mount."
+  },
+  "services": {
+    "postgres": "127.0.0.1:55432, database ravel_test",
+    "temporal": "127.0.0.1:7233",
+    "minio": "127.0.0.1:9100",
+    "note": "Services run on the WSL host; the canonical container uses --network host. MinIO image was unavailable from the allowed registries at T01 time, so MinIO-dependent tests are not PASS."
+  },
+  "database_test_lock": {
+    "mode": "SYSTEM_WIDE_EXCLUSIVE",
+    "default_dir": "/tmp/ravel-premium-locks",
+    "path": "database-<sha256(host:port/database)[:16]>.lock",
+    "env_override": "RAVEL_PREMIUM_LOCK_DIR"
+  },
+  "source_binding": {
+    "base_sha": "95b980974a7aa67678417272bd905090c88b5b85",
+    "source_digest": "computed by scripts/premium_task.py digest; bound in each evidence manifest"
+  }
+}
