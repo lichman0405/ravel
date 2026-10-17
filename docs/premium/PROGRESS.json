@@ -114,11 +114,11 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T06-actions",
       "base_sha": "61d7594",
-      "head_sha": "cfc93fe",
+      "head_sha": "c9d5235",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [
-        "evidence/T06/run-20261017-204533/manifest.json",
+        "evidence/T06/run-20261017-205353/manifest.json",
         "evidence/T06/run-20261017-204258/manifest.json"
       ],
       "integration_merge_sha": null,

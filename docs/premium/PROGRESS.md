@@ -11,7 +11,7 @@
 | [T03](TASKS/T03-contracts.md) | 冻结高端版接口、范围与 AC 映射 | T02 | DONE | SUPERVISOR | f75529707b/dc3b6b9564 |
 | [T04](TASKS/T04-project-lease.md) | Supervisor 项目租约与过期进程隔离 | T03 | DONE | SUPERVISOR | a62eff4e0d/17d855d15b |
 | [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | DONE | SUPERVISOR | ad8b06e/fbebde3 |
-| [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | RUNNING | SUPERVISOR | cfc93fe |
+| [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | RUNNING | SUPERVISOR | c9d5235 |
 | [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | TODO | 未派发 | — |
 | [T08](TASKS/T08-cos-backup.md) | COS 兼容存储与恢复演练 | T03 | TODO | 未派发 | — |
 | [T09](TASKS/T09-hpc-targets.md) | HPC 目标配置、并行提交和幂等恢复 | T02, T04, T06 | TODO | 未派发 | — |
