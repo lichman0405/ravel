@@ -11,8 +11,9 @@
       "ADR-001 decisions"
     ],
     "T03-AC3": [
-      "102 unique ACs",
-      "T04-T29 mapping audit"
+      "T03-T29: 102 unique ACs; T04-T29: 99; full T00-T29 table and map: 113",
+      "T04-T29 mapping audit",
+      "independent re-review reviews/T03/2.json"
     ]
   },
   "started_at": "2026-10-17 16:00 Asia/Shanghai",
@@ -55,6 +56,26 @@
   "data_mode": "REAL (document/schema validation)",
   "external_resources": [],
   "operator_authorization_ref": null,
+  "revalidation": {
+    "review": "reviews/T03/2.json",
+    "book_unique": 113,
+    "map_unique": 113,
+    "t03_to_t29_unique": 102,
+    "t04_to_t29_unique": 99,
+    "difference_set": [
+      "T00-AC1",
+      "T00-AC2",
+      "T00-AC3",
+      "T01-AC1",
+      "T01-AC2",
+      "T01-AC3",
+      "T01-AC4",
+      "T02-AC1",
+      "T02-AC2",
+      "T02-AC3",
+      "T02-AC4"
+    ]
+  },
   "result": "PASS",
   "blocked_reason": null
 }

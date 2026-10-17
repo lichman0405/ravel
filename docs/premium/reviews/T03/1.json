@@ -22,7 +22,7 @@
     {
       "id": "T03-AC3",
       "result": "PASS",
-      "evidence": "Deterministic audit: 30 tasks, 102 unique ACs, every T04-T29 row has type + expected evidence + execution commands; tracker validate PASS. The independent AC3 agent failed from context/tooling, not a mapping defect; the audit is mechanical and reproducible from the evidence."
+      "evidence": "Deterministic audit: 30 tasks; T03-T29 has 102 unique ACs (T04-T29 has 99); the full T00-T29 table and map both have 113 unique ACs. Every T04-T29 row has type + expected evidence + execution commands; tracker validate PASS. The independent AC3 agent failed from context/tooling, not a mapping defect; the audit is mechanical and reproducible from the evidence. Replaced by the independent re-review in reviews/T03/2.json."
     }
   ],
   "gate_evidence_refs": [
