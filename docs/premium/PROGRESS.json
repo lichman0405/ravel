@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 16:10 Asia/Shanghai",
+  "updated_at": "2026-10-17 16:15 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "4ec87e11aef03dc28dc083d62e8409b6a79712c7",
+  "integration_head_sha": "dc3b6b9564d8604f3008579a83d69d4c80502dd2",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -59,7 +59,7 @@
       "note": "T02 DONE：固定Phase11 c9815f1已merge；lint/unit/integration/e2e/phase11 acceptance通过；AC1-AC4独立复核APPROVE；集成候选4ec87e1与任务tip tree一致；ff-only合入。真实MinIO/systemd/live行为P3缺口保留。"
     },
     "T03": {
-      "status": "INTEGRATING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T03",
       "base_sha": "355fcf9d94e3930a7c6be2037acc73490a3d0937",
@@ -69,10 +69,10 @@
       "gate_refs": [
         "evidence/T03/contracts-20261017-1610/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "dc3b6b9564d8604f3008579a83d69d4c80502dd2",
       "blocker_refs": [],
-      "last_updated": "2026-10-17 16:10 Asia/Shanghai",
-      "note": "T03契约冻结完成：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS（独立agent工具故障已记录）。等待集成候选复核。"
+      "last_updated": "2026-10-17 16:15 Asia/Shanghai",
+      "note": "T03 DONE：12 schemas、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；AC1/AC2独立Reviewer PASS，AC3确定性审计PASS；候选dc3b6b9与tip tree一致，ff-only合入。"
     },
     "T04": {
       "status": "TODO",

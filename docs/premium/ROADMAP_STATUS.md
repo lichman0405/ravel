@@ -1,10 +1,10 @@
 # Roadmap实际进展（从PROGRESS.json生成）
 
-更新时间：2026-10-17 15:55 Asia/Shanghai
+更新时间：2026-10-17 16:15 Asia/Shanghai
 
 计划依赖见ROADMAP.md；本文件只保存实际完成投影。
 
-- M0: 3/4 DONE
+- M0: 4/4 DONE
 - M1: 0/11 DONE
-- M2: 3/24 DONE
+- M2: 4/24 DONE
 - M3: 0/6 DONE

@@ -19,6 +19,8 @@
 | 2026-10-17 15:20 Asia/Shanghai | Supervisor | T02 | `merge --no-ff c9815f1`；唯一冲突Makefile保留T01+Phase11全部targets；lint/unit 1106/0/2；空库与Phase10快照迁移到单head d1f7a40、marker保留 | merge 7cca83e；inventory 2069项/39 external；worktree LF规范化 | 运行integration/e2e |
 | 2026-10-17 15:45 Asia/Shanghai | Supervisor | T02 | integration 709 exit 0（LocalStack SIMULATED_S3）；e2e 27 exit 0；phase11 acceptance 11/11 demonstrated；修复两处acceptance竞态 | `reviews/T02/1.json` APPROVE；P3：真实MinIO/systemd/live/release-gate PATH | 集成候选 |
 | 2026-10-17 15:55 Asia/Shanghai | Supervisor | T02 | 候选4ec87e1 tree与tip c75d054一致、无删除文件；独立确认APPROVE；ff-only推进integration | integration HEAD 4ec87e1；PROGRESS/T02=DONE；T03 eligible | 派发T03 |
+| 2026-10-17 16:10 Asia/Shanghai | Supervisor | T03 | 12个premium schema、CONTRACTS v1 addendum、ADR-001、102唯一AC映射；schema check/tracker/diff-check PASS | `reviews/T03/1.json` APPROVE（AC1/AC2独立PASS，AC3确定性审计PASS） | 集成候选 |
+| 2026-10-17 16:15 Asia/Shanghai | Supervisor | T03 | 候选dc3b6b9 tree与tip一致；ff-only推进integration | integration HEAD dc3b6b9；PROGRESS/T03=DONE；T04/T06/T07/T08/T12/T22 eligible | 派发T04 |
 
 
 
