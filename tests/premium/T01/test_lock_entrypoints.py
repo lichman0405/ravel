@@ -65,7 +65,7 @@ def test_premium_task_entrypoint_is_refused_while_lock_held(
     environment = _environment(tmp_path)
     with DatabaseLock(_lock_path(tmp_path), timeout=0.5):
         result = _run(
-            [str(REPO_ROOT / "scripts" / "premium_task.py"), "T01", "--skip-preflight"],
+            [str(REPO_ROOT / "scripts" / "premium_task.py"), "T04", "--skip-preflight"],
             cwd=REPO_ROOT,
             environment=environment,
         )
