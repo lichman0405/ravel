@@ -529,7 +529,30 @@ class SlurmComputeBackend:
         workspace = Path(request.workspace_path)
         entrypoint = self._validated_entrypoint(workspace, request.entrypoint)
         with self._target_lock(target, submission_key), self._session_for(target) as ssh:
+            claimed = self._claim_remote_submission(ssh, remote_dir, target=target)
             record = self._read_record(ssh, remote_dir, target=target)
+            if record is None and not claimed:
+                # Another process created the claim after our local read and
+                # before its record was visible. It may be mid-submit; probe
+                # for the named job and otherwise refuse to create a second
+                # submission under the same key.
+                found = self._find_by_name(ssh, job_name, target=target)
+                if found is not None:
+                    self._write_target_submission(
+                        ssh, remote_dir, found, digest, request, target, submission_key
+                    )
+                    return self._handle(
+                        found, digest, "found on the cluster", target_id=target.target_id
+                    )
+                raise SlurmSubmissionUncertain(
+                    self.redact(
+                        f"submission {submission_key} is claimed by another process "
+                        "and no scheduler job is visible yet; RAVEL will not submit "
+                        "it again"
+                    ),
+                    submission_key=submission_key,
+                    target_id=target.target_id,
+                )
             if record is not None:
                 self._check_record(record, request, target, submission_key)
                 status = str(record.get("status") or "")
@@ -1164,6 +1187,41 @@ class SlurmComputeBackend:
                 "software": _requested_software(request) or None,
             },
             target=target,
+        )
+
+    def _claim_remote_submission(
+        self,
+        ssh: SSHTransport,
+        remote_dir: str,
+        *,
+        target: SlurmTarget | None = None,
+    ) -> bool:
+        """Create one atomic remote claim for this submission key.
+
+        ``mkdir`` without ``-p`` is the cross-process compare-and-set the local
+        lock cannot provide: the first process creates the claim directory and
+        the second gets ``File exists``. The claim is separate from the record
+        because the record is written after the claim; a process killed between
+        the two leaves a claim with no record, which the caller treats as
+        UNKNOWN rather than submitting a second time.
+        """
+        target = target or self.target
+        claim = f"{remote_dir}.claim"
+        parent = claim.rsplit("/", 1)[0]
+        result = ssh.run(
+            f"mkdir -p {_quote(parent)} && mkdir {_quote(claim)}",
+            timeout=target.command_timeout_seconds,
+        )
+        if result.ok:
+            return True
+        detail = result.describe()
+        if "exists" in detail.lower():
+            return False
+        raise SlurmSubmissionError(
+            self.redact(
+                "the remote submission claim could not be created, so RAVEL "
+                f"will not submit work it cannot make unique: {detail}"
+            )
         )
 
     def _write_target_record(

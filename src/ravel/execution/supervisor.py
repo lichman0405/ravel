@@ -465,6 +465,7 @@ class ProjectSupervisor:
                 research=research,
                 poll_seconds=self.loop_poll_seconds,
                 max_rounds=self.loop_max_rounds,
+                executor_start_concurrency=self.settings.action_compute_per_project,
                 lease_guard=guard.ensure,
                 retry=self.retry,
             ).run()

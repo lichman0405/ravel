@@ -305,6 +305,8 @@ class ScriptedTargetCluster:
     remote_root: str = REMOTE_ROOT
     #: Remote path to bytes: the uploaded workspace, results, the record.
     files: dict[str, bytes] = field(default_factory=dict)
+    #: Directories created with an atomic ``mkdir`` (submission claims).
+    directories: set[str] = field(default_factory=set)
     #: Job id to the facts about it. See `submit`.
     jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     #: Every command the backend ran, in order.
@@ -480,6 +482,16 @@ def _record_read(
     return result(command, body.decode("utf-8", errors="replace"))
 
 
+def _claim_directory(
+    cluster: ScriptedTargetCluster, match: re.Match[str], command: str
+) -> CommandResult:
+    claim = match.group("claim")
+    if claim in cluster.directories:
+        return _failed(command, f"mkdir: cannot create directory '{claim}': File exists")
+    cluster.directories.add(claim)
+    return result(command)
+
+
 def _mkdir(cluster: ScriptedTargetCluster, match: re.Match[str], command: str) -> CommandResult:
     return result(command)
 
@@ -642,6 +654,10 @@ _HANDLERS: tuple[tuple[re.Pattern[str], _Handled], ...] = (
     (
         re.compile(r"^if \[ -e '[^']*' \]; then cat '(?P<path>[^']*)'; fi$"),
         _record_read,
+    ),
+    (
+        re.compile(r"^mkdir -p '(?P<parent>[^']*)' && mkdir '(?P<claim>[^']*)'$"),
+        _claim_directory,
     ),
     (re.compile(r"^mkdir -p '[^']*'$"), _mkdir),
     (re.compile(r"^cat '(?P<path>[^']*)'$"), _cat),

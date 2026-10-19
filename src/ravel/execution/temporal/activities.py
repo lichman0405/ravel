@@ -23,6 +23,7 @@ connection and any row locks it had taken for the duration.
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -684,7 +685,7 @@ class NodeRunActivities:
         if verdict.permitted:
             return None
 
-        accepted = backend.cancel(job.backend_job_ref)
+        accepted = _cancel_job(backend, job.backend_job_ref, project_id)
         outcome = "accepted" if accepted else "did not accept"
 
         with self.database.transaction() as session:
@@ -822,7 +823,9 @@ class NodeRunActivities:
 
         accepted = False
         if job.backend_job_ref is not None:
-            accepted = self.registry.named(job.backend).cancel(job.backend_job_ref)
+            accepted = _cancel_job(
+                self.registry.named(job.backend), job.backend_job_ref, project_id
+            )
         outcome = "accepted" if accepted else "did not accept"
         detail = f"{reason}; the backend {outcome} the cancellation"
 
@@ -1030,6 +1033,19 @@ def _pending_job(plan: RunPlan, backend: WorkBackend, attempt: int) -> BackendJo
         backend=backend.name,
         detail=f"submitting to {backend.name}",
     )
+
+
+def _cancel_job(backend: WorkBackend, backend_job_ref: str, project_id: str) -> bool:
+    """Pass project scope only to a backend whose cancel accepts it.
+
+    `WorkBackend` keeps the original one-argument cancel, so the mock and lab
+    backends stay compatible; the Slurm target backend adds the keyword and
+    needs the project to refuse a cross-project job.
+    """
+    cancel = backend.cancel
+    if "project_id" in inspect.signature(cancel).parameters:
+        return cancel(backend_job_ref, project_id=project_id)  # type: ignore[call-arg]
+    return cancel(backend_job_ref)
 
 
 def _snapshot(

@@ -6,13 +6,17 @@ cluster. No scheduler is contacted; `REAL_HPC` is false in `support`.
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 from tests.premium.T09 import support
 from tests.premium.T09.support import ScriptedTargetCluster
 
 from ravel.backends.slurm import parallel_quota
 from ravel.config import Settings
-from ravel.domain.enums import JobState, NodeStatus
+from ravel.domain.dag import DagNode
+from ravel.domain.enums import JobState, NodeStatus, NodeType
 from ravel.execution.backends import (
     DispatchState,
     JobHandle,
@@ -21,6 +25,7 @@ from ravel.execution.backends import (
     ReadyNode,
     join_required,
 )
+from ravel.execution.loop import ProjectLoop, Situation
 
 
 def _candidate(
@@ -404,3 +409,80 @@ def test_join_refuses_a_required_node_without_a_handle() -> None:
 
     with pytest.raises(KeyError):
         join_required(backend, {}, ["node-0001"])
+
+
+class _Seat:
+    """An executor seat that measures how many starts overlap."""
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.peak = 0
+        self.started: list[str] = []
+
+    async def start(self, node: DagNode) -> None:
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        self.started.append(node.node_id)
+        await asyncio.sleep(0.05)
+        self.active -= 1
+
+    async def act(self, node: DagNode, situation: Situation) -> None:
+        _ = node, situation
+
+
+class _Decision:
+    """The Master/Review port shape; the start path never calls it."""
+
+    async def act(self, situation: Situation) -> None:
+        _ = situation
+
+
+def _ready_situation(count: int) -> Situation:
+    nodes = tuple(
+        DagNode.create(
+            project_id="project-0001",
+            node_type=NodeType.RESEARCH,
+            objective=f"Survey topic {index}.",
+            created_by="master",
+        ).model_copy(update={"status": NodeStatus.READY})
+        for index in range(count)
+    )
+    return Situation(
+        project=SimpleNamespace(),  # type: ignore[arg-type]
+        nodes=nodes,
+        pre_run={},
+        open_deviations=(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_production_loop_starts_at_most_the_project_quota() -> None:
+    """The loop, not only the coordinator, is what a supervisor actually runs."""
+    seat = _Seat()
+    loop = ProjectLoop(
+        database=SimpleNamespace(),  # type: ignore[arg-type]
+        project_id="project-0001",
+        master=_Decision(),
+        review=_Decision(),
+        compute_worker=seat,
+        experimental_worker=seat,
+        research=seat,
+        executor_start_concurrency=2,
+    )
+    await loop._executor_starts(_ready_situation(3))
+    assert seat.peak == 2
+    assert len(seat.started) == 3
+
+    serial = _Seat()
+    serial_loop = ProjectLoop(
+        database=SimpleNamespace(),  # type: ignore[arg-type]
+        project_id="project-0001",
+        master=_Decision(),
+        review=_Decision(),
+        compute_worker=serial,
+        experimental_worker=serial,
+        research=serial,
+        executor_start_concurrency=1,
+    )
+    await serial_loop._executor_starts(_ready_situation(3))
+    assert serial.peak == 1

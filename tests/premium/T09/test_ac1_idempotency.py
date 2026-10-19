@@ -86,6 +86,20 @@ def test_two_concurrent_identical_submissions_create_one_job(tmp_path) -> None:
     assert cluster.sbatch_calls() == 1
 
 
+def test_a_foreign_submission_claim_without_a_record_is_unknown(tmp_path) -> None:
+    """A second process that loses the remote mkdir must not run sbatch."""
+    cluster = ScriptedTargetCluster()
+    request = support.request(workspace=support.workspace(tmp_path))
+    remote = f"{support.REMOTE_ROOT}/{PROJECT}/{NODE}/{ATTEMPT}"
+    cluster.directories.add(remote + ".claim")
+
+    with pytest.raises(SlurmSubmissionUncertain, match="claimed by another process"):
+        support.backend(cluster).submit(request)
+
+    assert cluster.sbatch_calls() == 0
+    assert cluster.jobs == {}
+
+
 def test_a_restarted_worker_adopts_the_record_and_does_not_submit_again(tmp_path) -> None:
     cluster = ScriptedTargetCluster()
     request = support.request(workspace=support.workspace(tmp_path))
