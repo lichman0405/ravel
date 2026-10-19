@@ -156,17 +156,18 @@ that nobody listed.
 - **Since:** Phase 1
 - **Where:** `src/ravel/state/tables.py`
 
-`is_active` exists and defaults to true. No code path flips it, and the table's
-immutability guards refuse updates.
+`is_active` exists and defaults to true. **Update (T07):** deactivation now has
+an explicit repository primitive, `UserRepository.deactivate`, which writes an
+append-only `account_deactivations` audit row and makes login, access and
+refresh refuse the account. The `users` table itself remains append-only; a
+profile field is still not editable in place. There is no HTTP admin route for
+deactivation yet, so an operator currently needs a script or database access.
 
 **Do not conclude** that deactivation was forgotten, or that somebody who
-should lose their access cannot. Two other things do that job: the authority
-envelope, which is Master's and the User's lever, and — since Phase 11 —
-withdrawing the membership, which takes away everything the account could do in
-a project without touching the account. What remains absent is narrower than it
-used to be: `is_active` is still a column nothing flips, so an account that
-should be unable to log in at all has no path, and an account is never deleted
-because a record of who did the work outlives their access. See L-17.
+should lose their access cannot. Membership withdrawal still takes away
+everything the account could do in a project, and deactivation now removes the
+account's ability to log in at all. An account is never deleted because a
+record of who did the work outlives their access. See L-17.
 
 ## L-11 — Dependencies are immutable once added
 
@@ -295,18 +296,17 @@ other suite in that script passes without it.
 - **Since:** Phase 8
 - **Where:** `src/ravel/gateway/routes/artifacts.py` (`MAX_UPLOAD_BYTES`)
 
-`MAX_UPLOAD_BYTES` is 256 MiB, and the body is read into memory before it is
-stored, because the object store hashes the whole object on the way in. Two
-concurrent uploads at the cap are half a gigabyte of resident memory, and the
-cap exists because of that rather than as a policy about size.
+**Resolved (T07):** both the artifact and laboratory upload doors now read
+`request.stream()` into a spooled temporary file, hash while writing, and hand
+the spool to the object store. The default per-file limit is 64 MiB, read from
+`RAVEL_GATEWAY_UPLOAD_LIMIT_BYTES`; the declared `Content-Length` is checked
+when sent and the counted length is checked while reading, so a chunked upload
+cannot make the cap advisory. A 65 MiB body returns 413 and leaves no temporary
+file or formal artifact. The limit is per file and per request, not a
+project-wide quota or a concurrent-upload cap.
 
-The check is done twice on purpose — declared `Content-Length` when it is sent,
-and the counted length as well, because a chunked upload declares nothing.
-Checking only the header would make the cap advisory.
-
-**Do not conclude** that a large artifact is rejected by the design. 256 MiB is
-well above anything V0 research produces; what V0 does not have is a streaming
-upload path, and adding one means changing how the store hashes.
+**Do not conclude** that an upload is buffered whole. Peak memory is the
+spooling threshold (1 MiB) plus a fixed read chunk, not the file size.
 
 ## L-17 — Accounts are created at a terminal, and authority could not be withdrawn
 
@@ -325,8 +325,10 @@ upload path, and adding one means changing how the store hashes.
   the Gateway now serves the rest: `POST /projects` opens one, `POST
   /projects/{id}/members` confers, `POST /projects/{id}/members/{user_id}/revoke`
   withdraws, and all three require the caller to be the project's owner. What is
-  *still* absent is `L-10`: nothing deactivates an account, and nothing expires
-  a membership on a clock.
+  *still* absent is an HTTP route for account deactivation: the repository
+  primitive and append-only audit row now exist (T07), but an operator needs a
+  script or database access to use them. Nothing expires a membership on a
+  clock.
 - **Where:** `scripts/create_account.py`; `MembershipRepository` in
   `src/ravel/state/repositories/identity.py`; `src/ravel/gateway/routes/members.py`
 

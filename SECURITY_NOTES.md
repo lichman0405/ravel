@@ -59,8 +59,11 @@ resulting **address** to the socket layer. The name is not lost — httpcore sti
 knows the host and port the request is for, and uses them for the `Host` header,
 for the TLS server name, and for certificate verification — so the request that
 goes out is identical to what it would have been, and only the address it went
-to was chosen by the guard rather than by the resolver. There is now exactly one
-DNS lookup in the path, and its answer is the one that was checked.
+to was chosen by the guard rather than by the resolver. The path resolves twice:
+`_GuardedTransport.handle_request` validates every hop before the request, and
+`_PinnedBackend.connect_tcp` resolves again and connects to that second
+validated address. Both answers must be public; the connection uses the second
+one, never the unchecked name.
 
 Two consequences worth naming:
 
@@ -351,6 +354,26 @@ the text goes back to the model as data, and the HTML/XML path still strips
 markup rather than rendering it.
 
 ---
+
+## 6.1 Gateway controls added in T07
+
+- **Startup refuses development credentials.** `validate_gateway_settings` runs
+  before the database is opened; a production deployment cannot boot with the
+  shipped JWT/DB/storage credentials or with a public bind that has no HTTPS
+  origin and exact WebSocket Origin allowlist.
+- **Login failures are bounded per (source IP, account):** 5/minute, 20 over 15
+  minutes, then a 15-minute lock. The counter is process-local; V0 is one
+  Gateway on one CVM. Multi-replica deployment needs a shared counter.
+- **Revocation is re-read, not cached.** Every API request and the activity
+  stream re-read live membership; the stream rechecks within 5 seconds and
+  closes with 4404. Account deactivation writes an append-only audit row and is
+  enforced at login, access and refresh; the HTTP management route is still
+  absent and is an operator/T22 task.
+- **Uploads are streamed.** Both the artifact and laboratory doors read
+  `request.stream()` into a spooled temporary file, enforce
+  `RAVEL_GATEWAY_UPLOAD_LIMIT_BYTES` (64 MiB default) while reading, return 413
+  above it, and delete the temporary file on every path. Browser egress remains
+  fail-closed until T19 binds a sandbox provider.
 
 ## 7. What the automated reviews found
 

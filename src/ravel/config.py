@@ -218,6 +218,12 @@ class Settings(BaseSettings):
     search_api_key: SecretStr | None = None
     search_provider: str | None = None
     playwright_headless: bool = True
+    #: Which sandbox a browser run would execute inside. Empty until T19 binds
+    #: a provider, and browser research is fail-closed while it is empty: a
+    #: Chromium on the Gateway host is an egress path that cannot be pinned to
+    #: the address `addressing.guard` validated, so it must not be started at
+    #: all. Controlled HTTP/API research does not read this.
+    research_browser_sandbox_provider: str | None = None
 
     # ── Actions and budgets ────────────────────────────────────────────────
     # Defaults, not grants. An AuthorityEnvelope may be stricter and the
@@ -244,6 +250,35 @@ class Settings(BaseSettings):
     gateway_jwt_secret: SecretStr = SecretStr("dev-only-change-me")
     gateway_token_ttl_seconds: int = 3600
     gateway_refresh_ttl_seconds: int = 30 * 24 * 3600
+    #: The exact origin a browser uses to reach this Gateway, e.g.
+    #: `https://ravel.example.org`. Production requires it, requires HTTPS,
+    #: and refuses a value that is not a bare origin: a path or query in the
+    #: value would make the equality check the WebSocket route performs wrong.
+    gateway_public_origin: str | None = None
+    #: Comma-separated exact origins a browser may connect from. There is no
+    #: wildcard: an Origin allowlist that admits `*` is not an allowlist, and
+    #: the socket is the one route that a browser reaches with a credential the
+    #: browser attaches on its own.
+    gateway_allowed_origins: str = ""
+    #: Comma-separated IP addresses or CIDRs of the reverse proxy in front of
+    #: this Gateway. `X-Forwarded-For` is believed only when the TCP peer is in
+    #: this set, and then only for hops to the right of the last untrusted one.
+    gateway_trusted_proxies: str = ""
+    #: Permit a bind address that is neither loopback nor private. A V0 Gateway
+    #: is reached through a reverse proxy on the same host, so a public bind is
+    #: a deliberate departure and not a default. Production refuses one unless
+    #: this is set.
+    gateway_allow_public_bind: bool = False
+    #: The largest upload one request may carry. Enforced twice — against the
+    #: declared `Content-Length` and against the bytes actually read — and the
+    #: bytes are spooled rather than held, so this bounds disk and transfer
+    #: rather than memory.
+    gateway_upload_limit_bytes: int = 64 * 1024 * 1024
+    #: How often an open event stream re-reads the account and membership that
+    #: opened it. A revoked member must stop receiving events without waiting
+    #: for a token to expire; five seconds is the bound this deployment accepts,
+    #: and `gateway/auth/policy.py` refuses a larger one.
+    gateway_stream_reauthorize_seconds: float = 4.0
 
     @field_validator(
         "dsh_bin",
@@ -253,6 +288,8 @@ class Settings(BaseSettings):
         "search_provider",
         "postgres_dsn_override",
         "raspa_data_dir",
+        "research_browser_sandbox_provider",
+        "gateway_public_origin",
         mode="before",
     )
     @classmethod
