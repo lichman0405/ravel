@@ -1058,7 +1058,9 @@ class SlurmComputeBackend:
         if written.tzinfo is None:
             written = written.replace(tzinfo=UTC)
         age = (datetime.now(UTC) - written).total_seconds()
-        return age >= float(record.get("reconcile_grace_seconds") or 0.0)
+        raw_grace = record.get("reconcile_grace_seconds")
+        grace = float(raw_grace) if isinstance(raw_grace, (int, float)) else 0.0
+        return age >= grace
 
     def _write_target_intent(
         self,

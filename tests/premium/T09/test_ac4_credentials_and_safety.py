@@ -8,9 +8,10 @@ scripted cluster answers the commands the real backend builds, and
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import run_temporal_worker as worker
@@ -43,7 +44,7 @@ from ravel.backends.slurm import (
 )
 from ravel.backends.slurm.backend import Collected
 from ravel.config import Settings
-from ravel.execution.backends import JobOutputs
+from ravel.execution.backends import JobHandle, JobOutputs
 
 ENV_NAME = "RAVEL_T09_PASSWORD"
 
@@ -90,8 +91,8 @@ def _worker_args(
     *,
     default: str | None = None,
     jobs_root: str | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
+) -> argparse.Namespace:
+    return argparse.Namespace(
         compute_backend="slurm",
         compute_scenario="slurm",
         slurm_jobs_root=jobs_root,
@@ -100,14 +101,16 @@ def _worker_args(
     )
 
 
-def _server(tmp_path: Path, *, stderr_echo: str = "") -> tuple[ScriptedTargetCluster, object]:
+def _server(
+    tmp_path: Path, *, stderr_echo: str = ""
+) -> tuple[ScriptedTargetCluster, JobHandle]:
     cluster = ScriptedTargetCluster(stderr_echo=stderr_echo)
     backend = support.backend(cluster)
     handle = backend.submit(support.request(workspace=support.workspace(tmp_path)))
     return cluster, handle
 
 
-def _job_id(handle: object) -> str:
+def _job_id(handle: JobHandle) -> str:
     return handle.backend_job_ref.split(":")[2]
 
 
@@ -349,10 +352,10 @@ def test_the_worker_resolves_credentials_only_when_building_the_backend(
     monkeypatch.setenv(ENV_NAME, PASSWORD)
 
     backend = worker._target_mode_backend(
-        Settings(), object(), object(), _worker_args(targets_file)
+        Settings(), cast(Any, object()), cast(Any, object()), _worker_args(targets_file)
     )
 
-    assert set(backend.targets) == {TARGET_A}
+    assert set(backend.targets or {}) == {TARGET_A}
     assert backend.target.password == PASSWORD
     assert backend.target.known_hosts_filename == str(hosts)
     assert PASSWORD not in repr(backend)
@@ -369,7 +372,7 @@ def test_the_worker_refuses_a_target_file_with_no_enabled_target(
 
     with pytest.raises(TargetConfigurationError, match="no enabled target"):
         worker._target_mode_backend(
-            Settings(), object(), object(), _worker_args(targets_file)
+            Settings(), cast(Any, object()), cast(Any, object()), _worker_args(targets_file)
         )
 
 
@@ -382,7 +385,7 @@ def test_the_worker_refuses_a_missing_credential_and_names_only_the_reference(
 
     with pytest.raises(CredentialResolutionError) as raised:
         worker._target_mode_backend(
-            Settings(), object(), object(), _worker_args(targets_file)
+            Settings(), cast(Any, object()), cast(Any, object()), _worker_args(targets_file)
         )
 
     assert ENV_NAME in str(raised.value)
@@ -399,8 +402,8 @@ def test_the_worker_refuses_a_default_target_that_is_not_enabled(
     with pytest.raises(TargetConfigurationError, match="slurm-default-target"):
         worker._target_mode_backend(
             Settings(),
-            object(),
-            object(),
+            cast(Any, object()),
+            cast(Any, object()),
             _worker_args(targets_file, default=TARGET_B),
         )
 
@@ -566,8 +569,8 @@ def test_a_missing_required_output_is_reported_not_invented(tmp_path) -> None:
     where = Collected(
         job_id=_job_id(handle),
         project_id=PROJECT,
-        database=object(),
-        store=object(),
+        database=cast(Any, object()),
+        store=cast(Any, object()),
     )
 
     fetched, missing = backend._fetch(

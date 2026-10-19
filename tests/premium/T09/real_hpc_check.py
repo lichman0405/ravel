@@ -293,7 +293,7 @@ def _probe(args: argparse.Namespace) -> tuple[dict[str, object], int]:
         "host_key_verified": False,
         "checks": {},
     }
-    checks: dict[str, object] = {}
+    checks: dict[str, dict[str, object]] = {}
     report["checks"] = checks
 
     transport: ParamikoTransport | None = None
@@ -321,7 +321,7 @@ def _probe(args: argparse.Namespace) -> tuple[dict[str, object], int]:
         )
         if args.submit:
             checks["submission"] = _submission_probe(
-                configured, transport, args.timeout, args.poll_seconds
+                transport, configured, args.timeout, args.poll_seconds
             )
     except HostKeyVerificationError as error:
         report["state"] = getattr(error, "state", "HOST_KEY_UNKNOWN")

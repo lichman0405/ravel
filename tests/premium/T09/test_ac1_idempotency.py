@@ -30,6 +30,7 @@ from ravel.backends.slurm import (
     SlurmSubmissionUncertain,
     TransportError,
 )
+from ravel.execution.backends import JobHandle
 
 
 def _submission_key() -> str:
@@ -58,7 +59,7 @@ def test_two_concurrent_identical_submissions_create_one_job(tmp_path) -> None:
     second = support.backend(cluster)
     request = support.request(workspace=support.workspace(tmp_path))
     barrier = threading.Barrier(3)
-    handles: list[object] = []
+    handles: list[JobHandle] = []
     errors: list[BaseException] = []
 
     def submit(backend: SlurmComputeBackend) -> None:
