@@ -1,15 +1,15 @@
 # 外部资源与阻塞
 
-更新时间：2026-10-17 18:05 Asia/Shanghai。以下只记录实际观察到的事实；没有外部资源的任务不阻止无关代码开发，但相关门禁不能标 PASS。
+更新时间：2026-10-19 Asia/Shanghai。以下只记录实际观察到的事实；没有外部资源的任务不阻止无关代码开发，但相关门禁不能标 PASS。2026-10-19 用户确认：当前没有真实 MinIO、没有可用虚拟机、没有 HPC 集群、没有真人实验条件、没有邮箱服务器、没有专用 VM 池；DeepSeek API key 稍后提供。
 
 ## B01 — 真实 MinIO 不可用
 
 - blocker_id: B01
 - opened_at: 2026-10-17
-- task_ids: [T01, T02]
+- task_ids: [T01, T02, T08]
 - status: OPEN
 - category: RESOURCE
-- observed_fact: 尝试从 Docker Hub/Quay/GHCR 获取 MinIO 镜像及官方二进制均返回 401/403/410；T02 integration 使用 `localstack/localstack:3.8`，证据标记为 `SIMULATED_S3`。
+- observed_fact: 尝试从 Docker Hub/Quay/GHCR 获取 MinIO 镜像及官方二进制均返回 401/403/410；T02 integration 使用 `localstack/localstack:3.8`，证据标记为 `SIMULATED_S3`。2026-10-19 用户确认没有真实 MinIO；T08 的 MinIO 集成与真实 COS live 检查都不能 PASS。
 - missing_input: 可用的真实 MinIO 镜像/二进制，或获授权的 S3 兼容端点。
 - unblock_condition: 真实 MinIO 启动后，用同一套 integration S3 测试和真实 endpoint 重跑；结果不能再标 `SIMULATED_S3`。
 - owner: 环境/基础设施提供者。
@@ -69,7 +69,7 @@
 - task_ids: [T24, T25, T26, T27, T28, T29]
 - status: OPEN
 - category: RESOURCE / AUTHORIZATION
-- observed_fact: 尚无已授权的 CVM/COS、Slurm 队列/allocation、真人实验负责人/SOP/设备、专用 IMAP/SMTP 邮箱、专用 VM；真实 DSH 模型凭据也未进入本轮认证。
+- observed_fact: 2026-10-19 用户确认当前没有 CVM/COS、Slurm 集群、真人实验条件、邮箱服务器、专用 VM 池；真实 DSH 模型凭据（DeepSeek API key）稍后提供。T24–T29 不得标 PASS。
 - missing_input: 对应资源、授权和联系人；秘密不写入本文件。
 - unblock_condition: 各任务解锁条件按其任务卡；`make premium-live TASK=Txx` 必须真实运行并保存证据，不能用 mock 代替。
 - owner: 用户/基础设施与实验室负责人。
