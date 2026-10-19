@@ -1,0 +1,102 @@
+===== command 1: .venv/bin/python -m pytest tests/premium/T09 -q -rxXs --junitxml=/workspace/ravel-worktrees/T09/docs/premium/evidence/T09/run-20261019-173505/cmd-01-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T09 -q -rxXs --junitxml=/workspace/ravel-worktrees/T09/docs/premium/evidence/T09/run-20261019-173505/cmd-01-junit.xml
+
+........................................................................ [ 77%]
+.....................                                                    [100%]
+
+===== command 2: make lint =====
+exit_code=2 ok=False reason=exit code 2
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/T09'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+/workspace/ravel-worktrees/T09/src/ravel/backends/slurm/backend.py
+  /workspace/ravel-worktrees/T09/src/ravel/backends/slurm/backend.py:1061:29 - error: Argument of type "object | float" cannot be assigned to parameter "x" of type "ConvertibleToFloat" in function "__new__"
+    Type "object | float" is not assignable to type "ConvertibleToFloat"
+      Type "object" is not assignable to type "ConvertibleToFloat"
+        "object" is not assignable to "str"
+        "object" is incompatible with protocol "Buffer"
+          "__buffer__" is not present
+        "object" is incompatible with protocol "SupportsFloat"
+          "__float__" is not present
+        "object" is incompatible with protocol "SupportsIndex"
+    ... (reportArgumentType)
+  /workspace/ravel-worktrees/T09/src/ravel/backends/slurm/backend.py:1061:29 - error: Argument of type "object | float" cannot be assigned to parameter "x" of type "ConvertibleToFloat" in function "__new__"
+    Type "object | float" is not assignable to type "ConvertibleToFloat"
+      Type "object" is not assignable to type "ConvertibleToFloat"
+        "object" is not assignable to "str"
+        "object" is incompatible with protocol "Buffer"
+          "__buffer__" is not present
+        "object" is incompatible with protocol "SupportsFloat"
+          "__float__" is not present
+        "object" is incompatible with protocol "SupportsIndex" (reportArgumentType)
+/workspace/ravel-worktrees/T09/tests/premium/T09/real_hpc_check.py
+  /workspace/ravel-worktrees/T09/tests/premium/T09/real_hpc_check.py:324:17 - error: Argument of type "HpcTarget" cannot be assigned to parameter "transport" of type "ParamikoTransport" in function "_submission_probe"
+    "HpcTarget" is not assignable to "ParamikoTransport" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/real_hpc_check.py:324:29 - error: Argument of type "ParamikoTransport" cannot be assigned to parameter "target" of type "HpcTarget" in function "_submission_probe"
+    "ParamikoTransport" is not assignable to "HpcTarget" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/real_hpc_check.py:346:41 - error: Cannot access attribute "get" for class "object"
+    Attribute "get" is unknown (reportAttributeAccessIssue)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/real_hpc_check.py:347:62 - error: Cannot access attribute "get" for class "object"
+    Attribute "get" is unknown (reportAttributeAccessIssue)
+/workspace/ravel-worktrees/T09/tests/premium/T09/test_ac1_idempotency.py
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac1_idempotency.py:83:23 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac1_idempotency.py:83:53 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+/workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:111:19 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:335:51 - error: Argument of type "SimpleNamespace" cannot be assigned to parameter "args" of type "Namespace" in function "_describe_compute"
+    "SimpleNamespace" is not assignable to "Namespace" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:352:21 - error: Argument of type "object" cannot be assigned to parameter "database" of type "Database" in function "_target_mode_backend"
+    "object" is not assignable to "Database" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:352:31 - error: Argument of type "object" cannot be assigned to parameter "store" of type "S3ArtifactStore" in function "_target_mode_backend"
+    "object" is not assignable to "S3ArtifactStore" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:352:41 - error: Argument of type "SimpleNamespace" cannot be assigned to parameter "args" of type "Namespace" in function "_target_mode_backend"
+    "SimpleNamespace" is not assignable to "Namespace" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:355:16 - error: Argument of type "Mapping[str, SlurmTarget] | None" cannot be assigned to parameter "iterable" of type "Iterable[_T@set]" in function "__init__"
+    Type "Mapping[str, SlurmTarget] | None" is not assignable to type "Iterable[str]"
+      "None" is incompatible with protocol "Iterable[str]"
+        "__iter__" is not present (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:372:25 - error: Argument of type "object" cannot be assigned to parameter "database" of type "Database" in function "_target_mode_backend"
+    "object" is not assignable to "Database" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:372:35 - error: Argument of type "object" cannot be assigned to parameter "store" of type "S3ArtifactStore" in function "_target_mode_backend"
+    "object" is not assignable to "S3ArtifactStore" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:372:45 - error: Argument of type "SimpleNamespace" cannot be assigned to parameter "args" of type "Namespace" in function "_target_mode_backend"
+    "SimpleNamespace" is not assignable to "Namespace" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:385:25 - error: Argument of type "object" cannot be assigned to parameter "database" of type "Database" in function "_target_mode_backend"
+    "object" is not assignable to "Database" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:385:35 - error: Argument of type "object" cannot be assigned to parameter "store" of type "S3ArtifactStore" in function "_target_mode_backend"
+    "object" is not assignable to "S3ArtifactStore" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:385:45 - error: Argument of type "SimpleNamespace" cannot be assigned to parameter "args" of type "Namespace" in function "_target_mode_backend"
+    "SimpleNamespace" is not assignable to "Namespace" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:402:13 - error: Argument of type "object" cannot be assigned to parameter "database" of type "Database" in function "_target_mode_backend"
+    "object" is not assignable to "Database" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:403:13 - error: Argument of type "object" cannot be assigned to parameter "store" of type "S3ArtifactStore" in function "_target_mode_backend"
+    "object" is not assignable to "S3ArtifactStore" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:404:13 - error: Argument of type "SimpleNamespace" cannot be assigned to parameter "args" of type "Namespace" in function "_target_mode_backend"
+    "SimpleNamespace" is not assignable to "Namespace" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:507:36 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:527:36 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:569:18 - error: Argument of type "object" cannot be assigned to parameter "database" of type "Database" in function "__init__"
+    "object" is not assignable to "Database" (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:570:15 - error: Argument of type "object" cannot be assigned to parameter "store" of type "ArtifactStore" in function "__init__"
+    "object" is incompatible with protocol "ArtifactStore"
+      "put" is not present
+      "get" is not present
+      "open" is not present
+      "exists" is not present
+      "verify" is not present
+      "delete" is not present (reportArgumentType)
+  /workspace/ravel-worktrees/T09/tests/premium/T09/test_ac4_credentials_and_safety.py:585:49 - error: Cannot access attribute "backend_job_ref" for class "object"
+    Attribute "backend_job_ref" is unknown (reportAttributeAccessIssue)
+28 errors, 0 warnings, 0 informations
+make[1]: *** [Makefile:127: lint] Error 1
+make[1]: Leaving directory '/workspace/ravel-worktrees/T09'
+
