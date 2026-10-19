@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "task_id": "T07",
+  "attempt": 2,
+  "reviewer_id": "independent-T07-AC1-AC4",
+  "base_sha": "be3866f",
+  "candidate_sha": "5f27263",
+  "source_digest": "98b5a8b4eecd31abc88ccdc7ba51b50dee462425c4d99d7f4a5363729842528c",
+  "reviewed_at": "2026-10-19 18:15 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T07-AC1",
+      "result": "PASS",
+      "evidence": "Cross-project read/write refused, revoked membership closes the next request and an open stream with 4404, forged/over-claimed tokens refused, deactivation audited, no Owner DAG route. Independent review PASS; gate 147 tests."
+    },
+    {
+      "id": "T07-AC2",
+      "result": "PASS",
+      "evidence": "Address policy refuses metadata/loopback/RFC1918/link-local/ULA/lying resolver/one-private-among-public; each redirect hop is guarded; the connection is pinned to the validated address; browser egress fails closed before Playwright. Independent review PASS."
+    },
+    {
+      "id": "T07-AC3",
+      "result": "PASS",
+      "evidence": "Artifacts door: 65MiB chunked -> 413 with no store/rows/temp; 64MiB accepted below 16MiB peak. Lab door: request.stream -> temp file, configured limit, 413, unlink; repository no longer lists chunks: spools, hashes by re-read, passes file iterators; invalid filename 400 before body. Independent review PASS."
+    },
+    {
+      "id": "T07-AC4",
+      "result": "PASS",
+      "evidence": "Real HTTP retrieval (example.com/Crossref/httpbin), explicit ACCESS_LIMITED/AUTH_REQUIRED/PAYWALLED/POLICY_BLOCKED without fabricated content; no mock evidence. Independent review PASS."
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "tests/integration/gateway/test_lab_handover.py",
+      "line": 333,
+      "trigger": "no lab-door 65MiB/413/bounded-memory regression; the 17 handover tests use small fixtures",
+      "impact": "the lab streaming fix is statically verified but its size/memory property is not exercised by the T07 gate",
+      "acceptance_id": "T07-AC3",
+      "required_fix": "Add a lab-door 65MiB/413 and bounded-memory case in T11 or a follow-up; retained as residual.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "KNOWN_LIMITATIONS.md",
+      "line": 300,
+      "trigger": "L-16 says hash while writing; the repository writes then re-reads to hash",
+      "impact": "memory claim is true, wording slightly imprecise",
+      "acceptance_id": "T07-AC3",
+      "required_fix": "Clarify wording; no behavior change.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/gateway/routes/lab.py",
+      "line": 509,
+      "trigger": "Raises docstring omits the new 400 filename refusal",
+      "impact": "OpenAPI/API docs stale",
+      "acceptance_id": "T07-AC1",
+      "required_fix": "Add 400 to the docstring.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/repositories/lab.py",
+      "line": 317,
+      "trigger": "accepted lab upload spools up to three times on temp disk",
+      "impact": "about 3x file size in temp disk per upload; memory remains bounded",
+      "acceptance_id": "T07-AC3",
+      "required_fix": "Documented; a later refactor can pass the route spool directly.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/FILE_LOCKS.json",
+      "line": 118,
+      "trigger": "acceptance-map has both T07 and older T01 lock entries",
+      "impact": "T07 authorization is recorded; path-only lock resolution may be ambiguous",
+      "acceptance_id": "T07-AC1",
+      "required_fix": "Release T01 entry when set semantics are confirmed.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Login limiter process-local; multi-replica needs shared counters.",
+    "No HTTP admin deactivation route; repository/audit only.",
+    "Browser egress fail-closed until T19.",
+    "DNS resolver trust: both lookups are validated and the connection pinned, but the resolver is an assumption.",
+    "AC4 depends on external network; offline runs mark BLOCKED_EXTERNAL.",
+    "Per-file/per-request cap with no project-wide quota; temp disk ~3x file size per accepted lab upload.",
+    "T07 gate runs tests/premium/T07 only; lab handover tests passed separately but are not in the manifest.",
+    "A DB failure after store put can orphan an S3 object even with no artifact row (pre-existing)."
+  ],
+  "gate_evidence_refs": [
+    "evidence/T07/run-20261019-181839/manifest.json"
+  ],
+  "integration_candidate": false
+}
