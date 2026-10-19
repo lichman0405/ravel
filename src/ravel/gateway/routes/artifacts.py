@@ -484,9 +484,14 @@ def download(
         # and cannot be anything else — by then the status line has gone.
         stream = store.open(chosen.storage_key)
     except ArtifactStoreError as refused:
+        logger.warning(
+            "artifact download from project %s failed in the store: %s",
+            standing.project_id,
+            type(refused).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"the artifact store could not read this version: {refused}",
+            detail="the artifact store could not read this version",
         ) from refused
 
     def slices() -> Iterator[bytes]:

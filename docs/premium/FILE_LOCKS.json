@@ -3,6 +3,86 @@
   "writer": "SUPERVISOR_ONLY",
   "active_locks": [
     {
+      "path": "src/ravel/gateway/routes/auth.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/routes/events.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/routes/lab.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/deps.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/app.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/research/browser.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/state/repositories/identity.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/state/tables.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/state/migrations/versions/20261019_1200_7e4c1b2a9d3f_account_deactivations.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/config.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
       "path": "Makefile",
       "task_id": "T01",
       "owner": "SUPERVISOR",
