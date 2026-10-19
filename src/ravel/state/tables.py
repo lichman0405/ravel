@@ -137,6 +137,31 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class AccountDeactivationRow(Base):
+    """The fact that an account was stopped, and who stopped it.
+
+    A row here rather than an update to `users.is_active`, because `users` is
+    append-only — an account's existence is a fact about the past — and because
+    the operation is a security decision that has to be attributable. The two
+    columns together are the record: the newest deactivation is what makes an
+    account inactive, and there is no code path that erases one. A future
+    reactivation would be another row, not a rewrite of this one.
+
+    `is_active` remains on `users` for accounts created inactive; the effective
+    answer is "either says inactive", which is what `UserRepository` returns.
+    """
+
+    __tablename__ = "account_deactivations"
+
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.user_id"), primary_key=True)
+    deactivated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: Who performed it, as an operator or administrator reference. Not a
+    #: foreign key: the acting party may be an out-of-band operator, and an
+    #: account that later loses its row must not make the audit unreadable.
+    deactivated_by: Mapped[str] = mapped_column(REF, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+
+
 class ProjectRow(Base):
     """One research project — the unit of isolation."""
 

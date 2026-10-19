@@ -39,6 +39,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from ravel.config import Settings
 from ravel.domain.enums import UserRole
 from ravel.execution.node_runs import ExternalResultPort
+from ravel.gateway.auth.limits import LoginRateLimiter, TrustedProxies
 from ravel.gateway.auth.tokens import InvalidAccessToken, TokenService
 from ravel.gateway.conversation import MasterFactory
 from ravel.gateway.runtime import HarnessRuntime
@@ -116,6 +117,10 @@ class GatewayState:
         runtime: HarnessRuntime,
         deliver_external: ExternalResultPort,
         cadence: Cadence | None = None,
+        limiter: LoginRateLimiter | None = None,
+        trusted_proxies: TrustedProxies | None = None,
+        allowed_origins: frozenset[str] = frozenset(),
+        stream_reauthorize_seconds: float = 4.0,
     ) -> None:
         self.settings = settings
         self.database = database
@@ -124,6 +129,15 @@ class GatewayState:
         self.runtime = runtime
         self.deliver_external = deliver_external
         self.cadence = cadence or DEFAULT_CADENCE
+        #: The login failure budget. Held here rather than built in the route
+        #: so that one process has one budget and a test can supply a clock.
+        self.limiter = limiter or LoginRateLimiter()
+        #: Whose `X-Forwarded-For` is believed, and the exact browser origins
+        #: the socket accepts. Both are computed once at composition time from
+        #: settings that cannot change while the process runs.
+        self.trusted_proxies = trusted_proxies or TrustedProxies()
+        self.allowed_origins = allowed_origins
+        self.stream_reauthorize_seconds = stream_reauthorize_seconds
 
 
 @dataclass(frozen=True)

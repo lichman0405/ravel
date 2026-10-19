@@ -33,7 +33,9 @@ from fastapi import FastAPI
 from ravel.config import Settings, get_settings
 from ravel.domain.services import GATEWAY
 from ravel.execution.node_runs import ExecutionService, ExternalResultPort
-from ravel.gateway.auth.tokens import TokenService, require_a_real_secret
+from ravel.gateway.auth.limits import LoginRateLimiter, TrustedProxies
+from ravel.gateway.auth.policy import exact_origins, validate_gateway_settings
+from ravel.gateway.auth.tokens import TokenService
 from ravel.gateway.conversation import MasterFactory
 from ravel.gateway.deps import GatewayState
 from ravel.gateway.errors import install_error_handlers
@@ -72,6 +74,7 @@ def create_app(
     master_of: MasterFactory | None = None,
     deliver_external: ExternalResultPort | None = None,
     cadence: Cadence | None = None,
+    limiter: LoginRateLimiter | None = None,
     heartbeat_seconds: float | None = GATEWAY_PULSE_SECONDS,
 ) -> FastAPI:
     """Build the Gateway.
@@ -93,6 +96,11 @@ def create_app(
         cadence: How often the event stream looks for new events and how often
             it speaks when there are none. Defaults to the production rates;
             a test lowers them rather than sleeping through them.
+        limiter: The per-address, per-account login failure budget. Defaults to
+            a fresh one; a test injects one with its own clock so that a
+            fifteen-minute lock can be observed without waiting fifteen
+            minutes. The default is per process, which is what a single-Gateway
+            V0 deployment is.
         heartbeat_seconds: How often this process reports itself alive, or
             `None` to have it report nothing. On by default, because a Gateway
             that did not report would be a service the administrator's screen
@@ -101,17 +109,25 @@ def create_app(
             of a database rather than a deployment.
 
     Raises:
-        RuntimeError: In production, the configured token secret is the
-            development placeholder or shorter than the algorithm requires.
-            Checked here rather than at first login so that a deployment which
-            would issue forgeable tokens fails to start instead of running.
+        ValueError: The settings are not fit for the environment they name —
+            a development credential in production, a public bind that was not
+            asked for, a missing or malformed browser origin, or a stream
+            reauthorization interval outside its bound. Checked before the
+            database is opened and whether or not a token service was injected,
+            so a deployment that would be forgeable or reachable fails to start
+            rather than running.
     """
     resolved = settings or get_settings()
+    # Before the database: a Gateway that cannot be safely reached should not
+    # first establish that it can reach its state. The check is unconditional
+    # rather than tied to `tokens is None` — a caller may inject a token service
+    # for a reason that has nothing to do with the database credentials, and
+    # that must not be a way around every other production rule.
+    validate_gateway_settings(resolved)
     resolved_database = database or Database.from_settings(resolved)
 
     if tokens is None:
         secret = resolved.gateway_jwt_secret.get_secret_value()
-        require_a_real_secret(secret, environment=resolved.env)
         tokens = TokenService(secret=secret, ttl_seconds=resolved.gateway_token_ttl_seconds)
 
     app = FastAPI(
@@ -142,6 +158,10 @@ def create_app(
         deliver_external=deliver_external
         or ExecutionService(database=resolved_database, settings=resolved),
         cadence=cadence,
+        limiter=limiter or LoginRateLimiter(),
+        trusted_proxies=TrustedProxies(resolved.gateway_trusted_proxies),
+        allowed_origins=exact_origins(resolved),
+        stream_reauthorize_seconds=resolved.gateway_stream_reauthorize_seconds,
     )
 
     install_error_handlers(app)

@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ravel.domain.clock import utcnow
 from ravel.domain.enums import ApprovalStatus, UserRole
 from ravel.domain.events import ActorType, ProjectEventType
 from ravel.domain.identity import (
@@ -32,6 +33,7 @@ from ravel.state.mapping import from_row
 from ravel.state.outbox import emit
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.tables import (
+    AccountDeactivationRow,
     ActionRow,
     AgentIdentityRow,
     ApprovalRequestRow,
@@ -60,14 +62,14 @@ class UserRepository:
         return user
 
     def by_username(self, username: str) -> User | None:
-        """The account with this username, if any."""
+        """The account with this username, if any, as it stands now."""
         row = (
             self.session.query(UserRow).filter(UserRow.username == username).one_or_none()
         )
-        return from_row(User, row) if row is not None else None
+        return self._serviceable(row) if row is not None else None
 
     def get(self, user_id: str) -> User:
-        """One account by identifier.
+        """One account by identifier, as it stands now.
 
         Raises:
             NotFound: No such account.
@@ -75,7 +77,57 @@ class UserRepository:
         row = self.session.get(UserRow, user_id)
         if row is None:
             raise NotFound(f"no user {user_id!r}")
-        return from_row(User, row)
+        return self._serviceable(row)
+
+    def deactivate(self, user_id: str, *, deactivated_by: str, reason: str | None = None) -> User:
+        """Stop an account from authenticating, and record who decided that.
+
+        `users` is append-only, so the fact is written beside it rather than
+        into it. This is the read-side operation of an operator action rather
+        than a Gateway route: V0 has no account-administration screen, and the
+        method exists so that the state the authentication path already checks
+        has an attributable way to be reached.
+
+        Idempotent: deactivating an account already deactivated returns the
+        current record without writing a second row. The primary key on
+        `account_deactivations` would refuse it anyway, and refusing here turns
+        a constraint error into the same answer.
+
+        Raises:
+            NotFound: No such account.
+            ValueError: No accountable actor was named.
+        """
+        if not deactivated_by.strip():
+            raise ValueError("deactivating an account has to name who decided it")
+        self.get(user_id)  # existence, and a `NotFound` before anything is written
+        existing = self.session.get(AccountDeactivationRow, user_id)
+        if existing is None:
+            self.session.add(
+                AccountDeactivationRow(
+                    user_id=user_id,
+                    deactivated_at=utcnow(),
+                    deactivated_by=deactivated_by,
+                    reason=reason,
+                )
+            )
+            self.session.flush()
+        return self.get(user_id)
+
+    def _serviceable(self, row: UserRow) -> User:
+        """The account as authentication should see it.
+
+        A row in `account_deactivations` is as authoritative as
+        `users.is_active = false`, and either is enough. Overlaying here rather
+        than teaching every caller about a second table is what keeps the
+        Gateway's `authenticate`, the approval resolver, and the action service
+        from disagreeing about whether an account is active.
+        """
+        user = from_row(User, row)
+        if not user.is_active:
+            return user
+        if self.session.get(AccountDeactivationRow, row.user_id) is None:
+            return user
+        return user.model_copy(update={"is_active": False})
 
 
 def memberships_of(session: Session, user_id: str) -> list[ProjectMembership]:

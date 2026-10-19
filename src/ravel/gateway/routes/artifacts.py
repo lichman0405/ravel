@@ -27,28 +27,141 @@ second of two locks rather than the only one.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from typing import Annotated, Any
+import hashlib
+import logging
+import tempfile
+from collections.abc import Iterable, Iterator
+from pathlib import Path
+from typing import Annotated, Any, BinaryIO, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
+from ravel.domain.artifacts import unusable_filename_reason
 from ravel.gateway.deps import GatewayState, GatewayStateDep, PrincipalDep
 from ravel.state.repositories.research import ArtifactRepository
-from ravel.state.store import ArtifactStore, ArtifactStoreError, S3ArtifactStore
+from ravel.state.store import (
+    HASH_ALGORITHM,
+    ArtifactImmutableError,
+    ArtifactStore,
+    ArtifactStoreError,
+    S3ArtifactStore,
+    StoredObject,
+    _is_precondition_failure,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["artifacts"])
 
-#: What one upload may weigh. A cap rather than a limit on the design: the
-#: store hashes the whole object before it uploads it, so an unbounded upload is
-#: an unbounded allocation in the Gateway's own process, and a member with a
-#: curl command could take the gateway down for everybody. Well above any file
-#: V0 research produces.
-MAX_UPLOAD_BYTES = 256 * 1024 * 1024
+#: What one upload may weigh by default. The effective cap is
+#: `RAVEL_GATEWAY_UPLOAD_LIMIT_BYTES`, which the composition root validates as a
+#: positive number; this constant is the shipped default and the value the
+#: laboratory upload route imports. Well above any file V0 research produces,
+#: and low enough that a member with a curl command cannot fill the host's disk
+#: with one request.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
+#: How much of an upload the streaming S3 store holds in memory before it spills
+#: to a temporary file. Every byte still passes through the hash, but no byte
+#: beyond this is retained, so the Gateway's memory does not grow with the file.
+UPLOAD_MEMORY_BYTES = 1 << 20
 
 #: Read back in slices rather than whole when serving a download, so a large
 #: artifact does not have to fit in memory twice to be handed over.
 CHUNK_BYTES = 1 << 20
+
+
+class UploadTooLarge(RuntimeError):
+    """A body exceeded the configured upload cap while it was being read.
+
+    A distinct type rather than a store error: the size decision belongs to the
+    request boundary, and it has to be made before a store is asked to keep
+    anything. The route translates it to 413.
+    """
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"the upload exceeds the {limit}-byte limit")
+        self.limit = limit
+
+
+class StreamingS3ArtifactStore(S3ArtifactStore):
+    """An S3 store that uploads a spooled body instead of a copied one.
+
+    `S3ArtifactStore.put` hashes the whole object into a `bytes` before it
+    uploads, which makes an upload cost as much process memory as the file is
+    large. The upload boundary is capped, so that is bounded rather than
+    unbounded, but the cap is still a promise the process makes about its own
+    footprint. This subclass keeps the same single-shot conditional write and
+    the same content-addressed hash, and replaces only where the bytes wait:
+    they are written to a `SpooledTemporaryFile` as they are hashed, and the
+    file object itself is handed to `put_object`.
+
+    The spool is memory up to `UPLOAD_MEMORY_BYTES` and a temporary file past
+    that, so peak memory is a constant rather than a multiple of the artifact.
+    It is closed in every case, including a refused upload, which is what keeps
+    a failed request from leaving temporary data behind. The route that calls
+    this has already bounded the body; the order — hash while writing, upload
+    only after the hash is complete — is what makes the recorded hash describe
+    exactly the bytes that were sent.
+    """
+
+    def __init__(
+        self,
+        settings: Any | None = None,
+        *,
+        client: Any | None = None,
+        bucket: str | None = None,
+        memory_bytes: int = UPLOAD_MEMORY_BYTES,
+    ) -> None:
+        super().__init__(settings, client=client, bucket=bucket)
+        self._memory_bytes = memory_bytes
+
+    def put(self, key: str, chunks: Iterable[bytes], *, media_type: str = "") -> StoredObject:
+        """Hash the stream into a spool, then upload the spool.
+
+        The error text names the failure type and not the client library's
+        message: an S3 exception can carry an endpoint, a bucket, or a request
+        that a caller has no business reading, and the route above turns a
+        refusal into a fixed sentence in any case.
+
+        Raises:
+            ArtifactImmutableError: An object already exists at this key.
+            ArtifactStoreError: The object store refused the upload.
+        """
+        digest = hashlib.new(HASH_ALGORITHM)
+        size = 0
+        with tempfile.SpooledTemporaryFile(
+            max_size=self._memory_bytes, mode="w+b", prefix="ravel-upload-"
+        ) as spool:
+            for chunk in chunks:
+                digest.update(chunk)
+                size += len(chunk)
+                spool.write(chunk)
+            spool.seek(0)
+            extra = {"ContentType": media_type} if media_type else {}
+            try:
+                self._client.put_object(
+                    Bucket=self._bucket,
+                    Key=key,
+                    Body=spool,
+                    **extra,
+                    **{"IfNoneMatch": "*"},
+                )
+            except Exception as error:
+                if _is_precondition_failure(error):
+                    raise ArtifactImmutableError(
+                        f"{key} already exists in {self._bucket}; artifact versions are "
+                        "immutable, so a changed file needs a new version number"
+                    ) from error
+                raise ArtifactStoreError(
+                    f"could not store {key}: {type(error).__name__}"
+                ) from error
+        return StoredObject(
+            key=key,
+            content_hash=f"{HASH_ALGORITHM}:{digest.hexdigest()}",
+            size_bytes=size,
+        )
 
 
 def artifact_store(state: GatewayState) -> ArtifactStore:
@@ -60,22 +173,27 @@ def artifact_store(state: GatewayState) -> ArtifactStore:
     be read — which is how one door comes to write to a bucket the other cannot
     find.
 
+    The returned store is the streaming one. Callers pass an iterable of chunks
+    and the store never needs the whole body at once, which matters most for
+    the route that has just read it off the network.
+
     Raises:
-        HTTPException: 503, and the message says which half is missing. A
-            deployment with no bucket configured can still serve every route
-            that reads metadata — which is most of them — and that is worth
-            keeping, so an absent store is one route failing rather than the
-            application refusing to start.
+        HTTPException: 503. The exception's own text is logged rather than
+            returned: it can name an endpoint or a credential, and a client
+            that can do nothing about either should not receive it.
     """
     try:
-        return S3ArtifactStore(state.settings)
+        return StreamingS3ArtifactStore(state.settings)
     except Exception as refused:
         # The client library raises its own exception types and this route has
         # no business enumerating them: what it knows is that no store could be
         # built, and that is what the caller is told.
+        logger.warning(
+            "artifact store unavailable for project traffic: %s", type(refused).__name__
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"this deployment has no artifact store: {refused}",
+            detail="this deployment has no artifact store configured",
         ) from refused
 
 
@@ -168,68 +286,148 @@ async def upload(
     because it was registered, and whether it satisfies a node's contract is a
     Review verdict and a completeness check, neither of which this route makes.
 
+    **The body is never held whole.** It is read in the chunks Starlette
+    yields, counted against the cap as it arrives, and written to a temporary
+    file. Only after the last byte is in is the file handed to the repository,
+    whose store reads it in slices while it hashes and uploads. The previous
+    shape called `request.body()`, which made one upload cost 64 MiB of process
+    memory and let a member with a loop take the Gateway down for everyone.
+    The temporary file is removed in every path, including a refusal, so a
+    failed request leaves neither bytes on disk nor a formal Artifact row —
+    the store is written and refused before `register` stages anything.
+
     Raises:
         HTTPException: 413 if the body is larger than this deployment accepts,
             read from `Content-Length` when it is sent and counted while
             reading when it is not. 400 if a new artifact is uploaded with no
-            name. 503 if there is no object store.
+            name, or if the supplied filename could not be a storage-key
+            component. 502 if the object store refuses the upload, with a fixed
+            message that carries no store internals. 503 if there is no object
+            store.
     """
+    limit = state.settings.gateway_upload_limit_bytes
     declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+    if declared is not None and declared.isdigit() and int(declared) > limit:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"this deployment accepts uploads up to {MAX_UPLOAD_BYTES} bytes",
+            detail=f"this deployment accepts uploads up to {limit} bytes",
         )
     if artifact_id is None and not name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="a new artifact needs a name; adding a version does not",
         )
+    if filename:
+        # The name becomes a component of an object-storage key. An empty one is
+        # correct — the repository derives it from the artifact's name — but a
+        # supplied one that names a directory or carries a separator would
+        # either escape the prefix or become a 500 from `artifact_key` long
+        # after the body had been accepted. Refused here, before the body is
+        # read, and with the submitted value left out of the answer.
+        problem = unusable_filename_reason(filename)
+        if problem is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"the filename is not usable: {problem}",
+            )
 
-    body = await request.body()
-    if len(body) > MAX_UPLOAD_BYTES:
-        # The header may be absent — a chunked upload has no length to check —
-        # so the size is counted as well as declared. Checking only the header
-        # would make the cap advisory.
+    # Resolved before the body is read so a deployment with no store answers
+    # immediately rather than after accepting an upload it cannot keep.
+    store = artifact_store(state)
+
+    # Not a context manager: the file has to be closed before it is unlinked,
+    # on every path, so both steps live in the `finally` below rather than
+    # being split between a `with` exit and a later statement.
+    temporary = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        mode="w+b", prefix="ravel-upload-", suffix=".body", delete=False
+    )
+    try:
+        stream = request.stream()
+        try:
+            async for chunk in stream:
+                if not chunk:
+                    continue
+                if temporary.tell() + len(chunk) > limit:
+                    # The header may be absent — a chunked upload has no length
+                    # to check — so the size is counted as well as declared.
+                    # Checking only the header would make the cap advisory.
+                    raise UploadTooLarge(limit)
+                temporary.write(chunk)
+        finally:
+            # `async for` closes a generator only when the loop runs to
+            # completion. A body that was refused partway would otherwise leave
+            # the request's receive generator suspended, so it is closed here
+            # on both the refused and the completed path.
+            await stream.aclose()
+        temporary.flush()
+        temporary.seek(0)
+
+        try:
+            with state.database.transaction() as session:
+                repository = ArtifactRepository(session, standing.project_id, store)
+                chunks = _stored_chunks(cast(BinaryIO, temporary))
+                if artifact_id is None:
+                    artifact, version = repository.register(
+                        name=name,
+                        chunks=chunks,
+                        created_by=standing.user_id,
+                        filename=filename,
+                        media_type=media_type,
+                        kind=kind,
+                        node_id=node_id,
+                    )
+                else:
+                    artifact = repository.get(artifact_id=artifact_id)
+                    version = repository.add_version(
+                        artifact_id,
+                        chunks=chunks,
+                        created_by=standing.user_id,
+                        filename=filename,
+                        media_type=media_type,
+                        node_id=node_id,
+                    )
+        except ArtifactStoreError as refused:
+            # The store's own text is not returned. It can contain a key, an
+            # endpoint, or a request identifier; the caller can act on none of
+            # them, and a fixed sentence cannot leak a credential into a log
+            # aggregator or a bug report.
+            logger.warning(
+                "artifact upload to project %s failed in the store: %s",
+                standing.project_id,
+                type(refused).__name__,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="the artifact store refused the upload",
+            ) from refused
+    except UploadTooLarge as too_big:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"this deployment accepts uploads up to {MAX_UPLOAD_BYTES} bytes",
-        )
-
-    store = artifact_store(state)
-    try:
-        with state.database.transaction() as session:
-            repository = ArtifactRepository(session, standing.project_id, store)
-            if artifact_id is None:
-                artifact, version = repository.register(
-                    name=name,
-                    chunks=[body],
-                    created_by=standing.user_id,
-                    filename=filename,
-                    media_type=media_type,
-                    kind=kind,
-                    node_id=node_id,
-                )
-            else:
-                artifact = repository.get(artifact_id=artifact_id)
-                version = repository.add_version(
-                    artifact_id,
-                    chunks=[body],
-                    created_by=standing.user_id,
-                    filename=filename,
-                    media_type=media_type,
-                    node_id=node_id,
-                )
-    except ArtifactStoreError as refused:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"the artifact store refused the upload: {refused}",
-        ) from refused
+            detail=f"this deployment accepts uploads up to {too_big.limit} bytes",
+        ) from too_big
+    finally:
+        temporary.close()
+        # `delete=False` plus an explicit unlink rather than `delete=True`:
+        # the file has to stay readable while the store consumes it, and the
+        # removal has to happen on the same path that closed it, including the
+        # 413 path where the upload was refused before anything read it.
+        Path(temporary.name).unlink(missing_ok=True)
 
     return {
         "artifact": artifact.model_dump(mode="json"),
         "version": version.model_dump(mode="json"),
     }
+
+
+def _stored_chunks(spool: BinaryIO, *, chunk_bytes: int = CHUNK_BYTES) -> Iterator[bytes]:
+    """The temporary file as an iterable of bounded slices.
+
+    The repository hands this to the store, which hashes as it reads. Reading
+    in fixed slices is what keeps the second half of the upload — hashing and
+    the S3 write — from allocating the object too.
+    """
+    while block := spool.read(chunk_bytes):
+        yield block
 
 
 # ── Bytes out ───────────────────────────────────────────────────────────────
@@ -309,4 +507,12 @@ def download(
     )
 
 
-__all__ = ["CHUNK_BYTES", "MAX_UPLOAD_BYTES", "artifact_store", "router"]
+__all__ = [
+    "CHUNK_BYTES",
+    "MAX_UPLOAD_BYTES",
+    "UPLOAD_MEMORY_BYTES",
+    "StreamingS3ArtifactStore",
+    "UploadTooLarge",
+    "artifact_store",
+    "router",
+]

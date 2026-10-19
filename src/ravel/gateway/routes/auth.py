@@ -24,14 +24,23 @@ copy was noticed.
 It is a bearer token with no server-side record and it expires on its own,
 which is what "short-lived" is for. What logout cuts is the chain, so the
 session cannot be extended.
+
+**A failure budget is checked before the password is.** The key is the source
+address paired with the account, and a pair that has spent its budget is
+refused even when the password is right. Checking after verification would
+make the endpoint answer "locked" for a correct password and "wrong" for an
+incorrect one, which is the oracle the timing stand-in above exists to close.
+See `ravel.gateway.auth.limits` for the policy and for whose
+`X-Forwarded-For` is believed.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from ravel.domain.identity import RefreshToken
+from ravel.gateway.auth.limits import client_address, pair_key
 from ravel.gateway.auth.passwords import hash_password, verify_password
 from ravel.gateway.deps import CallerDep, GatewayStateDep
 from ravel.state.repositories.identity import UserRepository, memberships_of
@@ -95,24 +104,34 @@ class Identity(BaseModel):
 
 
 @router.post("/login", summary="Exchange a username and password for tokens")
-def login(request: LoginRequest, state: GatewayStateDep) -> TokenPair:
+def login(credentials: LoginRequest, request: Request, state: GatewayStateDep) -> TokenPair:
     """Authenticate and open a login chain.
 
     Raises:
         HTTPException: 401. The account is unknown, the password is wrong, or
             the account is deactivated — one answer for all three, and the same
-            amount of work for the first as for the second.
+            amount of work for the first as for the second. 429 when this
+            address has failed this account too often, with `Retry-After`; the
+            check happens before the account is looked up, so a lock does not
+            become a way to ask whether the account exists.
     """
+    key = pair_key(client_address(request, state.trusted_proxies), credentials.username)
+    wait = state.limiter.retry_after(key)
+    if wait is not None:
+        raise _throttled(wait)
+
     with state.database.read_only() as session:
-        user = UserRepository(session).by_username(request.username)
+        user = UserRepository(session).by_username(credentials.username)
 
     # An account may exist with no password set, which is not a way in: the
     # stand-in hash stands in for that case exactly as it does for no account.
     stored = (user.password_hash if user is not None else None) or _STAND_IN_HASH
-    accepted = verify_password(stored_hash=stored, password=request.password)
+    accepted = verify_password(stored_hash=stored, password=credentials.password)
     if not accepted or user is None or not user.is_active:
+        state.limiter.record_failure(key)
         raise _refused()
 
+    state.limiter.succeeded(key)
     return _open_chain(state, user.user_id, user.username)
 
 
@@ -248,6 +267,20 @@ def _refused() -> HTTPException:
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="those credentials were not accepted",
         headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _throttled(seconds: int) -> HTTPException:
+    """The answer a pair inside its failure budget gets.
+
+    The wording says nothing about whether the account exists: the budget is
+    charged per pair for every username, known or not, and the check that
+    produces this response runs before the account is even looked up.
+    """
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="too many failed sign-in attempts; try again later",
+        headers={"Retry-After": str(seconds)},
     )
 
 
