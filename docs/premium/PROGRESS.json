@@ -131,11 +131,11 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T07",
       "base_sha": "be3866f",
-      "head_sha": "e8d9cf5",
+      "head_sha": "95f704d",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [
-        "evidence/T07/run-20261019-174800/manifest.json"
+        "evidence/T07/run-20261019-181839/manifest.json"
       ],
       "integration_merge_sha": null,
       "blocker_refs": [],
@@ -161,11 +161,11 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T09",
       "base_sha": "478b5ed",
-      "head_sha": "5efed85",
+      "head_sha": "2121644",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [
-        "evidence/T09/run-20261019-174548/manifest.json"
+        "evidence/T09/run-20261019-182413/manifest.json"
       ],
       "integration_merge_sha": null,
       "blocker_refs": [
