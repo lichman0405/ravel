@@ -127,18 +127,18 @@
       "note": "T06 DONE：Action/审批版本绑定/预算预留/CNY定点/UNKNOWN/幂等/start_execution入口/gateway resolve sync/迁移；46 tests + migration + lint PASS；fresh DB run-204258、candidate run-205746 PASS；独立AC1-AC4复审APPROVE（P2 outcome回调/attempt=1接线明确留给T09/T11/T17/T19；P3覆盖项记录）；ff-only合入be98bd8。"
     },
     "T07": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T07",
+      "base_sha": "be3866f",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-19 Asia/Shanghai",
+      "note": "T07 RUNNING：Gateway 凭据/跨项目/撤权/SSRF/上传边界；无外部资源依赖，先实现内部安全门禁。"
     },
     "T08": {
       "status": "TODO",
