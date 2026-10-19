@@ -14,7 +14,7 @@
 | [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | DONE | SUPERVISOR | 0520e4e598/be98bd8749 |
 | [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | RUNNING | SUPERVISOR | — |
 | [T08](TASKS/T08-cos-backup.md) | COS 兼容存储与恢复演练 | T03 | TODO | 未派发 | — |
-| [T09](TASKS/T09-hpc-targets.md) | HPC 目标配置、并行提交和幂等恢复 | T02, T04, T06 | TODO | 未派发 | — |
+| [T09](TASKS/T09-hpc-targets.md) | HPC 目标配置、并行提交和幂等恢复 | T02, T04, T06 | RUNNING | SUPERVISOR | — |
 | [T10](TASKS/T10-raspa-package.md) | 第一条科学计算路线：RASPA 输入到 Review | T02, T09, T12 | TODO | 未派发 | — |
 | [T11](TASKS/T11-human-lab.md) | 真人实验签收、偏差和原始数据链 | T02, T06, T12 | TODO | 未派发 | — |
 | [T12](TASKS/T12-evidence-report.md) | 证据类型和可核对的科研报告 | T03 | TODO | 未派发 | — |
@@ -36,6 +36,6 @@
 | [T28](TASKS/T28-vm-live.md) | Docker 与真实专用 VM 可替换验证 | T23 | TODO | 未派发 | — |
 | [T29](TASKS/T29-certified-release.md) | 全真实科研闭环与最终交付 | T24, T25, T26, T27, T28 | TODO | 未派发 | — |
 
-当前可派发（仍需文件锁/环境）：T08, T09, T12, T22
+当前可派发（仍需文件锁/环境）：T08, T12, T22
 
 更新方法：Supervisor修改PROGRESS.json后执行 `python docs/premium/tools/tracker.py validate` 和 `render`。

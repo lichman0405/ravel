@@ -155,18 +155,20 @@
       "note": "未派发，未执行。"
     },
     "T09": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T09",
+      "base_sha": "478b5ed",
       "head_sha": null,
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
-      "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "blocker_refs": [
+        "B05"
+      ],
+      "last_updated": "2026-10-19 Asia/Shanghai",
+      "note": "T09 RUNNING：target registry/known_hosts/幂等提交/quota/收集；内部用scripted scheduler，真实HPC为BLOCKED_EXTERNAL(B05)。"
     },
     "T10": {
       "status": "TODO",
