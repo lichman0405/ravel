@@ -74,6 +74,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from temporalio.exceptions import TemporalError
 
+from ravel.domain.artifacts import unusable_filename_reason
 from ravel.domain.dag import DagNode
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.lab import LabHandover
@@ -512,6 +513,14 @@ async def upload_output(
             is over the cap. 502 if the store refused the bytes. 503 if the
             deployment has no store at all.
     """
+    if filename:
+        reason = unusable_filename_reason(filename)
+        if reason is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"this filename cannot name an artifact: {reason}",
+            )
+
     limit = state.settings.gateway_upload_limit_bytes
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:

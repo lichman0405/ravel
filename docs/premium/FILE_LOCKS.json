@@ -27,6 +27,22 @@
       "release_condition": "T07 integrated"
     },
     {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
+      "path": "src/ravel/state/repositories/lab.py",
+      "task_id": "T07",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T07-gateway-security",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T07 integrated"
+    },
+    {
       "path": "src/ravel/gateway/deps.py",
       "task_id": "T07",
       "owner": "SUPERVISOR",

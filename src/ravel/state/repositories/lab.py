@@ -26,7 +26,9 @@ say which one they want.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import tempfile
+from collections.abc import Iterable, Iterator
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -252,6 +254,12 @@ def arrived_outputs(
     return tuple((name, arrived[name]) for name in handover.arrived(arrived))
 
 
+def _file_chunks(path: Path) -> Iterator[bytes]:
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            yield chunk
+
+
 def record_upload(
     session: Session,
     store: ArtifactStore,
@@ -303,34 +311,49 @@ def record_upload(
         ),
         None,
     )
-    body = list(chunks)
-    note = f"uploaded against handover {handover.handover_id}"
-    if existing is None:
-        return artifacts.register(
-            name=output,
-            chunks=body,
+    # A bench upload is streamed, not listed: the route already bounded it, but
+    # a list of chunks would still hold the whole file in the Gateway's memory.
+    # Spool once, hash by re-reading, then hand a fresh iterator to the store.
+    temporary = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        mode="w+b", prefix="ravel-lab-repository-", suffix=".body", delete=False
+    )
+    path = Path(temporary.name)
+    try:
+        for chunk in chunks:
+            temporary.write(chunk)
+        temporary.flush()
+        temporary.close()
+        digest, _size = hash_chunks(_file_chunks(path))
+        note = f"uploaded against handover {handover.handover_id}"
+        if existing is None:
+            return artifacts.register(
+                name=output,
+                chunks=_file_chunks(path),
+                created_by=uploaded_by,
+                filename=filename,
+                media_type=media_type,
+                provenance=handover.upload_provenance,
+                node_id=handover.node_id,
+                execution_ref=handover.execution_ref,
+                note=note,
+            )
+        versions = artifacts.versions(existing.artifact_id)
+        if versions and versions[-1].content_hash == digest:
+            return existing, versions[-1]
+        added = artifacts.add_version(
+            existing.artifact_id,
+            chunks=_file_chunks(path),
             created_by=uploaded_by,
             filename=filename,
             media_type=media_type,
-            provenance=handover.upload_provenance,
             node_id=handover.node_id,
             execution_ref=handover.execution_ref,
             note=note,
         )
-    versions = artifacts.versions(existing.artifact_id)
-    if versions and versions[-1].content_hash == hash_chunks(body)[0]:
-        return existing, versions[-1]
-    added = artifacts.add_version(
-        existing.artifact_id,
-        chunks=body,
-        created_by=uploaded_by,
-        filename=filename,
-        media_type=media_type,
-        node_id=handover.node_id,
-        execution_ref=handover.execution_ref,
-        note=note,
-    )
-    return existing, added
+        return existing, added
+    finally:
+        temporary.close()
+        path.unlink(missing_ok=True)
 
 
 def _same_work(first: LabHandover, second: LabHandover) -> bool:
