@@ -3,6 +3,30 @@
   "writer": "SUPERVISOR_ONLY",
   "active_locks": [
     {
+      "path": "src/ravel/execution/temporal/activities.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/loop.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/supervisor.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
       "path": "Makefile",
       "task_id": "T01",
       "owner": "SUPERVISOR",
