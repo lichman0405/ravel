@@ -70,6 +70,8 @@ from ravel.backends.slurm import (
     SlurmComputeBackend,
     SlurmConfigurationError,
     SlurmTarget,
+    TargetConfigurationError,
+    TargetRegistry,
 )
 from ravel.config import Settings
 from ravel.domain.enums import NodeType
@@ -146,6 +148,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "the remote directory RAVEL's workspaces live under; overrides "
             "RAVEL_SLURM_JOBS_ROOT, and ignored unless --compute-backend slurm"
+        ),
+    )
+    parser.add_argument(
+        "--slurm-targets-file",
+        default=None,
+        help=(
+            "a JSON file of operator-published HPC targets "
+            "(schemas/premium/hpc_target.schema.json). Selecting it puts the "
+            "worker in target mode: a request names a target_id from this "
+            "allowlist, credentials are resolved here in the execution "
+            "process, and host keys are checked strictly"
+        ),
+    )
+    parser.add_argument(
+        "--slurm-default-target",
+        default=None,
+        help=(
+            "the target_id used by a request that names none; required when "
+            "the allowlist holds more than one enabled target, and ignored "
+            "without --slurm-targets-file"
         ),
     )
     parser.add_argument(
@@ -234,11 +256,27 @@ def slurm_backend(
     enters a job's `task_spec`, and is kept out of every tool server's
     environment by `Settings._LAUNCHER_ONLY`.
 
+    When `--slurm-targets-file` is set, the target allowlist replaces the
+    single host from `Settings`. `TargetRegistry.resolve_enabled` is called
+    here — in the execution process — and nowhere else; it reads credentials
+    from the environment or files into `SlurmTarget` objects that never enter a
+    model prompt, a manifest, a log line, or the database.
+
     Raises:
         SlurmConfigurationError: The host or the username is missing. Refused
             at start-up, where somebody is watching, rather than at the first
             node that reaches the queue.
+        TargetConfigurationError: The target file is malformed, names no
+            enabled target, or a credential or known_hosts reference cannot be
+            resolved.
     """
+    if args.slurm_targets_file:
+        return _target_mode_backend(settings, database, store, args)
+    if args.slurm_default_target:
+        raise SlurmConfigurationError(
+            "--slurm-default-target only applies with --slurm-targets-file; "
+            "the single-target configuration has one target already"
+        )
     if not settings.slurm_host:
         raise SlurmConfigurationError(
             "--compute-backend slurm needs a cluster: set RAVEL_SLURM_HOST and "
@@ -282,6 +320,74 @@ def slurm_backend(
     )
 
 
+def _target_mode_backend(
+    settings: Settings,
+    database: Database,
+    store: S3ArtifactStore,
+    args: argparse.Namespace,
+) -> SlurmComputeBackend:
+    """The backend for an operator-published target allowlist.
+
+    Credentials and host-key files are resolved by `resolve_enabled` in this
+    process. Every connection then uses strict host-key verification against
+    that target's own `known_hosts` file: there is no auto-accept setting in
+    target mode, by design.
+    """
+    registry = TargetRegistry.from_path(args.slurm_targets_file)
+    # The only place credentials are read. The resolved mapping stays in this
+    # process; the banner below is built from the *documents*, which hold
+    # references and never secrets.
+    resolved = registry.resolve_enabled()
+    if not resolved:
+        raise TargetConfigurationError(
+            f"the HPC target file {args.slurm_targets_file} contains no enabled "
+            "target, so the worker has nowhere to submit"
+        )
+    if args.slurm_default_target:
+        if args.slurm_default_target not in resolved:
+            raise TargetConfigurationError(
+                f"--slurm-default-target {args.slurm_default_target!r} is not "
+                f"an enabled target in {args.slurm_targets_file}; enabled: "
+                f"{', '.join(sorted(resolved))}"
+            )
+        default_id = args.slurm_default_target
+    elif len(resolved) == 1:
+        default_id = next(iter(resolved))
+    else:
+        # A request must name one. Choosing the first silently would make the
+        # allowlist order decide which allocation is spent.
+        default_id = ""
+    default = resolved[default_id] if default_id else next(iter(resolved.values()))
+
+    def connector(target: SlurmTarget):
+        def connect():
+            return ParamikoTransport.connect(
+                host=target.host,
+                port=target.port,
+                username=target.username,
+                password=target.password,
+                key_filename=target.key_filename,
+                known_hosts_filename=target.known_hosts_filename,
+                # Target mode has no opt-in: an unknown key is refused.
+                strict_host_keys=True,
+                timeout=target.connect_timeout_seconds,
+            )
+
+        return connect
+
+    connectors = {target_id: connector(target) for target_id, target in resolved.items()}
+    return SlurmComputeBackend(
+        target=default,
+        connect=connectors[default.target_id],
+        targets=resolved,
+        connect_for=connectors.__getitem__,
+        default_target_id=default_id,
+        database=database,
+        store=store,
+        jobs_root=args.slurm_jobs_root or settings.slurm_jobs_root,
+    )
+
+
 def _describe_compute(settings: Settings, args: argparse.Namespace) -> str:
     """What the worker is about to run computation on, for the banner.
 
@@ -291,6 +397,21 @@ def _describe_compute(settings: Settings, args: argparse.Namespace) -> str:
     if args.compute_backend != "slurm":
         return f"{args.compute_scenario} (a mock; its output is marked simulated)"
     root = args.slurm_jobs_root or settings.slurm_jobs_root
+    if args.slurm_targets_file:
+        # Read the documents, not the resolved targets: this line is printed
+        # and may be collected by a log system, and a credential must not be
+        # in scope when it is built.
+        registry = TargetRegistry.from_path(args.slurm_targets_file)
+        described = ", ".join(
+            f"{target.target_id} ({target.username}@{target.host}:{target.port})"
+            for target in registry
+            if target.enabled
+        )
+        default = args.slurm_default_target or "request must name one"
+        return (
+            f"slurm targets [{described or 'none enabled'}], default: {default}, "
+            f"workspaces under each target's remote_root"
+        )
     return (
         f"slurm at {settings.slurm_username}@{settings.slurm_host}:{settings.slurm_port}, "
         f"workspaces under {root}"
