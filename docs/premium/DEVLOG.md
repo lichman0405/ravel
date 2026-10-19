@@ -36,6 +36,9 @@
 | 2026-10-17 19:47 Asia/Shanghai | Supervisor | T05 | 补 concrete nodeids、migration、make lint到T05门禁；空库迁移run-193645，候选run-194532 PASS；ff-only合入integration | integration HEAD fbebde3；PROGRESS/T05=DONE；6/30 DONE；T06进行中 | 继续T06 |
 | 2026-10-17 21:00 Asia/Shanghai | Reviewer | T06 | 独立复审Action/审批绑定/预算/执行入口；首轮FIX_REQUIRED（gateway resolve未同步、outcome回调/attempt=1未披露），修复后APPROVE | `reviews/T06/1.json` APPROVE，AC1–AC4 PASS；P1 gateway sync、claimant/cancel/claim expiry修复；P2 outcome回调/T09-T11与attempt=1明确记录 | 集成候选 |
 | 2026-10-17 21:00 Asia/Shanghai | Supervisor | T06 | 修复security review 4项；gateway resolve调用sync_after_resolution；46 tests；fresh DB run-204258、候选run-205746 PASS；ff-only合入integration | integration HEAD be98bd8；PROGRESS/T06=DONE；7/30 DONE；T07/T08/T09/T12/T22 eligible | 下一波 |
+| 2026-10-19 Asia/Shanghai | Supervisor | B01/B02/B05 | 用户确认当前无真实MinIO、VM、HPC集群、真人实验、邮箱、专用VM池；DeepSeek key稍后提供 | BLOCKERS记录；T24–T29保持BLOCKED_EXTERNAL | 做无外部依赖任务 |
+| 2026-10-19 Asia/Shanghai | Supervisor | B03 | `*.sh text eol=lf` 修复shell CRLF；unit行1104 passed/2 skipped，PARTIALLY_CERTIFIED（systemd-analyze缺失） | .gitattributes commit 7975bbd，独立Review APPROVE；integration ff到f283f4c | 完整gate仍待B01/B02/B05 |
+| 2026-10-19 Asia/Shanghai | Supervisor | T07 | 派发Gateway安全任务；无外部资源依赖部分先实现 | T07 worktree，base be3866f | 独立Review |
 
 
 
