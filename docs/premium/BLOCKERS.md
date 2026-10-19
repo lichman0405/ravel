@@ -39,13 +39,13 @@
 - task_ids: [T02, T29]
 - status: OPEN
 - category: ENVIRONMENT / VERIFICATION_GAP
-- observed_fact: 第一次 release-gate 因 PATH 无 `ruff` 失败；第二次因数据库 deadlock 停止（该次结果作废）；共享锁修复后 `--only unit` 已取得锁并运行，但因 `scripts/install_services.sh` 在容器 checkout 中为 CRLF 而失败；`--only research-readback` 通过（10 passed, CERTIFIED），完整 gate 仍未跑完。
-- missing_input: 规范化 LF checkout、systemd 环境、真实 MinIO/DSH/外部资源，以及串行执行窗口。
+- observed_fact: 第一次 release-gate 因 PATH 无 `ruff` 失败；第二次因数据库 deadlock 停止（该次结果作废）；共享锁修复后 `--only unit` 曾因 `scripts/install_services.sh` CRLF 失败；2026-10-19 加入 `*.sh text eol=lf` 并重跑 unit 行：1104 passed、2 skipped，因缺 systemd-analyze 为 `PARTIALLY_CERTIFIED`。`--only research-readback` 通过（10 passed），完整 gate 仍未跑完。
+- missing_input: systemd 环境（B02）、真实 MinIO/DSH/HPC 等外部资源（B01/B05），以及串行执行窗口。
 - unblock_condition: 在无并发 DB 测试的条件下跑完整 `release_gate.py`，并保存每行结果；任何 skip/fail 均按 `NOT_CERTIFIED`/`PARTIALLY_CERTIFIED` 记录。
 - owner: Supervisor/环境提供者。
-- independent_work: T05、T06 等不依赖完整 gate 的任务。
-- next_command: `make release-gate`（先修正 CRLF，确保无其他 DB 测试并发）。
-- resolved_at/evidence: 未解决。`--only unit` 和 `--only research-readback` 只是单行证据，不是完整 gate。
+- independent_work: T07/T09/T12/T22 等不依赖完整 gate 的任务。
+- next_command: `make release-gate`（无其他 DB 测试并发）。
+- resolved_at/evidence: 未解决。CRLF 已修复；`--only unit` 现在是 1104 passed/2 skipped，仍不是完整 gate。
 
 ## B04 — T04 重开，等待独立复审
 
