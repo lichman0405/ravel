@@ -131,14 +131,16 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T07",
       "base_sha": "be3866f",
-      "head_sha": null,
+      "head_sha": "e8d9cf5",
       "source_digest": null,
       "review_ref": null,
-      "gate_refs": [],
+      "gate_refs": [
+        "evidence/T07/run-20261019-174800/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [],
       "last_updated": "2026-10-19 Asia/Shanghai",
-      "note": "T07 RUNNING：Gateway 凭据/跨项目/撤权/SSRF/上传边界；无外部资源依赖，先实现内部安全门禁。"
+      "note": "T07 RUNNING：Gateway 凭据/跨项目/撤权/SSRF/上传边界；门禁run-174800 PASS；等待独立Review；浏览器出口按设计fail-closed至T19。"
     },
     "T08": {
       "status": "TODO",
@@ -159,16 +161,18 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T09",
       "base_sha": "478b5ed",
-      "head_sha": null,
+      "head_sha": "5efed85",
       "source_digest": null,
       "review_ref": null,
-      "gate_refs": [],
+      "gate_refs": [
+        "evidence/T09/run-20261019-174548/manifest.json"
+      ],
       "integration_merge_sha": null,
       "blocker_refs": [
         "B05"
       ],
       "last_updated": "2026-10-19 Asia/Shanghai",
-      "note": "T09 RUNNING：target registry/known_hosts/幂等提交/quota/收集；内部用scripted scheduler，真实HPC为BLOCKED_EXTERNAL(B05)。"
+      "note": "T09 RUNNING：target registry/known_hosts/幂等提交/quota/收集；93 tests + lint PASS；内部用scripted scheduler，真实HPC为BLOCKED_EXTERNAL(B05)；等待独立Review。"
     },
     "T10": {
       "status": "TODO",

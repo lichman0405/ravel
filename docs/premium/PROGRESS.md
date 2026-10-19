@@ -12,9 +12,9 @@
 | [T04](TASKS/T04-project-lease.md) | Supervisor 项目租约与过期进程隔离 | T03 | DONE | SUPERVISOR | a62eff4e0d/17d855d15b |
 | [T05](TASKS/T05-bounded-retry.md) | 持久化重问限制、冷却与停滞通知 | T04 | DONE | SUPERVISOR | ad8b06e/fbebde3 |
 | [T06](TASKS/T06-actions-budget.md) | 有版本审批、执行 Action 与资源预算 | T03 | DONE | SUPERVISOR | 0520e4e598/be98bd8749 |
-| [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | RUNNING | SUPERVISOR | — |
+| [T07](TASKS/T07-gateway-security.md) | 云端 Gateway 与来源/上传边界 | T03 | RUNNING | SUPERVISOR | e8d9cf5 |
 | [T08](TASKS/T08-cos-backup.md) | COS 兼容存储与恢复演练 | T03 | TODO | 未派发 | — |
-| [T09](TASKS/T09-hpc-targets.md) | HPC 目标配置、并行提交和幂等恢复 | T02, T04, T06 | RUNNING | SUPERVISOR | — |
+| [T09](TASKS/T09-hpc-targets.md) | HPC 目标配置、并行提交和幂等恢复 | T02, T04, T06 | RUNNING | SUPERVISOR | 5efed85 |
 | [T10](TASKS/T10-raspa-package.md) | 第一条科学计算路线：RASPA 输入到 Review | T02, T09, T12 | TODO | 未派发 | — |
 | [T11](TASKS/T11-human-lab.md) | 真人实验签收、偏差和原始数据链 | T02, T06, T12 | TODO | 未派发 | — |
 | [T12](TASKS/T12-evidence-report.md) | 证据类型和可核对的科研报告 | T03 | TODO | 未派发 | — |
