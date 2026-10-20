@@ -451,6 +451,11 @@ class ProjectLoop:
     #: prose to be asked again; past that, the answer is not coming, and asking
     #: a fourth time is a model call that buys nothing.
     max_turns_per_question: int = 3
+    #: How many execution seats may begin at once. The default is one so a
+    #: one-shot loop keeps its old sequential behaviour; a supervisor passes
+    #: the project's T06 compute quota, which is what makes two independent
+    #: READY nodes submit together and the third wait for a slot.
+    executor_start_concurrency: int = 1
     #: The lease fence. Called before every round; returning ``False`` means
     #: this runtime no longer owns the project and the loop must stop before
     #: another turn or execution start. `None` is the local, single-process
@@ -850,18 +855,28 @@ class ProjectLoop:
         died between two rounds gets: the DAG does not move, and the turn that
         finds the node READY begins the task it was always going to begin.
         """
-        for node in situation.runnable:
-            seat = self._executor_for(node.node_type)
-            if seat is None:
-                continue
-            try:
-                await self._dispatch(lambda node=node, seat=seat: seat.start(node))
-            except Exception:
-                logger.exception(
-                    "seat could not start node %s in project %s",
-                    node.display_id,
-                    self.project_id,
-                )
+        slots = asyncio.Semaphore(max(1, self.executor_start_concurrency))
+
+        async def begin(node: DagNode, seat: ExecutorPort) -> None:
+            async with slots:
+                try:
+                    await self._dispatch(
+                        lambda node=node, seat=seat: seat.start(node)
+                    )
+                except Exception:
+                    logger.exception(
+                        "seat could not start node %s in project %s",
+                        node.display_id,
+                        self.project_id,
+                    )
+
+        await asyncio.gather(
+            *(
+                begin(node, seat)
+                for node in situation.runnable
+                if (seat := self._executor_for(node.node_type)) is not None
+            )
+        )
 
     async def _executor_turns(self, situation: Situation) -> None:
         """Dispatch execution seats for live nodes that have not been served yet.

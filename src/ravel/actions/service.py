@@ -801,6 +801,10 @@ class ActionService:
         """Newest first, optionally narrowed."""
         return self.actions.list_actions(status=status, kind=kind, limit=limit)
 
+    def live_for_node(self, node_id: str) -> Action | None:
+        """The Action currently holding this node's execution slot."""
+        return self.actions.live_for_node(node_id)
+
     def current_envelope(self) -> tuple[int, AuthorityEnvelope | None]:
         """The governing envelope version, and the envelope if one exists.
 

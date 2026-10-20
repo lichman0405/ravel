@@ -1,0 +1,18 @@
+===== command 1: .venv/bin/python -m pytest tests/premium/T09 -q -rxXs --junitxml=/workspace/ravel-worktrees/T09/docs/premium/evidence/T09/run-20261019-182413/cmd-01-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T09 -q -rxXs --junitxml=/workspace/ravel-worktrees/T09/docs/premium/evidence/T09/run-20261019-182413/cmd-01-junit.xml
+
+........................................................................ [ 75%]
+.......................                                                  [100%]
+
+===== command 2: make lint =====
+exit_code=0 ok=True reason=None
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/T09'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+0 errors, 0 warnings, 0 informations
+make[1]: Leaving directory '/workspace/ravel-worktrees/T09'
+

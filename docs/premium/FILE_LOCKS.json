@@ -3,6 +3,7 @@
   "writer": "SUPERVISOR_ONLY",
   "active_locks": [
     {
+<<<<<<< HEAD
       "path": "src/ravel/reports/",
       "task_id": "T12",
       "owner": "SUPERVISOR",
@@ -96,6 +97,29 @@
       "owner": "SUPERVISOR",
       "branch": "cc/T09-hpc-targets",
       "granted_at": "2026-10-20 Asia/Shanghai",
+=======
+      "path": "src/ravel/execution/temporal/activities.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/loop.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/supervisor.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+>>>>>>> cc/T09-hpc-targets
       "release_condition": "T09 integrated"
     }
   ],

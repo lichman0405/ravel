@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "task_id": "T09",
+  "attempt": 3,
+  "reviewer_id": "independent-T09-recheck",
+  "base_sha": "96f15c0",
+  "candidate_sha": "beec891",
+  "source_digest": "e696f1107e6f40681912bd47845952b3ebd4a6d9ba263660fe79d958d0345b52",
+  "reviewed_at": "2026-10-20 11:12 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T09-AC1",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac1_idempotency.py, 18 tests. The claim fence is unchanged by 0c03341: two concurrent identical submissions create one job and one sbatch; a lost response with a visible job is adopted; a lost response with no visible job raises UNKNOWN and the retry does not sbatch again; a restarted worker adopts the record; unreadable/malformed/unknown-status records never reach sbatch; with a foreign claim plus a PREPARING record the call raises SlurmSubmissionUncertain without rewriting the record and with sbatch_calls()==0, and a scheduler-visible job is adopted with sbatch_calls()==1. Verified at HEAD beec891 with the canonical container suite: 105 passed, exit 0. Gate run-20261020-110357: source_commit 0c03341, junit 105 tests / 0 failures / 0 errors / 0 skipped, all three commands exit 0. Real HPC remains BLOCKED_EXTERNAL (T25)."
+    },
+    {
+      "id": "T09-AC2",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac2_parallel.py, 17 tests, and tests/premium/T09/test_ac2_action_quota.py, 8 tests, against the real ActionService/BudgetService/PostgreSQL. The attempt-2 P1 is closed at activities.py lines 1310-1332: a live CLAIMED Action is settled for every ending finish_node_run can report - COMPLETED -> record_accepted then complete(actual_cny='0'); FAILED/CANCELLED/DEVIATION -> record_failed_confirmed (slot and reservation released); TIMED_OUT/other -> record_unknown (slot intentionally held). New tests prove CLAIMED+FAILED releases (held==0), CLAIMED+TIMED_OUT keeps the slot (UNKNOWN, held==1), and the completion race: SettlingExecutionService signs the run off before start_execution's acceptance write, and start_execution returns started=true with the Action COMPLETED and held==0. The tolerance in mcp/tools/execution.py catches ActionConflict only from the starter's own project-scoped action id and tolerates only COMPLETED/FAILED_CONFIRMED/UNKNOWN; any other status re-raises, and a foreign project's id raises NotFound rather than being tolerated. No reachable ending leaves a live CLAIMED Action: the only skip in finish_node_run is the idempotent early return when the node is no longer RUNNING and a record for the same contract version already exists, which is the same run's record written in the same transaction as the settlement. Gate junit: 105 tests / 0 failures / 0 skipped; canonical re-run at HEAD exit 0. Advisory residuals: target max_jobs not threaded into the production submit path, coordinator/join_required not wired into Temporal, stale remote claim recovery."
+    },
+    {
+      "id": "T09-AC3",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac3_cancellation_and_states.py, 17 tests: a same-project/same-target job is cancelled; a job from another project or another target gets REFUSED_SCOPE and no scancel; no record is UNKNOWN_JOB; a terminal job is ALREADY_TERMINAL; a refused scancel is REFUSED; partition, account and generic rejections have their own persisted states; a sacct delay is SACCT_DELAY and not a job state; absence from both queue and accounting is ABSENT, not success; unknown host key, changed key, missing known_hosts and authentication faults are distinct. Both workflow cancellation sites use _cancel_job, which passes project_id only to backends whose cancel accepts it. The 0c03341 fix does not touch the cancellation paths."
+    },
+    {
+      "id": "T09-AC4",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac4_credentials_and_safety.py, 45 tests: support.REAL_HPC is False and the scripted cluster parses the real backend's command strings, so no test claims a real cluster; target document, repr, errors and status never contain the secret; credentials resolve only in the calling process and an unset/empty reference names the variable, not a value; the worker banner and default-target enforcement are covered; absolute/backslash/'..'/empty segments, workspace and entrypoint symlinks, out-of-root collection and software outside the catalog are refused before contact; missing metering is UNKNOWN and never zero; manifest, scheduler log and missing outputs are handled. The 0c03341 fix adds no credential, log or frontend surface; the new code comments contain no secret."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T09/run-20261020-110357/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "src/ravel/backends/slurm/backend.py",
+      "line": 1219,
+      "trigger": "The remote claim is created once and never removed. A process that dies after mkdir <remote_dir>.claim and before writing a record (or whose lost sbatch created no job) leaves the claim behind; every later call is claimed=False, probes, finds nothing, and raises SlurmSubmissionUncertain. The SUBMITTING + grace-elapsed resubmission branch (line 610) is reachable only for a record without a claim, a state this backend's own writer never produces; test_a_confirmed_absence_after_the_grace_window_submits_once constructs that state by hand.",
+      "impact": "AC1's safety property (no automatic resubmit while unconfirmed) holds, but an attempt whose sbatch definitely produced no job can never be retried; it stays UNKNOWN until an operator removes the claim directory. The grace-resubmit branch and its test are not production-reachable.",
+      "acceptance_id": "T09-AC1",
+      "required_fix": "Release or rotate the claim when its owner can prove the attempt never landed after both probes and the grace window, or document operator-only recovery and make the test's precondition explicitly an externally cleared claim. If release is added, cover the production-reachable path.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/execution/supervisor.py",
+      "line": 468,
+      "trigger": "A target declares max_jobs smaller than the project's T06 quota (for example max_jobs=1, action_compute_per_project=2) and the project has several READY compute nodes. The supervisor passes only settings.action_compute_per_project to ProjectLoop; parallel_quota(project_quota, target_max_jobs) is used by ParallelSubmissionCoordinator only, and the target backend's submit does not check max_jobs.",
+      "impact": "The production start path can run more concurrent jobs on a target than its allowlisted max_jobs permits. The AC2 tests pass because they exercise the project quota, not a target bound.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Thread the selected target's max_jobs into the production admission/concurrency bound (min(project quota, max_jobs)) or enforce it in the Slurm target backend's submit with its own accounting; test the combined bound at the production boundary.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/execution/backends.py",
+      "line": 585,
+      "trigger": "A deployment runs two compute nodes under a T09 Slurm target. The production loop starts seats concurrently through the T06 quota semaphore, but no Temporal activity or supervisor code calls ParallelSubmissionCoordinator or join_required (only tests import them).",
+      "impact": "The AC2 'join waits only for the required two' behavior and the coordinator's READY/dependency/Review/budget admission checks are implemented and tested but not reachable from the production execution path; the AC2 join evidence is library-level only.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Wire the coordinator/join into the Temporal activity or supervisor path when the Supervisor authorizes that boundary, or record the internal AC2 join evidence as a library contract and keep production wiring as a blocking integration item.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/mcp/tools/execution.py",
+      "line": 236,
+      "trigger": "Commit 0c03341 changes this file to add the ActionConflict tolerance after context.execution.start. The T09 task card's write boundary (docs/premium/TASKS/T09-hpc-targets.md lines 7-15) lists only src/ravel/backends/slurm/**, src/ravel/execution/backends.py, scripts/run_temporal_worker.py and tests/premium/T09/**; src/ravel/mcp/tools/execution.py is not listed, FILE_LOCKS.json has no lock for it, and the attempt-2 section added to docs/premium/tasklogs/T09.md does not record a Supervisor-authorized extension. The protocol says unlisted paths are read-only until the Supervisor expands and records the whitelist.",
+      "impact": "The behavioral change is narrow and correct (it only tolerates an outcome the run already recorded), and it is the fix direction the Supervisor requested, but the candidate crosses the T09 write boundary without the required record. Integration would be the point where another task's ownership of the shared worker tool becomes ambiguous.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Before integration, the Supervisor should record the extension (task-card whitelist, FILE_LOCKS entry for src/ravel/mcp/tools/execution.py, and the tasklog's changed-files/authorization note) or move the tolerance behind an activity/service interface that is already inside the T09 boundary. No functional change to the fix is required.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/actions/repository.py",
+      "line": 163,
+      "trigger": "Settlement is not bound to the run that produced it. live_for_node selects the newest live Action by node_id only (no contract_version, attempt or kind), and finish_node_run's idempotent early return at activities.py line 921 matches Execution Records by execution_contract_version only. If a node ever had two live Actions (an older UNKNOWN from a timed-out run plus a newer run's ACCEPTED Action), or a second run at the same contract version were retired mid-run, a late/retried finish could settle the newer Action or skip the newer run's settlement.",
+      "impact": "The binding is positional rather than by run identity. The single-RUNNING DAG rule, the one-live-Action-per-node invariant, and the fact that no production transition returns a run node to READY under the same contract version (deviation revisions increment the version; the scheduler unblocks only PLANNED nodes) make this defensive today. The new tolerance does not mask a foreign Action: it re-reads the starter's own action_id through the project-scoped repository, so a foreign project's id raises NotFound and any status other than COMPLETED/FAILED_CONFIRMED/UNKNOWN re-raises. It also cannot identify which same-node run wrote the tolerated outcome, so the positional risk is unchanged rather than introduced.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Bind settlement to the Action that admitted the run (store the Action id on the run/Execution Record, or filter live_for_node by contract_version/attempt/kind) and key the finish idempotency check by run identity as well as contract version.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/premium/T09/test_ac2_action_quota.py",
+      "line": 298,
+      "trigger": "The three new CLAIMED tests call _settle_node_action directly inside a test transaction, like the five earlier settlement tests. The new race test drives start_execution and the settlement, but no test drives finish_node_run itself.",
+      "impact": "A regression that moved the settlement outside the Execution Record transaction, or removed it on one ending path in finish_node_run, would still pass the T09 suite. The record-and-slot atomicity and the early-return interaction are only statically verified.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Add an activity-level test that drives finish_node_run with the real database for COMPLETED/FAILED/TIMED_OUT and the CLAIMED case, asserting the Execution Record and the Action commit or roll back together, including a retried finish that hits the early return.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/temporal/activities.py",
+      "line": 713,
+      "trigger": "_stop_for_deviation records JobState.CANCELLED and the detail 'the work has stopped pending Master's decision' even when _cancel_job returned False (the backend refused the stop). The settlement maps DEVIATION to record_failed_confirmed and releases the slot and budget reservation.",
+      "impact": "For a backend that cannot stop the work, the slot and budget are released while the external work may still be running, and the job record asserts a stop that did not happen. This behavior already applied to ACCEPTED Actions before 0c03341; the fix extends it to CLAIMED Actions, so the class of the residual risk is unchanged, not newly created.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "When the deviation stop is refused, record UNKNOWN (slot held) rather than FAILED_CONFIRMED, or carry the refusal into the termination so the settlement can distinguish it; correct the detail text.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1,
+      "trigger": "Commit 0c03341 rewrites the entire shared acceptance map (4153 changed lines: 2075 CRLF in the old file, 2078 LF in the new one) while the only semantic change is the T09 test_nodeids list growing from 102 to 105. Parsed JSON outside tasks.T09.test_nodeids is identical between 72a4f66 and beec891.",
+      "impact": "No functional effect: the 105 unique nodeids match the gate junit 1:1 and database_suite/execution_commands remain consistent. The full-file line-ending rewrite is diff noise on a file other tasks also edit, and raises avoidable merge-conflict risk.",
+      "acceptance_id": "T09-AC1",
+      "required_fix": "Keep the original line endings and commit a minimal T09 nodeid diff in the integration commit; re-run the map/junit consistency check after any rebase.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Real HPC certification remains BLOCKED_EXTERNAL (T25); the scripted scheduler proves software semantics only, and the gate manifest's data_mode=REAL is the runner's hardcoded field, not a real-cluster claim.",
+    "The gate ran at source_commit 0c03341. The only post-gate commit on the branch, beec891, adds evidence files (all under the source_digest-excluded docs/premium/evidence/ prefix). Recomputed digests: HEAD=beec891, 0c03341 and beec891 all equal e696f1107e6f40681912bd47845952b3ebd4a6d9ba263660fe79d958d0345b52, and 72a4f66 equals the attempt-2 c93da9b8... digest.",
+    "The settlement relies on the one-live-Action-per-node / one-run-per-contract-version invariant (finding 5); the finish early return is not keyed by run identity.",
+    "The production start path still does not consume target max_jobs or the ParallelSubmissionCoordinator/join_required (findings 2 and 3).",
+    "A stale remote claim can only be cleared by an operator (finding 1).",
+    "A deviation whose backend cancel is refused is still accounted as a confirmed stop (finding 7).",
+    "The shared acceptance map was rewritten with different line endings (finding 8).",
+    "The T09 action_quota tests use the real PostgreSQL and ActionService but call _settle_node_action directly rather than driving finish_node_run (finding 6).",
+    "The COMPLETED settlement relies on the Action's declared free price (estimated_cny=0, cost_known=True); real site pricing is T25.",
+    "src/ravel/mcp/tools/execution.py is outside the T09 write boundary and the extension is not yet recorded (finding 4)."
+  ],
+  "integration_candidate": true
+}

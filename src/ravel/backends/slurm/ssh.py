@@ -18,8 +18,14 @@ never in a command line. That is the whole reason for the dependency.
 **Host keys are refused by default.** `AutoAddPolicy` is what most examples
 use, and it accepts whatever key the far end presents, which makes the
 encryption decorative: anyone who answers the address gets the session. A
-deployment may opt in (`slurm_trust_unknown_host`) when it is bringing up a
-cluster it has no key for yet, and the default is to refuse.
+legacy deployment may opt in (`slurm_trust_unknown_host`) when it is bringing
+up a cluster it has no key for yet, and the default is to refuse. A target-mode
+deployment has no opt-in: it names a `known_hosts` file and every connection is
+checked against it, so an unknown host is refused rather than trusted on first
+sight. The two outcomes are reported as states a caller can act on —
+`HOST_KEY_UNKNOWN` and `HOST_KEY_MISMATCH` — because "the cluster's key changed"
+is not the same event as "this host was never trusted", and an operator needs
+to know which one happened.
 
 **Every string that leaves this module is redacted first.** The backend runs
 commands whose output can echo a credential — a failed login, a verbose
@@ -63,6 +69,14 @@ class Redactor:
     """
 
     secrets: tuple[str, ...] = ()
+
+    def __repr__(self) -> str:
+        """Redacted: a repr ends up in tracebacks and assertion output.
+
+        A dataclass would otherwise print every secret it was constructed
+        with, which is exactly the leak this class exists to prevent.
+        """
+        return f"Redactor({len(self.secrets)} configured secret(s))"
 
     def __call__(self, text: str) -> str:
         """Return the text with every configured secret replaced."""
@@ -138,6 +152,26 @@ class TransportError(RuntimeError):
     """
 
 
+class HostKeyVerificationError(TransportError):
+    """The host's key was not verified, and no session was opened.
+
+    A refusal is not a transient fault: retrying the same connection against the
+    same key produces the same refusal. It carries a state so an operator can
+    tell the two causes apart.
+
+    `HOST_KEY_UNKNOWN` means the host is not in the configured `known_hosts`.
+    The fix is for a person to verify the fingerprint out of band and add the
+    key; auto-accepting it would make the check meaningless.
+    `HOST_KEY_MISMATCH` means the host presented a different key from the one
+    recorded. That is either a rebuilt cluster or an interception, and it must
+    stop until somebody establishes which.
+    """
+
+    def __init__(self, detail: str, *, state: str = "HOST_KEY_UNKNOWN") -> None:
+        super().__init__(detail)
+        self.state = state
+
+
 @runtime_checkable
 class SSHTransport(Protocol):
     """A connection to a host, at file and command granularity.
@@ -208,23 +242,47 @@ class ParamikoTransport:
         password: str | None = None,
         key_filename: str | None = None,
         trust_unknown_host: bool = False,
+        known_hosts_filename: str | None = None,
+        strict_host_keys: bool = False,
         timeout: float = 15.0,
     ) -> ParamikoTransport:
         """Open a connection and authenticate.
 
+        `strict_host_keys` is the target-mode policy: the host must appear in
+        `known_hosts_filename` (or the system's known-hosts files when one is
+        not named), and an unknown host is refused. It overrides
+        `trust_unknown_host`, so a target cannot be configured into
+        auto-acceptance by accident. Legacy single-target deployments keep the
+        old behaviour unless they pass it.
+
         Raises:
-            TransportError: The connection, the host key check, or the
-                authentication failed. The message carries the reason and never
-                the credential — see `_clean`.
+            HostKeyVerificationError: The host was unknown or presented a
+                different key. Carries `state` `HOST_KEY_UNKNOWN` or
+                `HOST_KEY_MISMATCH`.
+            TransportError: The connection or authentication failed. The
+                message carries the reason and never the credential — see
+                `_clean`.
         """
         import paramiko
 
         client = paramiko.SSHClient()
-        client.load_system_host_keys()
-        if trust_unknown_host:
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if known_hosts_filename:
+            # Loaded instead of, rather than in addition to, the system file:
+            # a target names the key set its operator verified. Falling back to
+            # the worker host's key set would silently widen the trust base.
+            try:
+                client.load_host_keys(known_hosts_filename)
+            except OSError as error:
+                raise HostKeyVerificationError(
+                    f"the known_hosts file for {host}:{port} could not be read "
+                    f"({error}); the host cannot be verified"
+                ) from None
         else:
+            client.load_system_host_keys()
+        if strict_host_keys or not trust_unknown_host:
             client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
             client.connect(
                 hostname=host,
@@ -240,6 +298,30 @@ class ParamikoTransport:
                 auth_timeout=timeout,
             )
             sftp = client.open_sftp()
+        except paramiko.BadHostKeyException as error:
+            client.close()
+            raise HostKeyVerificationError(
+                _clean(
+                    f"the key presented by {host}:{port} does not match the one "
+                    f"recorded for it: {error}"
+                ),
+                state="HOST_KEY_MISMATCH",
+            ) from None
+        except paramiko.SSHException as error:
+            client.close()
+            message = str(error).lower()
+            if "not found in known_hosts" in message or "not found in known hosts" in message:
+                raise HostKeyVerificationError(
+                    _clean(
+                        f"{host}:{port} is not in the configured known_hosts "
+                        f"file; verify its fingerprint out of band before "
+                        f"trusting it: {error}"
+                    ),
+                    state="HOST_KEY_UNKNOWN",
+                ) from None
+            raise TransportError(
+                _clean(f"could not connect to {username}@{host}:{port}: {error}")
+            ) from None
         except Exception as error:  # paramiko raises a wide family of its own
             client.close()
             raise TransportError(
@@ -419,6 +501,7 @@ def connected(connect: Callable[[], SSHTransport]) -> Generator[SSHTransport]:
 __all__ = [
     "REDACTED",
     "CommandResult",
+    "HostKeyVerificationError",
     "ParamikoTransport",
     "Redactor",
     "RemoteFile",
