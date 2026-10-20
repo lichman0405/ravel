@@ -152,7 +152,11 @@ def test_the_generated_client_reproduces_itself_byte_for_byte(tmp_path: Path) ->
         committed = PACKAGE / name
         regenerated = tmp_path / name
         assert regenerated.exists(), f"the generator did not write {name}"
-        assert committed.read_bytes() == regenerated.read_bytes(), (
+        # A checkout may rewrite line endings (CRLF on Windows). That is the
+        # transport's EOL, not generator drift; the content still has to match
+        # the generator's LF output byte for byte.
+        committed_bytes = committed.read_bytes().replace(b"\r\n", b"\n")
+        assert committed_bytes == regenerated.read_bytes(), (
             f"{name} is not what the generator emits; run "
             f"`.venv/bin/python packages/api-client/generate.py` and commit the result"
         )
