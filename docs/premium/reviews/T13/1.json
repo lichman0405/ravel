@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "task_id": "T13",
+  "attempt": 1,
+  "reviewer_id": "independent-T13-AC1-AC4",
+  "base_sha": "463376a",
+  "candidate_sha": "003533d392ab2855f1761c8bf4185ac2966897dc",
+  "source_digest": "daef5a00020cb27d8ea2ec7da1505de70a743b0419ae12a5f239bebbe5e421db",
+  "reviewed_at": "2026-10-20 12:31 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T13-AC1",
+      "result": "PASS",
+      "evidence": "Gate integrity independently re-checked at candidate HEAD 003533d: the source digest recomputed with the gate algorithm (git ls-tree over the tree, progress/records prefixes excluded) is daef5a00020cb27d8ea2ec7da1505de70a743b0419ae12a5f239bebbe5e421db over 569 rows, identical to the manifest; 003533d changes only evidence/tasklog paths that the digest excludes. I re-ran the gate commands in the canonical ravel-premium-ubuntu24 container against an isolated PostgreSQL database (ravel_t13_review_test): alembic upgrade head exit 0; pytest tests/premium/T13 -q -rxXs => 18 passed, 0 failed, 0 skipped; ruff clean and pyright (pointed at the review venv) 0 errors. The 18 JUnit nodeids are exactly the acceptance map's 18, with no diff in either direction. Stream evidence: events are project-scoped and seq only moves forward; a sibling project's events never appear; reconnect with after_seq=5 receives exactly seq 6 and 7, and the persisted sequence is complete 1..7 with no gap or duplicate; revoking membership closes the open socket with 4404 inside the 5s bound (test recheck 0.2s; production validate_gateway_settings refuses a value above MAX_STREAM_REAUTHORIZE_SECONDS=5.0). I independently ran a live-TCP probe against a real uvicorn server and real PostgreSQL: an outsider handshake was closed with 4404, then after an out-of-window resync an owner followed live event seq 8 with the correct project_id and payload."
+    },
+    {
+      "id": "T13-AC2",
+      "result": "PASS",
+      "evidence": "PASS on the card's criteria, with the F2 caveat below. resync: after_seq=0 with head=7 and retention=4 yields a resync_required frame with code RESYNC_REQUIRED, project_id, requested_after_seq=0, head_seq=7 and anchor_seq=7; the frame's snapshot has anchor_seq 7 and counts identical to GET /v1/projects/{id}/snapshot; the stream then follows live seq 8 and replays nothing the snapshot already covers. Boundary cursor after_seq=head-retention=3 is inside the window: an anchor plus exactly seq 4..7. My live-TCP probe reproduced the resync frame and then seq 8. Pagination: an insert between page 1 and page 2 does not shift the keyset (a repeated cursor returns the same page and ids stay unique); limit 101 and 0 -> 422 INVALID_REQUEST with loc [query, limit], limit 100 accepted; malformed and wrong-shape cursors -> 400 with a fixed message, no clamping. Isolation: cross-project snapshot and DAG -> 404 NOT_FOUND whose message is the same for an absent project and an existing project the caller does not belong to; expired token -> 401 HTTP and 4401 WebSocket, while the same account's valid token still works; a non-member connecting to an existing and to an absent project both -> 4404; the 422 envelope keeps a safe request id, strips submitted input (password-shaped input is not echoed), and replaces an unsafe 32-hex request id. Caveat: the resync snapshot omits the HTTP snapshot's role key (finding F2), and test_resync's field-for-field claim is only partially asserted. The card's AC2 (aggregate plus anchor, wrong project/expired token cannot read or replay, old cursor gets resync rather than empty success) is met; a stricter reading that the resync body must have exactly the HTTP snapshot's key set would fail on role."
+    },
+    {
+      "id": "T13-AC3",
+      "result": "PASS",
+      "evidence": "packages/api-client/openapi.json has exactly 26 /v1 paths and 30 operations; the only /dag path is /v1/projects/{project_id}/dag and it is GET-only; the premium package imports neither DagRepository nor DagMutationService. I ran packages/api-client/generate.py twice in the canonical container; both runs produced output byte-identical to the committed openapi.json, src/types.ts, src/client.ts and src/index.ts, all carrying the DO NOT EDIT header; client.ts has 30 async operation methods and mentions RESYNC_REQUIRED. test_dag_probe probes every non-GET /v1 operation as owner (auth excepted), proves it reached conversation, mail, pause, POST projects and lab, and asserts the DAG JSON and PostgreSQL node rows are unchanged with the node still READY. The legacy TUI compatibility test passes: login response keys, bare /projects array, last_event_seq=3, legacy DAG array equals the v1 Page items, legacy events shape, and legacy/v1 socket anchors equal. I independently ran the shared integration all-route probes and the e2e all-route probe over real uvicorn/TCP; both PASS. The shared probe extension is exactly the four authorized absent stand-ins (action_id, evidence_id, execution_id, source_id), adds no bypass, and test_probe_coverage asserts the effective /v1 HTTP path set and all 30 operations exactly and that every placeholder is taught. The generated TypeScript package does not pass its own typecheck; see finding F1, which is a build-quality gap rather than an OpenAPI-consistency failure."
+    },
+    {
+      "id": "T13-AC4",
+      "result": "PASS",
+      "evidence": "test_live_stack uses the real create_app and real PostgreSQL: client.app is a FastAPI instance, app.state.ravel.database is the test Database, current_database() ends with _test and equals the engine database; after writing real rows through the repositories the snapshot/counts change, counts equal SELECT count(*) for nodes/decisions/reviews/executions/deviations/evidence/actions/events, and anchor_seq equals max(seq); the legacy events payload contains the written body. There is no static JSON backend. My independent live-TCP probe also used the real app under uvicorn and the real ravel_t13_review_test database. The gate manifest records data_mode REAL, database_lock true, preflight_exit 0 and exit_code 0."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T13/run-20261020-120647/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "packages/api-client/src/client.ts",
+      "line": 102,
+      "trigger": "Run npm install in packages/api-client and then npm run typecheck (TypeScript 5.6.3 with the committed tsconfig: strict + exactOptionalPropertyTypes + noUncheckedIndexedAccess).",
+      "impact": "tsc reports 31 TS2379 errors across distinct lines 102-372 because the generated code passes explicitly-undefined optional properties to RequestInit and RequestOptions (for example signal: options.signal and body: options.body === undefined ? undefined : ...). The package's own advertised typecheck command therefore fails (tsc exits 2 when diagnostics are present), and any downstream consumer that enables exactOptionalPropertyTypes cannot compile the generated source. Byte-for-byte regeneration and OpenAPI consistency still pass; this is a build-quality defect, not an AC3 API-surface failure.",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Generate option objects that omit undefined keys (build RequestInit and RequestOptions conditionally, or spread a filtered object), or declare the optional properties as T | undefined; then add npm run typecheck to the T13 gate so the committed package is compiled, not only regenerated.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/gateway/routes/premium/support.py",
+      "line": 176,
+      "trigger": "Connect to /v1/projects/{id}/events with an after_seq outside the declared retention window and compare the resync frame's snapshot with GET /v1/projects/{id}/snapshot.",
+      "impact": "snapshot_for_project() (lines 176-218) duplicates the _snapshot() projection (lines 129-160) but omits the caller's role key that the HTTP snapshot returns at line 137. I confirmed over a real uvicorn/TCP socket that the resync snapshot has project/counts/anchor but no role. The events.py docstring (lines 14-15) claims the snapshot comes from the same function the HTTP route uses so the two cannot disagree, and test_resync.py (lines 32-35) claims it compares field for field, but the assertions (lines 66-68) only compare anchor_seq, project and counts. A client that replaces its cached snapshot with the resync frame therefore gets a different body from the HTTP route, and any future field added to one projection but not the other would not fail the suite. The project aggregate fields currently agree, so the card's AC2 requirement (aggregate plus anchor, resync rather than silence) is met.",
+      "acceptance_id": "T13-AC2",
+      "required_fix": "Build both snapshots from one projection function (parameterise the caller role or add it from the already-authenticated standing in the WebSocket handler) and assert exact key-set/value equality in test_resync, or assert the exact expected key set on the frame; correct the two docstrings so the evidence claim matches the assertion.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/gateway/app.py",
+      "line": 89,
+      "trigger": "Start the Gateway the way production does (uvicorn ravel.gateway.app:create_app --factory, scripts/run_gateway.py line 71, or the Makefile target) without passing event_retention.",
+      "impact": "create_app defaults event_retention to None and sets app.state.event_retention=None (line 210); there is no Settings field or entrypoint wiring for it. The deployed Gateway therefore has no retention window: a cursor can never be outside it, the RESYNC_REQUIRED path is unreachable outside tests, and replay from seq 0 reads and sends the entire project event history, which grows without bound. The behavior is safe (no loss; duplicates are allowed) and the stream module documents unbounded as V0 storage behaviour, so this is a deployment/configuration gap rather than a contract violation.",
+      "acceptance_id": "T13-AC2",
+      "required_fix": "Add a Settings field (validated >= 1) and pass it from every production entrypoint, or explicitly document unbounded retention as the intended V0 configuration and add an operational bound on event-table growth.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1116,
+      "trigger": "Inspect commit d69b992 on the T13 branch.",
+      "impact": "d69b992 changes T12's acceptance-map status from PLANNED to DONE in addition to adding the T13 probe-coverage nodeid. The T13 write boundary permits only the T13 entry; T12's status is the Supervisor's integration record (T12 review 3 approved the candidate and noted the Supervisor updates the map at integration). The change is consistent with the T12 candidate but is outside T13's authorized scope and could mark T12 DONE before the Supervisor's integration decision.",
+      "acceptance_id": null,
+      "required_fix": "Either revert the T12 status change in the T13 candidate, leaving T12's status to the Supervisor at integration, or have the Supervisor explicitly confirm that d69b992 is authorized to carry it.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "packages/api-client/src/client.ts",
+      "line": 8,
+      "trigger": "Construct V1Client to call POST /v1/auth/login or POST /v1/auth/refresh before any token exists.",
+      "impact": "ClientOptions.token is required and call() always sets Authorization: Bearer ... (lines 82-96). The OpenAPI for /v1/auth/login, /v1/auth/refresh and /v1/auth/logout declares no security requirement, so the generated client cannot represent an unauthenticated call: a consumer must pass a placeholder token, and the client sends a bearer header the operation does not need. Login still works because the route does not require the header, so this is API ergonomics rather than a security or functional failure.",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Make the token optional (or add an unauthenticated mode) and omit the Authorization header when no token is supplied; regenerate and re-check byte identity.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The resync frame's head_seq is read from a separate anchor() transaction before the snapshot; concurrent commits can make the snapshot's anchor_seq greater than head_seq. Clients must resume from anchor_seq, not head_seq; the feed resumes at the snapshot anchor, so no event is lost.",
+    "tests/support/routes.py::effective_routes loses the outer /v1 prefix for a nested WebSocket route (it reports /projects/{project_id}/events). The probe-coverage test therefore covers the 26 HTTP paths and 30 operations; the socket is covered by real connection tests and by my live-TCP probe, not by the shared all-route table.",
+    "The full tests/e2e/test_tui.py file was not run by the implementer or by me. I ran its all-route probe over real uvicorn/TCP plus the T13 legacy compatibility test; other legacy TUI cases are not independently exercised in this review.",
+    "The gate and this review used isolated databases (ravel_t13_test and ravel_t13_review_test) because the shared test database had been stamped by a parallel, un-integrated migration. A full shared-database regression on the integration tip remains unverified in this worktree.",
+    "The v1 WebSocket tests inside the gate use TestClient rather than real TCP. My independent live-TCP probe mitigates that gap but is not part of the committed evidence.",
+    "ProjectAudit.assemble reads the whole project ledger, including every event, to produce counts and the anchor. Snapshot cost grows with event history, and with unbounded production retention that cost is unbounded in a long-lived project.",
+    "acceptance-map.json still records T13 as RUNNING; the Supervisor updates it after this review and integration, and FILE_LOCKS coordination for the shared paths remains a Supervisor step.",
+    "Lab sign-off returns 501 UNSUPPORTED after authorization in V0; this is contract-consistent and is not a user DAG mutation path.",
+    "Findings F1 (generated TypeScript package fails its own typecheck) and F2 (resync snapshot omits role and its test overclaims field-for-field equality) are classified advisory because neither violates the card's AC text, but both should be resolved before a downstream consumer relies on the client package or treats the resync snapshot as identical to the HTTP snapshot."
+  ],
+  "integration_candidate": true
+}
