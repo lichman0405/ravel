@@ -21,7 +21,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/ravel-t14-node.XXXXXX")"
 trap 'rm -rf "$workdir"' EXIT
 
-git -C "$repo_root" archive HEAD | tar -x -C "$workdir"
+git -C "$repo_root" -c safe.directory="$repo_root" archive HEAD | tar -x -C "$workdir"
 
 cd "$workdir"
 npx --yes \
