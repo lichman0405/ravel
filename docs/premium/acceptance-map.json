@@ -1169,12 +1169,40 @@
         "make premium-task TASK=T13"
       ],
       "classification": "internal",
-      "status": "PLANNED",
+      "status": "RUNNING",
       "test_nodeids": [
-        "tests/premium/T13"
+        "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
+        "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
+        "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
+        "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
+        "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
+        "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
+        "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
+        "tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input",
+        "tests/premium/T13/test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine",
+        "tests/premium/T13/test_pagination.py::test_a_keyset_cursor_does_not_shift_when_a_row_is_inserted_between_pages",
+        "tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted",
+        "tests/premium/T13/test_resync.py::test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence",
+        "tests/premium/T13/test_resync.py::test_a_cursor_inside_the_window_still_replays_normally",
+        "tests/premium/T13/test_stream.py::test_the_stream_is_scoped_to_one_project_and_its_sequence_only_moves_forward",
+        "tests/premium/T13/test_stream.py::test_a_reconnect_from_the_last_processed_seq_loses_nothing_and_repeats_nothing",
+        "tests/premium/T13/test_stream.py::test_a_revoked_membership_closes_an_open_stream_within_five_seconds"
       ],
       "manual_evidence_refs": [],
       "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "upgrade",
+            "head"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
         {
           "argv": [
             ".venv/bin/python",
@@ -1186,6 +1214,15 @@
           ],
           "allow_skips": false,
           "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
           "external": false
         }
       ],
