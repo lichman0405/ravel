@@ -1,0 +1,8 @@
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/candidate-T10'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+0 errors, 0 warnings, 0 informations
+make[1]: Leaving directory '/workspace/ravel-worktrees/candidate-T10'
