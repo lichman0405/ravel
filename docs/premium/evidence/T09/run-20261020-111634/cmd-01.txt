@@ -1,0 +1,6 @@
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+ERROR [alembic.util.messaging] Can't locate revision identified by 'a4d2e6f8b1c3'
+FAILED: Can't locate revision identified by 'a4d2e6f8b1c3'
