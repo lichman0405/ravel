@@ -34,13 +34,29 @@ from typing import Any
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ravel.domain.artifacts import Artifact, ArtifactVersion, is_simulated
-from ravel.domain.enums import JobState
-from ravel.domain.lab import LabHandover
+from ravel.domain.artifacts import SIMULATED_KIND, Artifact, ArtifactVersion, is_simulated
+from ravel.domain.enums import JobState, LabEventType, LabExecutionMode
+from ravel.domain.lab import (
+    LabDeviationLink,
+    LabEvent,
+    LabHandover,
+    LabLeadConfirmation,
+    LabPackageBinding,
+    LabUploadReceipt,
+)
+from ravel.domain.preparation import PreparationRecord
+from ravel.state.mapping import to_row_data
 from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.repositories.research import ArtifactRepository
 from ravel.state.store import ArtifactStore, hash_chunks
-from ravel.state.tables import LabHandoverRow
+from ravel.state.tables import (
+    LabDeviationLinkRow,
+    LabEventRow,
+    LabHandoverRow,
+    LabLeadConfirmationRow,
+    LabPackageBindingRow,
+    LabUploadReceiptRow,
+)
 
 
 class LabHandoverRepository(ProjectScopedRepository[LabHandover]):
@@ -213,6 +229,312 @@ class LabHandoverRepository(ProjectScopedRepository[LabHandover]):
         return open_here[-1] if open_here else None
 
 
+class LabEventRepository(ProjectScopedRepository[LabEvent]):
+    """Every person-reported event this project recorded.
+
+    Milestones are `ACKNOWLEDGED`, `START_REPORTED` and `STOP_CONFIRMED`: one
+    per handover, enforced by partial unique indexes. Reporting them twice is a
+    retry, not a second event, so `record_milestone` returns the event already
+    there instead of conflict. `DEVIATION_REPORTED` and `OUTPUT_UPLOADED` are
+    repeatable — a bench may report several problems and upload several
+    corrections.
+    """
+
+    row_type = LabEventRow
+    record_type = LabEvent
+
+    def _order_by(self) -> Any:
+        return self.row_type.reported_at
+
+    def record(self, event: LabEvent) -> LabEvent:
+        return self.add(event)
+
+    def for_handover(self, handover_id: str) -> list[LabEvent]:
+        return self.all(handover_id=handover_id)
+
+    def of_type(self, handover_id: str, event_type: LabEventType) -> LabEvent | None:
+        found = [
+            event
+            for event in self.for_handover(handover_id)
+            if event.event_type is event_type
+        ]
+        return found[-1] if found else None
+
+    def record_milestone(self, event: LabEvent) -> LabEvent:
+        """Write a one-per-handover event, or return the one already written."""
+        # The insert below is its own statement rather than `add`, so the
+        # project-scope guard `add` performs is not on this path unless it is
+        # asked for here. A milestone built from a caller-supplied record is
+        # exactly where a foreign `project_id` must not be taken at its word.
+        self._authorize(event)
+        existing = self.of_type(event.handover_id, event.event_type)
+        if existing is not None:
+            return existing
+        statement = (
+            pg_insert(LabEventRow)
+            .values(**to_row_data(event, LabEventRow))
+            .on_conflict_do_nothing()
+            .returning(LabEventRow.event_id)
+        )
+        inserted = self.session.execute(statement).scalar_one_or_none()
+        if inserted is None:
+            existing = self.of_type(event.handover_id, event.event_type)
+            if existing is None:  # pragma: no cover - the conflict was our index
+                raise NotFound(
+                    f"event {event.event_id} conflicted but no "
+                    f"{event.event_type.value} event exists for handover "
+                    f"{event.handover_id}"
+                )
+            return existing
+        return event
+
+    def output_recorded(
+        self, handover_id: str, artifact_id: str, sha256: str
+    ) -> bool:
+        """Whether this exact uploaded version already has its event."""
+        return any(
+            event.raw_output_ref == artifact_id
+            and event.raw_output_sha256 == sha256
+            for event in self.for_handover(handover_id)
+            if event.event_type is LabEventType.OUTPUT_UPLOADED
+        )
+
+    def upload_event_for(
+        self, handover_id: str, artifact_id: str, sha256: str
+    ) -> LabEvent | None:
+        """The person-reported upload event for one exact artifact version."""
+        for event in reversed(self.for_handover(handover_id)):
+            if (
+                event.event_type is LabEventType.OUTPUT_UPLOADED
+                and event.raw_output_ref == artifact_id
+                and event.raw_output_sha256 == sha256
+            ):
+                return event
+        return None
+
+
+class LabDeviationLinkRepository(ProjectScopedRepository[LabDeviationLink]):
+    """The explicit join from a deviation to the person-reported lab event.
+
+    The unique keys in `lab_deviation_links` make the join one-to-one. Writes
+    go through `add`, so the project scope is checked here as it is for every
+    other record the Gateway produces.
+    """
+
+    row_type = LabDeviationLinkRow
+    record_type = LabDeviationLink
+
+    def _order_by(self) -> Any:
+        return self.row_type.linked_at
+
+    def record(self, link: LabDeviationLink) -> LabDeviationLink:
+        return self.add(link)
+
+    def for_deviation(self, deviation_id: str) -> LabDeviationLink | None:
+        found = self.all(deviation_id=deviation_id)
+        return found[-1] if found else None
+
+    def for_event(self, event_id: str) -> LabDeviationLink | None:
+        found = self.all(event_id=event_id)
+        return found[-1] if found else None
+
+
+class LabPackageRepository(ProjectScopedRepository[LabPackageBinding]):
+    """The binding between a prepared package and what a bench was told it is.
+
+    Written once per preparation. `ensure_bound` is idempotent through the
+    unique key rather than a check-then-insert, because a retried handover and
+    a lead confirmation can race the first write.
+    """
+
+    row_type = LabPackageBindingRow
+    record_type = LabPackageBinding
+
+    def _order_by(self) -> Any:
+        return self.row_type.bound_at
+
+    def binding_for(self, preparation_id: str) -> LabPackageBinding | None:
+        found = self.all(preparation_id=preparation_id)
+        return found[-1] if found else None
+
+    def ensure_bound(self, preparation: PreparationRecord) -> LabPackageBinding:
+        existing = self.binding_for(preparation.preparation_id)
+        if existing is not None:
+            return existing
+        binding = binding_from_preparation(preparation)
+        self._authorize(binding)
+        statement = (
+            pg_insert(LabPackageBindingRow)
+            .values(**to_row_data(binding, LabPackageBindingRow))
+            .on_conflict_do_nothing(
+                index_elements=["project_id", "preparation_id"]
+            )
+            .returning(LabPackageBindingRow.binding_id)
+        )
+        self.session.execute(statement)
+        stored = self.binding_for(preparation.preparation_id)
+        if stored is None:  # pragma: no cover - the insert cannot vanish
+            raise NotFound(
+                f"binding for preparation {preparation.preparation_id} was "
+                "neither inserted nor found"
+            )
+        return stored
+
+
+class LabLeadConfirmationRepository(
+    ProjectScopedRepository[LabLeadConfirmation]
+):
+    """One lab lead's confirmation per prepared package."""
+
+    row_type = LabLeadConfirmationRow
+    record_type = LabLeadConfirmation
+
+    def _order_by(self) -> Any:
+        return self.row_type.confirmed_at
+
+    def for_package(self, preparation_id: str) -> LabLeadConfirmation | None:
+        found = self.all(preparation_id=preparation_id)
+        return found[-1] if found else None
+
+    def record_once(self, confirmation: LabLeadConfirmation) -> LabLeadConfirmation:
+        existing = self.for_package(confirmation.preparation_id)
+        if existing is not None:
+            return existing
+        self._authorize(confirmation)
+        statement = (
+            pg_insert(LabLeadConfirmationRow)
+            .values(**to_row_data(confirmation, LabLeadConfirmationRow))
+            .on_conflict_do_nothing(
+                index_elements=["project_id", "preparation_id"]
+            )
+            .returning(LabLeadConfirmationRow.confirmation_id)
+        )
+        self.session.execute(statement)
+        stored = self.for_package(confirmation.preparation_id)
+        if stored is None:  # pragma: no cover - the insert cannot vanish
+            raise NotFound(
+                f"confirmation for preparation {confirmation.preparation_id} "
+                "was neither inserted nor found"
+            )
+        return stored
+
+
+class LabUploadReceiptRepository(ProjectScopedRepository[LabUploadReceipt]):
+    """Every upload attempt, including the ones the door refused."""
+
+    row_type = LabUploadReceiptRow
+    record_type = LabUploadReceipt
+
+    def _order_by(self) -> Any:
+        return self.row_type.uploaded_at
+
+    def record(self, receipt: LabUploadReceipt) -> LabUploadReceipt:
+        return self.add(receipt)
+
+    def for_handover(self, handover_id: str) -> list[LabUploadReceipt]:
+        return self.all(handover_id=handover_id)
+
+
+def confirmation_for(
+    session: Session, binding: LabPackageBinding
+) -> LabLeadConfirmation | None:
+    """The confirmation that covers this binding, if a lab lead made one."""
+    candidate = LabLeadConfirmationRepository(
+        session, binding.project_id
+    ).for_package(binding.preparation_id)
+    if candidate is not None and candidate.covers(binding):
+        return candidate
+    return None
+
+
+def ready_for_real_execution(
+    session: Session, binding: LabPackageBinding
+) -> bool:
+    """Whether the package may be opened at a real bench.
+
+    A binding without a covering lead confirmation is never ready, however
+    complete its sample and SOP lists are. That is the rule the task card
+    states, and it is expressed as a property of records rather than a mutable
+    flag so there is no path that sets it by assertion.
+    """
+    return confirmation_for(session, binding) is not None
+
+
+def binding_from_preparation(preparation: PreparationRecord) -> LabPackageBinding:
+    """Bind a prepared package to the terms its own manifest recorded.
+
+    Everything is read from the manifest — the document preparation wrote and
+    hashed when it built the directory — rather than from the contract, which
+    may have moved since. `sample_ids` are the labels the laboratory
+    materializer assigns by position (`S-1`, `S-2`, ...); the manifest records
+    the samples in that same order, so the labels are reproducible without
+    reading files.
+
+    SOP references are the contract's existing references, carried in
+    `resource_limits` as `sop_ref` (one reference) or `sop_refs` (a
+    comma-separated list). The device is the contract's `instrument` limit.
+    Nothing here invents a reference or an instrument.
+
+    Raises:
+        ValueError: The preparation manifest does not name its contract, which
+            would make the binding unattributable.
+    """
+    manifest = preparation.manifest
+    contract_ref = str(manifest.get("execution_contract_ref") or "")
+    if not contract_ref:
+        raise ValueError(
+            f"preparation {preparation.preparation_id} has no "
+            "execution_contract_ref in its manifest, so a package binding "
+            "could not say which contract it was built from"
+        )
+    manifest_version = manifest.get("execution_contract_version")
+    if manifest_version != preparation.execution_contract_version:
+        raise ValueError(
+            f"preparation {preparation.preparation_id} records contract version "
+            f"{preparation.execution_contract_version} but its manifest was built "
+            f"from version {manifest_version!r}; the package cannot be bound to "
+            "both, and choosing one would make the other unattributable"
+        )
+    resource_request = manifest.get("resource_request")
+    limits = resource_request if isinstance(resource_request, dict) else {}
+    samples = manifest.get("samples")
+    sample_names = samples if isinstance(samples, list) else []
+    required = manifest.get("required_outputs")
+    required_files = required if isinstance(required, list) else []
+    return LabPackageBinding(
+        project_id=preparation.project_id,
+        node_id=preparation.node_id,
+        preparation_id=preparation.preparation_id,
+        execution_contract_ref=contract_ref,
+        execution_contract_version=preparation.execution_contract_version,
+        protocol_version=preparation.execution_contract_version,
+        sample_ids=tuple(f"S-{position}" for position in range(1, len(sample_names) + 1)),
+        required_raw_files=tuple(str(name) for name in required_files),
+        device_identity=str(limits.get("instrument", "")).strip(),
+        sop_refs=_sop_refs(limits),
+    )
+
+
+def _sop_refs(limits: dict[str, Any]) -> tuple[str, ...]:
+    """The SOP references the contract already carries, verbatim.
+
+    `sop_refs` is treated as a comma- or newline-separated list; `sop_ref` is
+    one reference and is not split, because a reference may itself contain a
+    comma. Order is the contract's and duplicates are collapsed.
+    """
+    refs: dict[str, None] = {}
+    listed = limits.get("sop_refs", "")
+    if isinstance(listed, str):
+        for part in listed.replace("\n", ",").split(","):
+            trimmed = part.strip()
+            if trimmed:
+                refs.setdefault(trimmed, None)
+    single = limits.get("sop_ref", "")
+    if isinstance(single, str) and single.strip():
+        refs.setdefault(single.strip(), None)
+    return tuple(refs)
+
+
 def arrived_outputs(
     session: Session, handover: LabHandover
 ) -> tuple[tuple[str, Artifact], ...]:
@@ -230,9 +552,14 @@ def arrived_outputs(
       this handover owed — checked again here because this is the read that
       decides a delivery, and a check that only ran at the door would be one
       refactor away from not running at all.
-    - **The kind** keeps simulated bytes out: the guard that stops a mock's
-      output entering the Evidence Ledger would be worth very little if a
-      mock's output could be handed to a real backend as a bench's delivery.
+    - **The kind and the person's event** keep a stray mock out of a delivery.
+      Simulated bytes never answer a REAL handover: the guard that stops a
+      mock's output entering the Evidence Ledger would be worth very little if
+      that output could be handed to a real bench as its result. A SIMULATED
+      handover is itself a software proof, so its uploads carry `simulated` and
+      may answer it — but only when the same artifact also has a person-reported
+      `OUTPUT_UPLOADED` event. That event is what makes the file a bench's
+      report rather than a mock row somebody wrote beside the handover.
 
     The contract version is not among them, and that is deliberate rather than
     an omission. It is *recorded* on every upload — `execution_ref` on the
@@ -244,12 +571,26 @@ def arrived_outputs(
     artifacts = ArtifactRepository(session, handover.project_id).all(
         node_id=handover.node_id
     )
+    reported = {
+        event.raw_output_ref
+        for event in LabEventRepository(session, handover.project_id).for_handover(
+            handover.handover_id
+        )
+        if event.event_type is LabEventType.OUTPUT_UPLOADED
+        and event.raw_output_ref
+    }
     arrived = {
         artifact.name: artifact
         for artifact in artifacts
         if artifact.provenance == handover.upload_provenance
         and handover.answers(artifact.name)
-        and not is_simulated(artifact.kind)
+        and (
+            not is_simulated(artifact.kind)
+            or (
+                handover.execution_mode is LabExecutionMode.SIMULATED
+                and artifact.artifact_id in reported
+            )
+        )
     }
     return tuple((name, arrived[name]) for name in handover.arrived(arrived))
 
@@ -270,6 +611,7 @@ def record_upload(
     uploaded_by: str,
     filename: str = "",
     media_type: str = "",
+    sample_id: str | None = None,
 ) -> tuple[Artifact, ArtifactVersion]:
     """File an uploaded file as the artifact that answers one output.
 
@@ -296,6 +638,15 @@ def record_upload(
     the door that receives the upload, where the answer can be a refusal with a
     message naming what the contract does require, and repeating it here would
     be a second place for it to be written and one place for it to be wrong.
+
+    **An accepted file is also a person-reported event.** The `OUTPUT_UPLOADED`
+    row carries the uploader, the time, the artifact and the version's digest,
+    so the raw-data chain is traceable from the event to the bytes even after
+    later versions of the artifact exist. It is written only once for a given
+    `(artifact, digest)`: a retried upload returns the version that is already
+    there, and writing a second event for the same bytes would turn a retry
+    into a second delivery. The event is not a scientific verdict; that remains
+    Review's, against criteria frozen before the run.
 
     Raises:
         ArtifactStoreError: The object store refused the write.
@@ -326,31 +677,57 @@ def record_upload(
         digest, _size = hash_chunks(_file_chunks(path))
         note = f"uploaded against handover {handover.handover_id}"
         if existing is None:
-            return artifacts.register(
+            artifact, version = artifacts.register(
                 name=output,
                 chunks=_file_chunks(path),
                 created_by=uploaded_by,
                 filename=filename,
                 media_type=media_type,
+                kind=(
+                    SIMULATED_KIND
+                    if handover.execution_mode is LabExecutionMode.SIMULATED
+                    else ""
+                ),
                 provenance=handover.upload_provenance,
                 node_id=handover.node_id,
                 execution_ref=handover.execution_ref,
                 note=note,
             )
-        versions = artifacts.versions(existing.artifact_id)
-        if versions and versions[-1].content_hash == digest:
-            return existing, versions[-1]
-        added = artifacts.add_version(
-            existing.artifact_id,
-            chunks=_file_chunks(path),
-            created_by=uploaded_by,
-            filename=filename,
-            media_type=media_type,
-            node_id=handover.node_id,
-            execution_ref=handover.execution_ref,
-            note=note,
-        )
-        return existing, added
+        else:
+            versions = artifacts.versions(existing.artifact_id)
+            if versions and versions[-1].content_hash == digest:
+                artifact, version = existing, versions[-1]
+            else:
+                artifact = existing
+                version = artifacts.add_version(
+                    existing.artifact_id,
+                    chunks=_file_chunks(path),
+                    created_by=uploaded_by,
+                    filename=filename,
+                    media_type=media_type,
+                    node_id=handover.node_id,
+                    execution_ref=handover.execution_ref,
+                    note=note,
+                )
+        events = LabEventRepository(session, handover.project_id)
+        if not events.output_recorded(
+            handover.handover_id, artifact.artifact_id, version.sha256
+        ):
+            events.record(
+                LabEvent(
+                    project_id=handover.project_id,
+                    handover_id=handover.handover_id,
+                    actor_user_id=uploaded_by,
+                    protocol_version=handover.execution_contract_version,
+                    event_type=LabEventType.OUTPUT_UPLOADED,
+                    reported_at=version.created_at,
+                    sample_id=sample_id,
+                    lead_confirmation_ref=handover.lead_confirmation_ref or None,
+                    raw_output_ref=artifact.artifact_id,
+                    raw_output_sha256=version.sha256,
+                )
+            )
+        return artifact, version
     finally:
         temporary.close()
         path.unlink(missing_ok=True)
@@ -370,4 +747,15 @@ def _same_work(first: LabHandover, second: LabHandover) -> bool:
     )
 
 
-__all__ = ["LabHandoverRepository", "arrived_outputs", "record_upload"]
+__all__ = [
+    "LabEventRepository",
+    "LabHandoverRepository",
+    "LabLeadConfirmationRepository",
+    "LabPackageRepository",
+    "LabUploadReceiptRepository",
+    "arrived_outputs",
+    "binding_from_preparation",
+    "confirmation_for",
+    "ready_for_real_execution",
+    "record_upload",
+]

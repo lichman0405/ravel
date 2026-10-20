@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "task_id": "T11",
+  "attempt": 1,
+  "reviewer_id": "independent-T11-AC1-AC4",
+  "base_sha": "9c58f3d",
+  "candidate_sha": "b02b5e86509e9c9335783de0f0903f7189b30717",
+  "source_digest": "025d5bef1fcf1241053e63236b22609a10fd964c5740e221ac013a802d839d76",
+  "reviewed_at": "2026-10-20 12:58 Asia/Shanghai",
+  "decision": "FIX_REQUIRED",
+  "acceptance_results": [
+    {
+      "id": "T11-AC1",
+      "result": "PASS",
+      "evidence": "Authorization is project-scoped from the authenticated principal. gateway/deps.py resolves the project from the route path and checks PostgreSQL membership; every lab write uses standing.project_id and no request body or query parameter supplies project_id. _human_operator (routes/lab.py:507) requires LAB_USER before all five person doors; _lab_lead (routes/lab.py:530) requires PROJECT_OWNER. test_only_a_lab_user_reports_a_bench_event proves an owner gets 403 on sign-off, start, stop-confirmation, deviations and uploads, with no event or receipt written; test_only_the_project_owner_may_confirm_a_laboratory proves a LAB_USER gets 403 on lead-confirmation; test_a_foreign_project_member_cannot_reach_any_human_door proves 404 (not 403) on all six doors, so project existence is not leaked. Refusals are durable and byte-free: a declared contract version that does not match the reached handover is 409 with a REJECTED_WRONG_CONTRACT_VERSION receipt carrying the actual sha256 and no artifact (test_uploads_and_deviations.py:129); an unowed output is 409 with REJECTED_UNKNOWN_OUTPUT and no artifact; an unbound sample is 409 with REJECTED_WRONG_SAMPLE and no artifact (test_uploads_and_deviations.py:185-215); deviations enforce the same version and sample rules with 409 and no record. The old-version property is structural: _upload_target (routes/lab.py:1548) selects the handover whose version a declaration matches, a terminal one produces REJECTED_LATE, and arrived_outputs (repositories/lab.py:505) filters by provenance lab-upload:<handover_id>, so a file filed against another version or attempt cannot answer the waiting run; a delivery claiming both outputs while the second upload was refused stays WAITING_EXTERNAL. The suite does not build two simultaneous different-version handovers, so the cross-version form is verified by construction plus the mismatch test rather than by a dedicated test."
+    },
+    {
+      "id": "T11-AC2",
+      "result": "FAIL",
+      "evidence": "The upload half passes. An accepted upload records content_sha256, size, artifact id/version and an ACCEPTED receipt, writes one OUTPUT_UPLOADED person-reported event per (artifact, digest), and returns scientific_verdict null; collect also returns no verdict. The hash is byte-derived: the route hashes the chunks it actually receives (routes/lab.py:776-788), record_upload re-hashes the spooled file (repositories/lab.py:644), and ArtifactStore hashes the buffered chunks before upload. Uploads are not a PASS and lab tables are append-only (test_records.py). The deviation half does not meet the AC for every deviation the route accepts. DeviationRequest declares sample_id, raw_output_ref and raw_output_sha256 (routes/lab.py:190-196), but report_deviation constructs DeviationRecord with only requested_action, description, permitted and raised_by (routes/lab.py:1469-1479) and writes the raw fields only on a DEVIATION_REPORTED LabEvent (1482-1495). When the task has no handover (target is None) no event is written: the route returns 201 with person_reported_event null, and the supplied sample_id, raw_output_ref, raw_output_sha256 and declared protocol_version are silently discarded and not echoed. The suite exercises that no-handover path without those fields (test_uploads_and_deviations.py:382-412). Even with a handover, DeviationRecord (domain/execution.py:46-65) has no sample/hash field and no link to the event, and LabEvent has no deviation_id (only the Temporal signal payload carries it), so the join relies on node/description/time. tasklogs/T11.md:58 claims the deviation record and the event both store all of these fields; that is false. The card requires the verbatim text, operator, time, file hash and sample id to be traceable; an accepted no-handover deviation loses the hash and sample outright."
+    },
+    {
+      "id": "T11-AC3",
+      "result": "PASS",
+      "evidence": "Sign-off and start are person-reported events: LabEvent.person_reported is Literal[True] (domain/lab.py:297), LabEventRow has CHECK (person_reported) named events_are_person_reported (tables.py:1547), and a raw INSERT with false is rejected (test_records.py:76). The handover is never RUNNING: submit creates WAITING_EXTERNAL, status returns WAITING_EXTERNAL or a terminal state, and the state table/CHECK has no RUNNING value; test_start_requires_the_persons_sign_off_and_never_reports_running asserts WAITING_EXTERNAL after a start report. Start requires a prior ACKNOWLEDGED event for the same handover (routes/lab.py:1132) and returns 409 otherwise. Duplicate sign-off/start are idempotent through record_milestone plus the partial unique indexes uq_lab_events_acknowledged/start_reported/stop_confirmed; the retry returns the same event id and one row (test_person_events.py:79,100). System cancellation closes the handover CANCELLED (backend.py:350-380) and writes no lab event at all; the backend contains no LabEvent construction (only the gateway and the gateway-only record_upload do), and test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped asserts no STOP_CONFIRMED, awaiting_manual_stop_confirmation true, a REJECTED_LATE receipt for a late upload with no artifact, instrument_state null, and a later STOP_CONFIRMED that clears the derived awaiting flag while the state remains CANCELLED. The awaiting flag is derived in the view (routes/lab.py:396), not stored or written by cancellation."
+    },
+    {
+      "id": "T11-AC4",
+      "result": "PASS",
+      "evidence": "The internal software-handover scope is labelled correctly and real acceptance is not claimed. HumanLabBackend.live_lab defaults False (backend.py:116); submit opens REAL only when live_lab is true and a recorded LabLeadConfirmation covers the binding (backend.py:140-190), otherwise SIMULATED; execution_mode and lead_confirmation_ref are immutable identity columns (guards.py) and execution_mode has a SIMULATED/REAL check. Every handover view, upload response and deviation response carries evidence_execution_type and real_lab_acceptance={status: BLOCKED_EXTERNAL, task: T26, ...} (routes/lab.py:227-235); instrument_state and scientific_verdict are null on every lab surface. test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover proves REAL needs both conditions and is still software proof; test_automated_people_remain_software_proof_even_after_a_confirmation proves a lead confirmation does not turn an automated run REAL and every surface still reports T26/BLOCKED_EXTERNAL. No test claims a real laboratory or real measurement. Caveat carried as finding F2: reports/classification.py (outside the T11 diff) types any human-lab execution as HUMAN_LAB regardless of the handover's execution_mode, so a SIMULATED handover's execution reference can be certified as human-lab evidence; T11's artifacts are correctly SIMULATED, but the execution-record typing is a cross-task interaction the Supervisor must resolve before reports may cite lab executions."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T11/run-20261020-124313/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "file": "src/ravel/gateway/routes/lab.py",
+      "line": 1469,
+      "trigger": "report_deviation accepts sample_id, raw_output_ref, raw_output_sha256 and protocol_version (DeviationRequest, lines 190-196) for any task with an execution contract. When the task has no handover (target is None), it constructs DeviationRecord with only requested_action, description, permitted and raised_by (1469-1479) and writes no LabEvent (1480-1495); the request returns 201 with person_reported_event null and the supplied raw-data fields are neither stored nor echoed. Even when a handover exists, DeviationRecord (domain/execution.py:46-65) has no sample_id/raw_output_ref/raw_output_sha256 and no event reference; only the LabEvent carries them, and LabEvent carries no deviation_id (only the signal payload does). tests/premium/T11/test_uploads_and_deviations.py:382 tests the no-handover path without those fields. tasklogs/T11.md:58 states both records store all fields; that is inaccurate.",
+      "impact": "A deviation the system accepts can silently lose the reporter's sample label and raw-file hash, so the card's file-hash/sample traceability is not satisfied on that path and the raw-data chain cannot be reconstructed from the records. On the handover path traceability depends on matching node, verbatim description and time across two unlinked append-only rows.",
+      "acceptance_id": "T11-AC2",
+      "required_fix": "Reject sample_id/raw_output_ref/raw_output_sha256 (and a declared protocol_version) with 409/422 when there is no handover to attach them to, so the caller knows they were not recorded, or persist them on the deviation record. Add an explicit link between the deviation record and its DEVIATION_REPORTED event (deviation_id on LabEvent or event_id on the deviation). Correct the AC2 evidence in tasklogs/T11.md.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/reports/classification.py",
+      "line": 287,
+      "trigger": "T11 records every lab run with backend human-lab (backend.py:75,173; execution/temporal/activities.py:194,1046), including handovers whose execution_mode is SIMULATED. T12's classifier maps any backend human-lab to HUMAN_LAB (classification.py:287-293), and builder.py's simulated checks and data_mode (607-610, 642-651) consult only backend names; no handover mode is read. tests/premium/T12/test_evidence_typing.py:145 explicitly expects a human-lab execution to be HUMAN_LAB. T11's artifacts are kind=simulated and its surfaces report SIMULATED, but a report citing a SIMULATED handover's execution reference is typed HUMAN_LAB and a FACT claim on it is not flagged simulated; if the run has no uploaded artifact (failed or cancelled), the report's data_mode is REAL from the execution and job rows. docs/premium/CONTRACTS.md:201 says a simulated result is SIMULATED, never COMPUTATION or HUMAN_LAB.",
+      "impact": "Scientific-evidence confusion across the T11/T12 boundary: an automated software handover can be certified as human-lab evidence. The misclassification is not introduced by a T11 diff (classification.py is outside it), but T11 is the task that makes SIMULATED lab handovers explicit and tasklogs/T11.md:32 asserts the T12 distinction is preserved; it is preserved for artifacts, not for execution records.",
+      "acceptance_id": "T11-AC4",
+      "required_fix": "Supervisor to authorize and schedule a cross-task fix before any report cites lab executions: make report evidence typing consult the handover execution_mode (or persist a simulated marker on the lab execution/backend job that is_simulated_backend recognizes), and add a regression test proving a SIMULATED handover's execution is SIMULATED and a FACT on it is refused. Until then, reports must not cite a SIMULATED lab execution as evidence.",
+      "advisory": false
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/repositories/lab.py",
+      "line": 261,
+      "trigger": "record_milestone builds a direct pg_insert(...).on_conflict_do_nothing() and does not call _authorize, unlike record() -> add(); the repository's project_id is not compared with event.project_id. All current production callers are the gateway routes passing standing.project_id (routes/lab.py:1086,1142,1202), so no cross-project write is reachable today.",
+      "impact": "Defense-in-depth: a future caller could write a person-reported event into another project's handover, because the insert is scoped only by the event's own project_id and bypasses the repository's project check.",
+      "acceptance_id": "T11-AC1",
+      "required_fix": "Check event.project_id against the repository's project on the same path as add(), or route the insert through the authorized add() with the partial-unique conflict handled.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/domain/lab.py",
+      "line": 376,
+      "trigger": "LabUploadReceipt/LabUploadReceiptRow (tables.py:1696) store protocol_version of the handover the upload reached, but have no sample_id and no declared_protocol_version. For REJECTED_WRONG_SAMPLE the refused label, and for REJECTED_WRONG_CONTRACT_VERSION the declared version, exist only inside the free-text detail (routes/lab.py:827-845,889-905); _record_receipt (1587-1624) never stores them structurally.",
+      "impact": "AC1's durable-receipt/no-artifact requirement holds and the values are present verbatim in detail, but refusals cannot be queried or joined by sample or declared version, and the receipt's protocol_version can be mistaken for the caller's declaration. Audit quality, not an authority or correctness hole.",
+      "acceptance_id": "T11-AC1",
+      "required_fix": "Add nullable sample_id and declared_protocol_version fields to the append-only receipt (migration) and populate them on refusal paths, or state explicitly that refusals are text-only.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/repositories/lab.py",
+      "line": 646,
+      "trigger": "record_upload performs a read-then-insert: it looks for an existing artifact by (node, output, provenance) and, if absent, registers a new artifact; artifacts have no unique constraint on (project, node, name, provenance) (tables.py:980). Two concurrent first uploads for the same output can both miss and create two artifacts, each with its own OUTPUT_UPLOADED event. Two concurrent corrections can both compute the same next version and one request hits the (artifact_id, version) unique constraint (tables.py:1009) as an unhandled IntegrityError. Sequential replay is safe: byte-identical bytes return the existing version and one event (test_an_accepted_upload_records_a_receipt_and_a_person_reported_event). No test drives concurrent uploads.",
+      "impact": "A double-submitted upload can duplicate artifact rows and person-reported events; the run does not complete falsely (arrived_outputs collapses by name and provenance) and no transition is bypassed. Audit cleanliness and robustness, not a scientific-state violation.",
+      "acceptance_id": "T11-AC1",
+      "required_fix": "Add a unique index on lab uploads (project_id, node_id, name, provenance) or serialize on the handover with a row/advisory lock, and retry add_version on a version-number conflict; add a concurrent-upload test.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Real human-lab acceptance remains BLOCKED_EXTERNAL (T26, blocker B05): no real laboratory, operator or instrument exists in this task. The REAL backend branch is implemented and only exercised as software proof (live_lab=True plus a covering confirmation); it has not seen hardware, a real instrument state or a real measurement.",
+    "The gate manifest's data_mode=REAL is the premium runner's hardcoded field, not a real-lab claim. The 29 tests exercise a SIMULATED software handover against real PostgreSQL.",
+    "The report-classification interaction in finding F2 predates T11 but is newly explicit: a SIMULATED handover's execution record is backend human-lab and T12 types it HUMAN_LAB. CONTRACTS.md:201 forbids a simulated result being labeled HUMAN_LAB, so the Supervisor must resolve F2 before reports cite lab executions.",
+    "The suite does not construct two simultaneous different-version handovers; the old-version-cannot-answer-new-run property is verified from _upload_target and provenance scoping plus the version-mismatch test, not by a two-handover test.",
+    "No concurrent upload, concurrent lead-confirmation or concurrent cancel-vs-upload test exists (finding F5 covers the upload race). Sequential duplicate sign-off/start and system-cancel-then-stop are tested.",
+    "A no-handover deviation with sample_id/raw_output_ref/raw_output_sha256 is not tested; static review shows those values are dropped (finding F1).",
+    "The independent re-run applied the full migration chain from an empty database to b8d3f2a6c9e1 (alembic exit 0), so the upgrade path is verified; no downgrade was exercised.",
+    "acceptance-map.json still records T11 status RUNNING; the Supervisor updates it at integration.",
+    "The three P3 findings are defense-in-depth/audit-quality items and may remain documented advisories only because the reachable behavior still satisfies the AC; F1 and F2 are not advisory."
+  ],
+  "integration_candidate": false
+}

@@ -62,6 +62,7 @@ any future one file bytes through.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import tempfile
 from collections.abc import Iterator
@@ -76,12 +77,24 @@ from temporalio.exceptions import TemporalError
 
 from ravel.domain.artifacts import unusable_filename_reason
 from ravel.domain.dag import DagNode
+from ravel.domain.enums import JobState, LabEventType, LabUploadOutcome, UserRole
 from ravel.domain.execution import DeviationRecord
-from ravel.domain.lab import LabHandover
+from ravel.domain.lab import (
+    LabDeviationLink,
+    LabEvent,
+    LabHandover,
+    LabLeadConfirmation,
+    LabUploadReceipt,
+)
 from ravel.domain.preparation import PreparationRecord
 from ravel.domain.roles import AgentRole
 from ravel.execution.temporal.contracts import ExternalResult
-from ravel.gateway.deps import GatewayState, GatewayStateDep, PrincipalDep
+from ravel.gateway.deps import (
+    GatewayState,
+    GatewayStateDep,
+    Principal,
+    PrincipalDep,
+)
 from ravel.gateway.routes.artifacts import (
     CHUNK_BYTES,
     UploadTooLarge,
@@ -91,8 +104,14 @@ from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.lab import (
+    LabDeviationLinkRepository,
+    LabEventRepository,
     LabHandoverRepository,
+    LabLeadConfirmationRepository,
+    LabPackageRepository,
+    LabUploadReceiptRepository,
     arrived_outputs,
+    confirmation_for,
     record_upload,
 )
 from ravel.state.repositories.preparations import PreparationRepository
@@ -165,6 +184,57 @@ class DeviationRequest(BaseModel):
     #: can compare it against `allowed_actions` without guessing at synonyms.
     requested_action: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=10_000)
+    #: Which run the report is about. Omitted means the handover currently in
+    #: somebody's hands, or the newest one if nothing is waiting.
+    protocol_version: int | None = Field(default=None, ge=1)
+    #: The sample the observation is about, labelled as the package labelled
+    #: it. Checked against the package binding when one exists.
+    sample_id: str | None = Field(default=None, max_length=128)
+    #: The file the observation is about, by the artifact identifier the read
+    #: routes return, and its SHA-256 as the person computed or was given it.
+    raw_output_ref: str | None = Field(default=None, max_length=1024)
+    raw_output_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+
+
+class HumanReportRequest(BaseModel):
+    """The version a person believes they are reporting under.
+
+    Optional because the current handover is the ordinary answer; when it is
+    supplied it has to agree with the handover the report lands on, so a report
+    about version one cannot be recorded as an observation about version two.
+    """
+
+    protocol_version: int | None = Field(default=None, ge=1)
+
+
+class LeadConfirmationRequest(BaseModel):
+    """A lab lead's statement that SOP, site and device suit one package."""
+
+    protocol_version: int = Field(ge=1)
+    #: The exact prepared package. Required when several preparations exist for
+    #: a node, because a confirmation is about one package's files and terms;
+    #: omitted means the newest prepared package for `protocol_version`.
+    preparation_id: str | None = Field(default=None, max_length=32)
+    sop_ref: str = Field(min_length=1, max_length=256)
+    site_ref: str = Field(min_length=1, max_length=256)
+    device_identity: str = Field(min_length=1, max_length=256)
+    statement: str = Field(min_length=1, max_length=4_000)
+
+
+#: Real human-lab acceptance is T26 and external. T11 proves the software
+#: handover with simulated stand-ins, and every surface that reports a
+#: handover says which side of that line it is on.
+REAL_LAB_ACCEPTANCE: dict[str, str] = {
+    "status": "BLOCKED_EXTERNAL",
+    "task": "T26",
+    "reason": (
+        "Real human-lab acceptance needs a real laboratory, a real operator and "
+        "a real instrument. T11's automated people prove software handover only; "
+        "a SIMULATED handover is not instrument evidence."
+    ),
+}
 
 
 # ── Reading the task ────────────────────────────────────────────────────────
@@ -236,6 +306,65 @@ def _documents(package: PreparationRecord | None) -> list[dict[str, Any]]:
     return [dict(entry) for entry in listed if isinstance(entry, dict) and entry.get("name")]
 
 
+def _readiness(
+    session: Session, project_id: str, preparation_id: str
+) -> dict[str, Any] | None:
+    """What one prepared package is bound to, and whether it may open for real.
+
+    `ready_for_real_execution` is derived from a covering lead confirmation,
+    not from a stored flag: the binding names the protocol version, samples,
+    required raw files, device and SOP references, and a confirmation is
+    covering only when its protocol version and device agree and its SOP is one
+    the package names. A package with no confirmation — or with one about a
+    different instrument — is not ready, however complete its file list is.
+
+    Reading never creates the binding. A package nobody has used or confirmed
+    has no binding yet, and a GET that wrote one would turn a read into a fact.
+    """
+    if not preparation_id:
+        return None
+    try:
+        package = PreparationRepository(session, project_id).get(
+            preparation_id=preparation_id
+        )
+    except NotFound:
+        return None
+    binding = LabPackageRepository(session, project_id).binding_for(preparation_id)
+    recorded = LabLeadConfirmationRepository(
+        session, project_id
+    ).for_package(preparation_id)
+    covering = confirmation_for(session, binding) if binding is not None else None
+    return {
+        "preparation_id": preparation_id,
+        "execution_contract_ref": package.execution_contract_ref,
+        "execution_contract_version": package.execution_contract_version,
+        "workspace_path": package.workspace_path,
+        "manifest": package.manifest,
+        "binding": None if binding is None else binding.model_dump(mode="json"),
+        "lead_confirmation": (
+            None if recorded is None else recorded.model_dump(mode="json")
+        ),
+        "confirmation_covers_package": (
+            recorded is not None
+            and binding is not None
+            and recorded.covers(binding)
+        ),
+        "ready_for_real_execution": covering is not None,
+    }
+
+
+def _newest_prepared(
+    session: Session, project_id: str, node_id: str
+) -> PreparationRecord | None:
+    """The newest package RAVEL built for this node, skipping refusals."""
+    prepared = [
+        record
+        for record in PreparationRepository(session, project_id).for_node(node_id)
+        if record.is_prepared
+    ]
+    return prepared[-1] if prepared else None
+
+
 def _handover_view(
     session: Session, project_id: str, handover: LabHandover
 ) -> dict[str, Any]:
@@ -249,10 +378,25 @@ def _handover_view(
     output is a fact about artifact versions, the artifact routes are where
     versions live, and repeating them here would be a second listing to keep
     in step with the first.
+
+    The person-reported events and the upload receipts are listed in full
+    because they are the audit trail T11 is about: who signed, who started,
+    what deviation was said verbatim, and which late upload was refused. They
+    sit beside — not instead of — the artifact records.
     """
     package = _package(session, project_id, handover)
     answered = arrived_outputs(session, handover)
     names = tuple(name for name, _artifact in answered)
+    events = LabEventRepository(session, project_id).for_handover(
+        handover.handover_id
+    )
+    receipts = LabUploadReceiptRepository(session, project_id).for_handover(
+        handover.handover_id
+    )
+    readiness = _readiness(session, project_id, handover.preparation_id)
+    stopped = any(
+        event.event_type is LabEventType.STOP_CONFIRMED for event in events
+    )
     return {
         "handover": handover.model_dump(mode="json"),
         "package": None
@@ -274,6 +418,24 @@ def _handover_view(
             name: artifact.artifact_id for name, artifact in answered
         },
         "missing_outputs": list(handover.owed(names)),
+        "execution_mode": handover.execution_mode.value,
+        "evidence_execution_type": handover.evidence_execution_type.value,
+        "package_readiness": readiness,
+        "ready_for_real_execution": bool(
+            readiness and readiness["ready_for_real_execution"]
+        ),
+        "awaiting_manual_stop_confirmation": (
+            handover.state is JobState.CANCELLED and not stopped
+        ),
+        "person_reported_events": [
+            event.model_dump(mode="json") for event in events
+        ],
+        "upload_receipts": [
+            receipt.model_dump(mode="json") for receipt in receipts
+        ],
+        "instrument_state": None,
+        "scientific_verdict": None,
+        "real_lab_acceptance": REAL_LAB_ACCEPTANCE,
     }
 
 
@@ -288,9 +450,14 @@ def _task(session: Session, project_id: str, node: DagNode) -> dict[str, Any]:
     from a handover that has ended — the three states a lab user can be looking
     at, and each of them answered by what is here rather than by an empty
     object.
+
+    `package_readiness` is present before a handover too, because a lab lead
+    confirms a package *before* it is opened at a bench. Without it the
+    confirmation would have no preparation to name.
     """
     latest = BackendJobRepository(session, project_id).latest_for_node(node.node_id)
     handover = LabHandoverRepository(session, project_id).latest_for_node(node.node_id)
+    prepared = _newest_prepared(session, project_id, node.node_id)
     return {
         "node": node.model_dump(mode="json"),
         "instruction": _instruction(session, project_id, node),
@@ -298,6 +465,10 @@ def _task(session: Session, project_id: str, node: DagNode) -> dict[str, Any]:
         "handover": None
         if handover is None
         else _handover_view(session, project_id, handover),
+        "package_readiness": None
+        if prepared is None
+        else _readiness(session, project_id, prepared.preparation_id),
+        "real_lab_acceptance": REAL_LAB_ACCEPTANCE,
         "deviation_mechanism": DEVIATION_MECHANISM,
         "messages": [
             message.model_dump(mode="json")
@@ -333,6 +504,51 @@ def _experiment_node(session: Session, project_id: str, task_id: str) -> DagNode
             detail=f"node {task_id!r} is not an experiment task",
         )
     return node
+
+
+def _human_operator(standing: Principal) -> None:
+    """Refuse a bench report from anybody who is not a lab user.
+
+    Reads are open to every member; *reporting what happened at a bench* is
+    not. A project owner or administrator may intervene, approve and read, but
+    cannot sign for an operator or upload as one — that would make the
+    person-reported record no longer person-reported. The check is here rather
+    than in each route so the several human doors cannot disagree.
+
+    Raises:
+        HTTPException: 403.
+    """
+    if standing.role is not UserRole.LAB_USER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "only a LAB_USER reports bench events; this account holds "
+                f"{standing.role.value}, and a sign-off, start report, upload, "
+                "deviation or stop confirmation must be the person's own"
+            ),
+        )
+
+
+def _lab_lead(standing: Principal) -> None:
+    """Refuse a lead confirmation from anybody but the project owner.
+
+    V0 has no separate lab-lead account, and the project owner is the human
+    authority that can bind the project to a laboratory's SOP, site and
+    device. A lab user cannot confirm their own laboratory's suitability, and
+    an administrator who is not the owner cannot either.
+
+    Raises:
+        HTTPException: 403.
+    """
+    if standing.role is not UserRole.PROJECT_OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "only the project owner may confirm that a laboratory's SOP, "
+                "site and device suit a prepared package; this account holds "
+                f"{standing.role.value}"
+            ),
+        )
 
 
 @router.get("/{project_id}/lab/tasks", summary="The experiment tasks this project has")
@@ -484,6 +700,23 @@ async def upload_output(
     ],
     filename: Annotated[str, Query(max_length=255)] = "",
     media_type: Annotated[str, Query(max_length=200)] = "",
+    protocol_version: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description=(
+                "The contract version this file answers; omitted means the run "
+                "now waiting."
+            ),
+        ),
+    ] = None,
+    sample_id: Annotated[
+        str | None,
+        Query(
+            max_length=128,
+            description="The sample label from the package this file belongs to.",
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """File the body as the artifact that answers one output, and tell the run.
 
@@ -495,24 +728,32 @@ async def upload_output(
     the handover's frozen list, so an arbitrary file could not complete a run
     even if it were accepted.
 
-    Any member may upload, which is the point of this door: the person who ran
-    the experiment is the person holding the file, and requiring the owner to
-    relay it would mean the owner uploading files they have never seen. The
-    record says who uploaded it — `created_by` on the version — so the route
-    does not need to.
+    **Only a lab user uploads.** The person who ran the experiment is the
+    person holding the file, and the record has to be their own report; an
+    owner or administrator relaying a file would be uploading something they
+    never saw and signing for somebody else.
 
     Uploading does not complete anything. What it does is make the file a fact
     and tell the run, which then decides whether it has everything; and it is
     idempotent in the bytes, because the same file sent twice is one version
     with one hash rather than two versions of one output.
 
+    **Every attempt leaves a receipt, including the refused ones.** A late file
+    after a withdrawal, a file for the wrong contract version, a sample the
+    package never named and an output the contract never required are all
+    recorded with their digest and size before the route refuses them. The
+    bytes of a refused upload are not stored as an artifact, and the receipt is
+    the trace that says what was sent and why it could not count.
+
     Raises:
-        HTTPException: 404 if this project has no such task. 409 if nothing is
-            in anybody's hands for it, or if the package owes no such output —
-            either way the message says what is owed instead. 413 if the body
-            is over the cap. 502 if the store refused the bytes. 503 if the
-            deployment has no store at all.
+        HTTPException: 403 if the caller is not a LAB_USER. 404 if this project
+            has no such task. 409 if nothing is in anybody's hands, if the
+            handover has ended, if the version or sample is not this run's, or
+            if the package owes no such output — the message says which and
+            what is owed instead. 413 if the body is over the cap. 502 if the
+            store refused the bytes. 503 if the deployment has no store at all.
     """
+    _human_operator(standing)
     if filename:
         reason = unusable_filename_reason(filename)
         if reason is not None:
@@ -534,6 +775,8 @@ async def upload_output(
         mode="w+b", prefix="ravel-lab-upload-", suffix=".body", delete=False
     )
     temporary_path = Path(temporary.name)
+    digest = hashlib.sha256()
+    size = 0
     try:
         stream = request.stream()
         try:
@@ -543,36 +786,171 @@ async def upload_output(
                 if temporary.tell() + len(chunk) > limit:
                     raise UploadTooLarge(limit)
                 temporary.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
         finally:
             await stream.aclose()
         temporary.flush()
         temporary.close()
 
+        accepted = False
+        rejection = ""
+        receipt: LabUploadReceipt
+        event: LabEvent | None = None
+        artifact = version = None
+        answered: tuple[tuple[str, Any], ...] = ()
         try:
             with state.database.transaction() as session:
                 node = _experiment_node(session, standing.project_id, task_id)
-                handover = _owed_handover(session, standing.project_id, node)
-                if not handover.answers(output):
+                handover, versions = _upload_target(
+                    session, standing.project_id, node, protocol_version
+                )
+                if handover is None:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=(
-                            f"this handover owes no output called {output!r}; it owes "
-                            f"{list(handover.required_outputs)}. An upload answers a "
-                            "name the contract required, and a file that answers "
-                            "nothing is not part of a delivery."
+                            f"task {node.display_id} has not been handed to a "
+                            "bench, so there is nothing for an upload to answer; "
+                            "a handover exists once a run has prepared a package "
+                            "and given it to somebody"
                         ),
                     )
-                artifact, version = record_upload(
-                    session,
-                    store,
-                    handover,
-                    output=output,
-                    chunks=_file_chunks(temporary_path),
-                    uploaded_by=standing.user_id,
-                    filename=filename,
-                    media_type=media_type or _media_type(filename),
+                binding = (
+                    LabPackageRepository(
+                        session, standing.project_id
+                    ).binding_for(handover.preparation_id)
+                    if handover.preparation_id
+                    else None
                 )
-                answered = arrived_outputs(session, handover)
+                if (
+                    protocol_version is not None
+                    and handover.execution_contract_version != protocol_version
+                ):
+                    rejection = (
+                        f"this file declares contract version {protocol_version}, "
+                        f"but the handover it reached is version "
+                        f"{handover.execution_contract_version}; this task's "
+                        f"handovers are versions {list(versions)}. A file for "
+                        "another version keeps its provenance but cannot answer "
+                        "this run."
+                    )
+                    receipt = _record_receipt(
+                        session,
+                        standing,
+                        handover,
+                        output=output,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        digest=digest.hexdigest(),
+                        size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
+                        outcome=LabUploadOutcome.REJECTED_WRONG_CONTRACT_VERSION,
+                        detail=rejection,
+                    )
+                elif handover.is_terminal:
+                    rejection = (
+                        f"the handover for task {node.display_id} ended as "
+                        f"{handover.state.value} and cannot be answered; what was "
+                        "already recorded against it stands, the late upload is "
+                        "recorded as a receipt, and a new run is a new handover."
+                    )
+                    receipt = _record_receipt(
+                        session,
+                        standing,
+                        handover,
+                        output=output,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        digest=digest.hexdigest(),
+                        size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
+                        outcome=LabUploadOutcome.REJECTED_LATE,
+                        detail=rejection,
+                    )
+                elif not handover.answers(output):
+                    rejection = (
+                        f"this handover owes no output called {output!r}; it owes "
+                        f"{list(handover.required_outputs)}. An upload answers a "
+                        "name the contract required, and a file that answers "
+                        "nothing is not part of a delivery."
+                    )
+                    receipt = _record_receipt(
+                        session,
+                        standing,
+                        handover,
+                        output=output,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        digest=digest.hexdigest(),
+                        size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
+                        outcome=LabUploadOutcome.REJECTED_UNKNOWN_OUTPUT,
+                        detail=rejection,
+                    )
+                elif sample_id is not None and (
+                    binding is None or sample_id not in binding.sample_ids
+                ):
+                    labels = [] if binding is None else list(binding.sample_ids)
+                    rejection = (
+                        f"sample {sample_id!r} is not one the package bound for "
+                        f"this handover; the package names {labels}. A sample "
+                        "label that is not in the binding cannot be traced from "
+                        "the upload back to what the bench was given."
+                    )
+                    receipt = _record_receipt(
+                        session,
+                        standing,
+                        handover,
+                        output=output,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        digest=digest.hexdigest(),
+                        size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
+                        outcome=LabUploadOutcome.REJECTED_WRONG_SAMPLE,
+                        detail=rejection,
+                    )
+                else:
+                    artifact, version = record_upload(
+                        session,
+                        store,
+                        handover,
+                        output=output,
+                        chunks=_file_chunks(temporary_path),
+                        uploaded_by=standing.user_id,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        sample_id=sample_id,
+                    )
+                    receipt = _record_receipt(
+                        session,
+                        standing,
+                        handover,
+                        output=output,
+                        filename=filename,
+                        media_type=media_type or _media_type(filename),
+                        digest=digest.hexdigest(),
+                        size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
+                        outcome=LabUploadOutcome.ACCEPTED,
+                        detail="",
+                        artifact_id=artifact.artifact_id,
+                        artifact_version=version.version,
+                    )
+                    event = LabEventRepository(
+                        session, standing.project_id
+                    ).upload_event_for(
+                        handover.handover_id,
+                        artifact.artifact_id,
+                        version.sha256,
+                    )
+                    answered = arrived_outputs(session, handover)
+                    accepted = True
         except ArtifactStoreError as refused:
             logger.warning(
                 "lab upload to project %s failed in the store: %s",
@@ -592,6 +970,18 @@ async def upload_output(
         temporary.close()
         temporary_path.unlink(missing_ok=True)
 
+    if not accepted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{rejection} This attempt is recorded as upload receipt "
+                f"{receipt.receipt_id} with sha256 {receipt.content_sha256}."
+            ),
+        )
+    assert artifact is not None and version is not None, (
+        "the accepted path recorded no artifact"
+    )
+
     names = tuple(name for name, _artifact in answered)
     delivered, note = await _tell_the_run(
         state,
@@ -610,10 +1000,386 @@ async def upload_output(
         "artifact": artifact.model_dump(mode="json"),
         "version": version.model_dump(mode="json"),
         "output": output,
+        "sample_id": sample_id,
         "answered_outputs": list(names),
         "missing_outputs": list(handover.owed(names)),
+        "receipt": receipt.model_dump(mode="json"),
+        "person_reported_event": (
+            None if event is None else event.model_dump(mode="json")
+        ),
+        "execution_mode": handover.execution_mode.value,
+        "evidence_execution_type": handover.evidence_execution_type.value,
+        "scientific_verdict": None,
         "delivered_to_run": delivered,
         "delivery_note": note,
+    }
+
+
+def _event_response(
+    event: LabEvent,
+    handover: LabHandover,
+    *,
+    awaiting_manual_stop_confirmation: bool,
+) -> dict[str, Any]:
+    """What a person is told after a bench report.
+
+    The handover state is repeated unchanged, because no bench report moves it:
+    acknowledging, starting and stopping are statements about the bench, and
+    the run is ended by a delivery or by Master through the backend. A waiting
+    bench is therefore still `WAITING_EXTERNAL` here, never `RUNNING`.
+    """
+    return {
+        "person_reported_event": event.model_dump(mode="json"),
+        "handover_id": handover.handover_id,
+        "handover_state": handover.state.value,
+        "execution_mode": handover.execution_mode.value,
+        "evidence_execution_type": handover.evidence_execution_type.value,
+        "awaiting_manual_stop_confirmation": awaiting_manual_stop_confirmation,
+        "instrument_state": None,
+        "scientific_verdict": None,
+        "real_lab_acceptance": REAL_LAB_ACCEPTANCE,
+    }
+
+
+def _refuse_a_version_mismatch(
+    handover: LabHandover, protocol_version: int | None
+) -> None:
+    """Refuse a report that declares a version other than the handover's.
+
+    Raises:
+        HTTPException: 409, naming both versions.
+    """
+    if (
+        protocol_version is not None
+        and protocol_version != handover.execution_contract_version
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"this report is about contract version {protocol_version}, but "
+                f"the handover it reached is version "
+                f"{handover.execution_contract_version}; a report about one "
+                "version cannot be recorded against another."
+            ),
+        )
+
+
+@router.post(
+    "/{project_id}/lab/tasks/{task_id}/sign-off",
+    status_code=status.HTTP_201_CREATED,
+    summary="Sign for the package a bench was given",
+)
+def sign_off(
+    standing: PrincipalDep,
+    state: GatewayStateDep,
+    task_id: str,
+    request: HumanReportRequest | None = None,
+) -> dict[str, Any]:
+    """Record that the person at the bench accepted the package.
+
+    **This is the person's signature, not RAVEL's inference.** Nothing in
+    software can tell that a human read the SOP or stood at the instrument, so
+    the only thing that can create this event is the LAB_USER saying so. The
+    event is person-reported by construction and the handler keeps that true by
+    refusing every other role.
+
+    A sign-off is idempotent: sending it twice returns the event already
+    recorded, because a retried request is not a second signature. It does not
+    start the run and does not move the handover — a signed package is still
+    `WAITING_EXTERNAL`, because nothing RAVEL can see is running while a person
+    works.
+    """
+    _human_operator(standing)
+    with state.database.transaction() as session:
+        node = _experiment_node(session, standing.project_id, task_id)
+        handover = _owed_handover(session, standing.project_id, node)
+        if request is not None:
+            _refuse_a_version_mismatch(handover, request.protocol_version)
+        event = LabEventRepository(session, standing.project_id).record_milestone(
+            LabEvent(
+                project_id=standing.project_id,
+                handover_id=handover.handover_id,
+                actor_user_id=standing.user_id,
+                protocol_version=handover.execution_contract_version,
+                event_type=LabEventType.ACKNOWLEDGED,
+                lead_confirmation_ref=handover.lead_confirmation_ref or None,
+            )
+        )
+    return _event_response(
+        event, handover, awaiting_manual_stop_confirmation=False
+    )
+
+
+@router.post(
+    "/{project_id}/lab/tasks/{task_id}/start",
+    status_code=status.HTTP_201_CREATED,
+    summary="Report that work at the bench has started",
+)
+def report_start(
+    standing: PrincipalDep,
+    state: GatewayStateDep,
+    task_id: str,
+    request: HumanReportRequest | None = None,
+) -> dict[str, Any]:
+    """Record that a person says they have started the protocol.
+
+    **A start report does not make the run `RUNNING`.** RAVEL cannot see the
+    bench; what it can record is that a person said they began. The handover
+    therefore stays `WAITING_EXTERNAL`, and the start is an event beside it
+    rather than a state transition that would claim observability RAVEL does
+    not have.
+
+    The sign-off has to exist first, because "started" is a statement about a
+    package the person already accepted; without that ordering the record
+    could show work started under terms nobody signed for. Reporting a start
+    twice returns the first event, so a retry is not a second start.
+    """
+    _human_operator(standing)
+    with state.database.transaction() as session:
+        node = _experiment_node(session, standing.project_id, task_id)
+        handover = _owed_handover(session, standing.project_id, node)
+        if request is not None:
+            _refuse_a_version_mismatch(handover, request.protocol_version)
+        events = LabEventRepository(session, standing.project_id)
+        if events.of_type(handover.handover_id, LabEventType.ACKNOWLEDGED) is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "nobody has signed for this handover, so work cannot be "
+                    "reported as started; the lab user signs for the package "
+                    "first, and a start is a statement about work under terms "
+                    "they accepted."
+                ),
+            )
+        event = events.record_milestone(
+            LabEvent(
+                project_id=standing.project_id,
+                handover_id=handover.handover_id,
+                actor_user_id=standing.user_id,
+                protocol_version=handover.execution_contract_version,
+                event_type=LabEventType.START_REPORTED,
+                lead_confirmation_ref=handover.lead_confirmation_ref or None,
+            )
+        )
+    return _event_response(
+        event, handover, awaiting_manual_stop_confirmation=False
+    )
+
+
+@router.post(
+    "/{project_id}/lab/tasks/{task_id}/stop-confirmation",
+    status_code=status.HTTP_201_CREATED,
+    summary="Confirm that the instrument was stopped by a person",
+)
+def confirm_stop(
+    standing: PrincipalDep,
+    state: GatewayStateDep,
+    task_id: str,
+    request: HumanReportRequest | None = None,
+) -> dict[str, Any]:
+    """Record the person's confirmation that the instrument was stopped.
+
+    **Only a person can produce this event.** A system cancellation revokes
+    RAVEL's handover and receiving eligibility and then says it is awaiting
+    manual stop confirmation; it never writes this event, because whether the
+    bench stopped is not something RAVEL can see. This route is the other side
+    of that: the operator says the instrument is stopped, and the statement is
+    recorded as theirs.
+
+    The confirmation never changes the handover state. It is valid after a
+    withdrawal as well as during work — a late confirmation that the bench
+    stopped is exactly what the awaiting flag was waiting for — and it is
+    idempotent, since a second confirmation is a retry rather than a second
+    stop.
+    """
+    _human_operator(standing)
+    with state.database.transaction() as session:
+        node = _experiment_node(session, standing.project_id, task_id)
+        handover, _versions = _upload_target(
+            session,
+            standing.project_id,
+            node,
+            None if request is None else request.protocol_version,
+        )
+        if handover is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"task {node.display_id} has not been handed to a bench, so "
+                    "there is no instrument whose stop a person could confirm"
+                ),
+            )
+        if request is not None:
+            _refuse_a_version_mismatch(handover, request.protocol_version)
+        event = LabEventRepository(session, standing.project_id).record_milestone(
+            LabEvent(
+                project_id=standing.project_id,
+                handover_id=handover.handover_id,
+                actor_user_id=standing.user_id,
+                protocol_version=handover.execution_contract_version,
+                event_type=LabEventType.STOP_CONFIRMED,
+                lead_confirmation_ref=handover.lead_confirmation_ref or None,
+            )
+        )
+    return _event_response(
+        event,
+        handover,
+        awaiting_manual_stop_confirmation=False,
+    )
+
+
+@router.post(
+    "/{project_id}/lab/tasks/{task_id}/lead-confirmation",
+    status_code=status.HTTP_201_CREATED,
+    summary="A lab lead confirms SOP, site and device suit the package",
+)
+def confirm_lab_lead(
+    standing: PrincipalDep,
+    state: GatewayStateDep,
+    task_id: str,
+    request: LeadConfirmationRequest,
+) -> dict[str, Any]:
+    """Bind a prepared package to what the lab lead says about the laboratory.
+
+    **Without this, a package is not ready for real execution.** The binding is
+    derived from the package's own manifest — protocol version, sample labels,
+    required raw files, device identity and SOP references — and readiness is
+    derived from a confirmation that actually covers it. There is no mutable
+    "ready" flag: a lead who confirms protocol 2 on instrument A says nothing
+    about protocol 3 on instrument B, and `LabLeadConfirmation.covers` is where
+    that is decided.
+
+    **RAVEL can verify linkage, not reality.** It can check that the SOP named
+    is one the package carries and the device is the device the contract asked
+    for. It cannot check that the laboratory is what the statement says, which
+    is why the confirmation is a signed human record and why real acceptance
+    remains T26 and external.
+
+    Raises:
+        HTTPException: 403 if the caller is not the project owner. 404 if the
+            task or the named preparation is not in this project. 409 if the
+            package is not prepared, is for another node or version, or if the
+            SOP, site or device do not agree with its binding.
+    """
+    _lab_lead(standing)
+    with state.database.transaction() as session:
+        node = _experiment_node(session, standing.project_id, task_id)
+        preparations = PreparationRepository(
+            session, standing.project_id
+        ).for_node(node.node_id)
+        if request.preparation_id is not None:
+            try:
+                package = PreparationRepository(
+                    session, standing.project_id
+                ).get(preparation_id=request.preparation_id)
+            except NotFound as missing:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=(
+                        f"no preparation {request.preparation_id!r} in this "
+                        "project"
+                    ),
+                ) from missing
+        else:
+            package = next(
+                (
+                    record
+                    for record in reversed(preparations)
+                    if record.is_prepared
+                    and record.execution_contract_version
+                    == request.protocol_version
+                ),
+                None,
+            )
+            if package is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"no prepared package for contract version "
+                        f"{request.protocol_version} exists for task "
+                        f"{node.display_id}, so there is nothing to confirm"
+                    ),
+                )
+        if package.node_id != node.node_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"preparation {package.preparation_id} belongs to node "
+                    f"{package.node_id}, not task {node.display_id}"
+                ),
+            )
+        if not package.is_prepared:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"preparation {package.preparation_id} was not prepared "
+                    "successfully, so it is not a package a lead can confirm"
+                ),
+            )
+        if package.execution_contract_version != request.protocol_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"preparation {package.preparation_id} is contract version "
+                    f"{package.execution_contract_version}, but the confirmation "
+                    f"declares {request.protocol_version}"
+                ),
+            )
+        try:
+            binding = LabPackageRepository(
+                session, standing.project_id
+            ).ensure_bound(package)
+        except ValueError as unusable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"this package cannot be bound: {unusable}",
+            ) from unusable
+        if request.device_identity != binding.device_identity:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"the package was bound to device "
+                    f"{binding.device_identity!r}, but the confirmation names "
+                    f"{request.device_identity!r}; a lead confirms the device "
+                    "the package was actually built for"
+                ),
+            )
+        if request.sop_ref not in binding.sop_refs:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"SOP {request.sop_ref!r} is not one the package references; "
+                    f"it references {list(binding.sop_refs)}. A confirmation "
+                    "about an SOP the bench was not given does not cover this "
+                    "package."
+                ),
+            )
+        confirmation = LabLeadConfirmationRepository(
+            session, standing.project_id
+        ).record_once(
+            LabLeadConfirmation(
+                project_id=standing.project_id,
+                node_id=node.node_id,
+                preparation_id=package.preparation_id,
+                execution_contract_ref=package.execution_contract_ref,
+                execution_contract_version=package.execution_contract_version,
+                protocol_version=request.protocol_version,
+                sop_ref=request.sop_ref,
+                site_ref=request.site_ref,
+                device_identity=request.device_identity,
+                statement=request.statement,
+                confirmed_by=standing.user_id,
+            )
+        )
+        readiness = _readiness(session, standing.project_id, package.preparation_id)
+    return {
+        "confirmation": confirmation.model_dump(mode="json"),
+        "covers_package": confirmation.covers(binding),
+        "package_readiness": readiness,
+        "ready_for_real_execution": bool(
+            readiness and readiness["ready_for_real_execution"]
+        ),
+        "real_lab_acceptance": REAL_LAB_ACCEPTANCE,
     }
 
 
@@ -653,12 +1419,22 @@ async def report_deviation(
     the question exist, and Master reads open deviations on the next turn
     whatever the scheduler is doing.
 
+    **Provenance needs somewhere to live.** A sample label, raw-file reference,
+    raw-file hash and declared protocol version are recorded on the
+    `DEVIATION_REPORTED` lab event, which only exists when a handover does.
+    A report against a task nobody is holding therefore cannot carry them: the
+    route refuses the request rather than accepting fields and silently
+    dropping them. The bare report — the observation itself — is still
+    recorded, and Master reads it on the next turn.
+
     Raises:
         HTTPException: 404 if this project has no such task. 409 if the node has
             no contract, because there is then nothing to have deviated from —
             a report against no contract would record a refusal that no
-            document ever made.
+            document ever made. Also 409 when a report that names a sample,
+            raw file or protocol version has no handover to record them on.
     """
+    _human_operator(standing)
     with state.database.transaction() as session:
         node = _experiment_node(session, standing.project_id, task_id)
         if not node.execution_contract_ref:
@@ -672,6 +1448,64 @@ async def report_deviation(
         contract = ExecutionContractRepository(session, standing.project_id).get(
             contract_id=node.execution_contract_ref
         )
+        target, _versions = _upload_target(
+            session,
+            standing.project_id,
+            node,
+            request.protocol_version,
+        )
+        provenance = {
+            "sample_id": request.sample_id,
+            "raw_output_ref": request.raw_output_ref,
+            "raw_output_sha256": request.raw_output_sha256,
+            "protocol_version": request.protocol_version,
+        }
+        supplied = sorted(name for name, value in provenance.items() if value is not None)
+        if target is None and supplied:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"this report names {supplied}, but task {node.display_id} has "
+                    "no handover, so there is no person-reported lab event to "
+                    "record them on and they would be silently dropped. Submit "
+                    "the observation without those fields to record a general "
+                    "deviation, or report again once the task has been handed "
+                    "to a bench."
+                ),
+            )
+        if target is not None:
+            _refuse_a_version_mismatch(target, request.protocol_version)
+        binding = (
+            LabPackageRepository(
+                session, standing.project_id
+            ).binding_for(target.preparation_id)
+            if target is not None and target.preparation_id
+            else None
+        )
+        if (
+            request.sample_id is not None
+            and binding is not None
+            and request.sample_id not in binding.sample_ids
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"sample {request.sample_id!r} is not one the package bound "
+                    f"for this handover; the package names "
+                    f"{list(binding.sample_ids)}."
+                ),
+            )
+        if target is not None and len(request.description) > 4000:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "a deviation against a handed-over run is recorded as a "
+                    "person-reported lab event, whose verbatim note holds up to "
+                    "4000 characters; this report is longer. Shorten it or split "
+                    "the observations, so the event keeps the text verbatim "
+                    "rather than truncating it."
+                ),
+            )
         deviation = DeviationRepository(session, standing.project_id).raise_(
             DeviationRecord(
                 project_id=standing.project_id,
@@ -683,7 +1517,40 @@ async def report_deviation(
                 raised_by=standing.user_id,
             )
         )
-        waiting = LabHandoverRepository(session, standing.project_id).waiting_for(task_id)
+        event: LabEvent | None = None
+        link: LabDeviationLink | None = None
+        if target is not None:
+            event = LabEventRepository(session, standing.project_id).record(
+                LabEvent(
+                    project_id=standing.project_id,
+                    handover_id=target.handover_id,
+                    actor_user_id=standing.user_id,
+                    protocol_version=target.execution_contract_version,
+                    event_type=LabEventType.DEVIATION_REPORTED,
+                    sample_id=request.sample_id,
+                    lead_confirmation_ref=target.lead_confirmation_ref or None,
+                    raw_output_ref=request.raw_output_ref,
+                    raw_output_sha256=request.raw_output_sha256,
+                    deviation_note=request.description,
+                )
+            )
+            # The link has foreign keys to both rows, and neither is in
+            # PostgreSQL until the transaction flushes. The join is explicit
+            # rather than inferred from node and time: two deviations on one
+            # shift can carry identical prose and still be different events.
+            session.flush()
+            link = LabDeviationLinkRepository(
+                session, standing.project_id
+            ).record(
+                LabDeviationLink(
+                    project_id=standing.project_id,
+                    node_id=target.node_id,
+                    handover_id=target.handover_id,
+                    deviation_id=deviation.deviation_id,
+                    event_id=event.event_id,
+                )
+            )
+        waiting = target if target is not None and target.is_waiting else None
 
     delivered, note = (False, _NOBODY_WAITING)
     if waiting is not None:
@@ -706,6 +1573,21 @@ async def report_deviation(
 
     return {
         **deviation.model_dump(mode="json"),
+        "person_reported_event": (
+            None if event is None else event.model_dump(mode="json")
+        ),
+        "deviation_event_link": (
+            None if link is None else link.model_dump(mode="json")
+        ),
+        "handover_id": None if target is None else target.handover_id,
+        "execution_mode": (
+            None if target is None else target.execution_mode.value
+        ),
+        "evidence_execution_type": (
+            None if target is None else target.evidence_execution_type.value
+        ),
+        "instrument_state": None,
+        "scientific_verdict": None,
         "delivered_to_run": delivered,
         "delivery_note": note,
     }
@@ -721,6 +1603,96 @@ _NOBODY_WAITING = (
     "no run of this task is waiting on anything, so there was nothing to tell; "
     "the record stands and Master reads it on the next turn"
 )
+
+
+def _upload_target(
+    session: Session,
+    project_id: str,
+    node: DagNode,
+    protocol_version: int | None,
+) -> tuple[LabHandover | None, tuple[int, ...]]:
+    """The handover an upload reaches, and the versions this node has had.
+
+    A declared version wins when it names a handover this node really had, so
+    a late file for an ended version lands on *that* handover and is recorded
+    there as late rather than being refused against the version now waiting.
+    Without a declaration the live handover is the target; if nothing is live,
+    the newest one is, which is what makes a late upload a recorded rejection
+    instead of a 409 that leaves no trace.
+
+    `None` means this node was never handed to a bench at all. That is not a
+    late upload and it has no handover to attach a receipt to.
+    """
+    repository = LabHandoverRepository(session, project_id)
+    handovers = repository.for_node(node.node_id)
+    if not handovers:
+        return None, ()
+    versions = tuple(
+        sorted({handover.execution_contract_version for handover in handovers})
+    )
+    if protocol_version is not None:
+        matching = [
+            handover
+            for handover in handovers
+            if handover.execution_contract_version == protocol_version
+        ]
+        if matching:
+            return matching[-1], versions
+    waiting = repository.waiting_for(node.node_id)
+    if waiting is not None:
+        return waiting, versions
+    return handovers[-1], versions
+
+
+def _record_receipt(
+    session: Session,
+    standing: Principal,
+    handover: LabHandover,
+    *,
+    output: str,
+    filename: str,
+    media_type: str,
+    digest: str,
+    size: int,
+    sample_id: str | None,
+    declared_protocol_version: int | None,
+    outcome: LabUploadOutcome,
+    detail: str,
+    artifact_id: str | None = None,
+    artifact_version: int | None = None,
+) -> LabUploadReceipt:
+    """Record one upload attempt against the handover it reached.
+
+    Written for every outcome, so a refusal is a record rather than silence.
+    The sample and declared contract version are their own columns rather than
+    prose in `detail`, so a refusal can be queried by what the uploader said
+    it was for. `protocol_version` remains the handover's version: a wrong
+    declaration is evidence for the rejection, not a replacement for the
+    version the file had to answer.
+
+    The artifact identifiers are present only for `ACCEPTED`, because the
+    bytes of a refused upload are not in the artifact store at all.
+    """
+    return LabUploadReceiptRepository(session, standing.project_id).record(
+        LabUploadReceipt(
+            project_id=standing.project_id,
+            node_id=handover.node_id,
+            handover_id=handover.handover_id,
+            output=output,
+            filename=filename,
+            media_type=media_type,
+            content_sha256=digest,
+            size_bytes=size,
+            uploaded_by=standing.user_id,
+            outcome=outcome,
+            detail=detail,
+            artifact_id=artifact_id,
+            artifact_version=artifact_version,
+            protocol_version=handover.execution_contract_version,
+            sample_id=sample_id,
+            declared_protocol_version=declared_protocol_version,
+        )
+    )
 
 
 def _owed_handover(session: Session, project_id: str, node: DagNode) -> LabHandover:

@@ -60,6 +60,9 @@ from ravel.domain.enums import (
     FailurePolicy,
     JobState,
     JoinPolicy,
+    LabEventType,
+    LabExecutionMode,
+    LabUploadOutcome,
     NodeStatus,
     NodeType,
     ProjectStatus,
@@ -1427,6 +1430,11 @@ class PreparationRow(Base):
 #: behind. Narrower than `JobState` on purpose: a handover is never `SUBMITTED`
 #: or `RUNNING`, and the constraint is where that stops being a convention.
 _HANDOVER_STATES_SQL = ", ".join(f"'{state.value}'" for state in HANDOVER_STATES)
+_LAB_EXECUTION_MODES_SQL = ", ".join(f"'{mode.value}'" for mode in LabExecutionMode)
+_LAB_EVENT_TYPES_SQL = ", ".join(f"'{kind.value}'" for kind in LabEventType)
+_LAB_UPLOAD_OUTCOMES_SQL = ", ".join(
+    f"'{outcome.value}'" for outcome in LabUploadOutcome
+)
 
 
 class LabHandoverRow(Base):
@@ -1474,6 +1482,10 @@ class LabHandoverRow(Base):
             f"(state = '{JobState.WAITING_EXTERNAL.value}') = (closed_at IS NULL)",
             name="closing_is_all_or_nothing",
         ),
+        CheckConstraint(
+            f"execution_mode IN ({_LAB_EXECUTION_MODES_SQL})",
+            name="execution_mode_is_known",
+        ),
         UniqueConstraint(
             "project_id",
             "node_id",
@@ -1499,12 +1511,298 @@ class LabHandoverRow(Base):
     workspace_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     protocol: Mapped[str] = mapped_column(Text, nullable=False, default="")
     required_outputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    execution_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=LabExecutionMode.SIMULATED.value
+    )
+    lead_confirmation_ref: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=""
+    )
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
     handed_over_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LabEventRow(Base):
+    """One person-reported event from a laboratory handover.
+
+    Append-only: this table is absent from `guards.UPDATABLE_TABLES`, so the
+    guard trigger refuses both UPDATE and DELETE. A person's report is history,
+    and a report that could be edited after the run would not be a report.
+
+    `person_reported` is constrained to TRUE rather than stored as a flag that
+    could be false. There is no system event in this table by construction:
+    withdrawal of a handover is a change to `lab_handovers`, never a
+    `STOP_CONFIRMED` written by software.
+    """
+
+    __tablename__ = "lab_events"
+    __table_args__ = (
+        CheckConstraint(
+            f"event_type IN ({_LAB_EVENT_TYPES_SQL})", name="event_type_is_known"
+        ),
+        CheckConstraint("protocol_version >= 1", name="protocol_version_is_positive"),
+        CheckConstraint("person_reported", name="events_are_person_reported"),
+        CheckConstraint(
+            "raw_output_sha256 IS NULL OR raw_output_sha256 ~ '^[0-9a-f]{64}$'",
+            name="raw_output_hash_is_sha256",
+        ),
+        CheckConstraint(
+            "deviation_note IS NULL OR char_length(deviation_note) <= 4000",
+            name="deviation_note_fits_the_schema",
+        ),
+        Index(
+            "uq_lab_events_acknowledged",
+            "handover_id",
+            unique=True,
+            postgresql_where=text("event_type = 'ACKNOWLEDGED'"),
+        ),
+        Index(
+            "uq_lab_events_start_reported",
+            "handover_id",
+            unique=True,
+            postgresql_where=text("event_type = 'START_REPORTED'"),
+        ),
+        Index(
+            "uq_lab_events_stop_confirmed",
+            "handover_id",
+            unique=True,
+            postgresql_where=text("event_type = 'STOP_CONFIRMED'"),
+        ),
+        Index("ix_lab_events_project_handover", "project_id", "handover_id"),
+    )
+
+    event_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    handover_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("lab_handovers.handover_id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    person_reported: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sample_id: Mapped[str | None] = mapped_column(String(128))
+    sop_ref: Mapped[str | None] = mapped_column(String(256))
+    lead_confirmation_ref: Mapped[str | None] = mapped_column(String(256))
+    raw_output_ref: Mapped[str | None] = mapped_column(String(1024))
+    raw_output_sha256: Mapped[str | None] = mapped_column(String(64))
+    deviation_note: Mapped[str | None] = mapped_column(Text)
+
+
+class LabDeviationLinkRow(Base):
+    """The explicit join from a deviation record to its lab event.
+
+    Append-only. Matching the two records by node, sample and timestamp would
+    be an inference that can silently select the wrong occurrence; this table
+    makes the join an identifier. One link per deviation and one per event,
+    enforced by the unique keys rather than by a caller's discipline.
+    """
+
+    __tablename__ = "lab_deviation_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "deviation_id", name="uq_lab_deviation_links_deviation"
+        ),
+        UniqueConstraint(
+            "project_id", "event_id", name="uq_lab_deviation_links_event"
+        ),
+        Index(
+            "ix_lab_deviation_links_project_handover",
+            "project_id",
+            "handover_id",
+        ),
+    )
+
+    link_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    handover_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("lab_handovers.handover_id", ondelete="CASCADE"), nullable=False
+    )
+    deviation_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("deviation_records.deviation_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("lab_events.event_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    linked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class LabPackageBindingRow(Base):
+    """What one prepared laboratory package is bound to.
+
+    Append-only. The binding is written the first time the package is handed
+    over or confirmed by a lab lead, and never rewritten: a contract revised
+    while the bench works must not change which samples the bench was given.
+    """
+
+    __tablename__ = "lab_package_bindings"
+    __table_args__ = (
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        CheckConstraint("protocol_version >= 1", name="protocol_version_is_positive"),
+        UniqueConstraint(
+            "project_id",
+            "preparation_id",
+            name="uq_lab_package_bindings_preparation",
+        ),
+        Index("ix_lab_package_bindings_project_node", "project_id", "node_id"),
+    )
+
+    binding_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    preparation_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("execution_preparations.preparation_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    sample_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    required_raw_files: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    device_identity: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sop_refs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    bound_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LabLeadConfirmationRow(Base):
+    """A lab lead's confirmation that SOP, site and device suit one package.
+
+    Append-only, and one per package. A confirmation cannot be edited into
+    covering a different instrument or protocol version; a package that needs
+    different terms is a new preparation and a new confirmation.
+    """
+
+    __tablename__ = "lab_lead_confirmations"
+    __table_args__ = (
+        CheckConstraint(
+            "execution_contract_version >= 1", name="contract_version_is_positive"
+        ),
+        CheckConstraint("protocol_version >= 1", name="protocol_version_is_positive"),
+        CheckConstraint(
+            "char_length(statement) BETWEEN 1 AND 4000",
+            name="statement_has_length",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "preparation_id",
+            name="uq_lab_lead_confirmations_preparation",
+        ),
+        Index("ix_lab_lead_confirmations_project_node", "project_id", "node_id"),
+    )
+
+    confirmation_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    preparation_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("execution_preparations.preparation_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    execution_contract_ref: Mapped[str] = mapped_column(REF, nullable=False)
+    execution_contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    sop_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    site_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    device_identity: Mapped[str] = mapped_column(String(256), nullable=False)
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmed_by: Mapped[str] = mapped_column(String(32), nullable=False)
+    confirmed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class LabUploadReceiptRow(Base):
+    """Every upload attempt, accepted or refused, kept as history.
+
+    Append-only. The artifact version is the bytes that were accepted; this
+    table is the account of the attempt, including late uploads after a
+    withdrawal and corrections that became a new version. A refused upload that
+    left no record would make "nothing arrived" and "the door refused it"
+    indistinguishable.
+    """
+
+    __tablename__ = "lab_upload_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            f"outcome IN ({_LAB_UPLOAD_OUTCOMES_SQL})", name="outcome_is_known"
+        ),
+        CheckConstraint(
+            "content_sha256 ~ '^[0-9a-f]{64}$'", name="content_hash_is_sha256"
+        ),
+        CheckConstraint("size_bytes >= 0", name="size_is_not_negative"),
+        CheckConstraint("protocol_version >= 1", name="protocol_version_is_positive"),
+        CheckConstraint(
+            "artifact_version IS NULL OR artifact_version >= 1",
+            name="artifact_version_is_positive",
+        ),
+        CheckConstraint(
+            "declared_protocol_version IS NULL OR declared_protocol_version >= 1",
+            name="declared_protocol_version_is_positive",
+        ),
+        Index(
+            "ix_lab_upload_receipts_project_handover",
+            "project_id",
+            "handover_id",
+        ),
+    )
+
+    receipt_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    handover_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("lab_handovers.handover_id", ondelete="CASCADE"), nullable=False
+    )
+    output: Mapped[str] = mapped_column(String(200), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    media_type: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    uploaded_by: Mapped[str] = mapped_column(String(32), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    artifact_id: Mapped[str | None] = mapped_column(ID)
+    artifact_version: Mapped[int | None] = mapped_column(Integer)
+    protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    sample_id: Mapped[str | None] = mapped_column(String(128))
+    declared_protocol_version: Mapped[int | None] = mapped_column(Integer)
 
 
 # ── The event stream ────────────────────────────────────────────────────────

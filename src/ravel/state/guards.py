@@ -195,6 +195,8 @@ LAB_HANDOVER_IDENTITY_COLUMNS: tuple[str, ...] = (
     "workspace_path",
     "protocol",
     "required_outputs",
+    "execution_mode",
+    "lead_confirmation_ref",
     "handed_over_at",
 )
 

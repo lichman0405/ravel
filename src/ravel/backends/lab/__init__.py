@@ -25,8 +25,12 @@ brought everything cannot complete a run.
 The pieces:
 
 - `HumanLabBackend` — the port, against a person.
-- `BACKEND_NAME` — how this backend is named in every record it produces, and
-  the string its references begin with.
+- `REAL_BACKEND_NAME` — `human-lab`, the name a REAL handover is recorded
+  under. It is the only name a report classifier treats as bench evidence.
+- `SIMULATED_BACKEND_NAME` — `mock-human-lab`, the name a SIMULATED handover
+  is recorded under.
+- `BACKEND_NAME` — the default name, which is the simulated one because an
+  automated deployment is not a bench.
 - `BACKEND_WORD` — the bench's own word for "in somebody's hands", kept beside
   RAVEL's state so a reader can see the two are about different things.
 - `LabConfigurationError` — a laboratory run handed over with no package to
@@ -43,6 +47,8 @@ records them as blocked until somebody runs one.
 from ravel.backends.lab.backend import (
     BACKEND_NAME,
     BACKEND_WORD,
+    REAL_BACKEND_NAME,
+    SIMULATED_BACKEND_NAME,
     HumanLabBackend,
     LabConfigurationError,
 )
@@ -50,6 +56,8 @@ from ravel.backends.lab.backend import (
 __all__ = [
     "BACKEND_NAME",
     "BACKEND_WORD",
+    "REAL_BACKEND_NAME",
+    "SIMULATED_BACKEND_NAME",
     "HumanLabBackend",
     "LabConfigurationError",
 ]

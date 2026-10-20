@@ -1,0 +1,214 @@
+{
+  "run_id": "run-20261020-124313",
+  "task_id": "T11",
+  "acceptance_map": {
+    "T11-AC1": {
+      "test_nodeids": [
+        "tests/premium/T11/test_package_binding.py::test_the_package_is_bound_to_its_protocol_samples_raw_files_device_and_sop",
+        "tests/premium/T11/test_package_binding.py::test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real_bench",
+        "tests/premium/T11/test_package_binding.py::test_the_lead_confirmation_is_recorded_and_readiness_is_derived",
+        "tests/premium/T11/test_package_binding.py::test_a_confirmation_for_another_device_sop_or_version_does_not_cover_the_package",
+        "tests/premium/T11/test_package_binding.py::test_only_the_project_owner_may_confirm_a_laboratory",
+        "tests/premium/T11/test_package_binding.py::test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover",
+        "tests/premium/T11/test_package_binding.py::test_automated_people_remain_software_proof_even_after_a_confirmation",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_person_reported_and_leaves_the_run_waiting",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_idempotent_because_a_retry_is_not_a_second_signature",
+        "tests/premium/T11/test_person_events.py::test_start_requires_the_persons_sign_off_and_never_reports_running",
+        "tests/premium/T11/test_person_events.py::test_only_a_lab_user_reports_a_bench_event",
+        "tests/premium/T11/test_person_events.py::test_a_foreign_project_member_cannot_reach_any_human_door",
+        "tests/premium/T11/test_person_events.py::test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped",
+        "tests/premium/T11/test_records.py::test_events_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_person_reported_event_cannot_be_written_as_a_system_event",
+        "tests/premium/T11/test_records.py::test_a_signature_cannot_be_written_twice_around_the_route",
+        "tests/premium/T11/test_records.py::test_the_handover_mode_and_confirmation_are_immutable",
+        "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
+        "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_is_a_file_not_a_scientific_verdict",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T11-AC2": {
+      "test_nodeids": [
+        "tests/premium/T11/test_package_binding.py::test_the_package_is_bound_to_its_protocol_samples_raw_files_device_and_sop",
+        "tests/premium/T11/test_package_binding.py::test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real_bench",
+        "tests/premium/T11/test_package_binding.py::test_the_lead_confirmation_is_recorded_and_readiness_is_derived",
+        "tests/premium/T11/test_package_binding.py::test_a_confirmation_for_another_device_sop_or_version_does_not_cover_the_package",
+        "tests/premium/T11/test_package_binding.py::test_only_the_project_owner_may_confirm_a_laboratory",
+        "tests/premium/T11/test_package_binding.py::test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover",
+        "tests/premium/T11/test_package_binding.py::test_automated_people_remain_software_proof_even_after_a_confirmation",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_person_reported_and_leaves_the_run_waiting",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_idempotent_because_a_retry_is_not_a_second_signature",
+        "tests/premium/T11/test_person_events.py::test_start_requires_the_persons_sign_off_and_never_reports_running",
+        "tests/premium/T11/test_person_events.py::test_only_a_lab_user_reports_a_bench_event",
+        "tests/premium/T11/test_person_events.py::test_a_foreign_project_member_cannot_reach_any_human_door",
+        "tests/premium/T11/test_person_events.py::test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped",
+        "tests/premium/T11/test_records.py::test_events_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_person_reported_event_cannot_be_written_as_a_system_event",
+        "tests/premium/T11/test_records.py::test_a_signature_cannot_be_written_twice_around_the_route",
+        "tests/premium/T11/test_records.py::test_the_handover_mode_and_confirmation_are_immutable",
+        "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
+        "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_is_a_file_not_a_scientific_verdict",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T11-AC3": {
+      "test_nodeids": [
+        "tests/premium/T11/test_package_binding.py::test_the_package_is_bound_to_its_protocol_samples_raw_files_device_and_sop",
+        "tests/premium/T11/test_package_binding.py::test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real_bench",
+        "tests/premium/T11/test_package_binding.py::test_the_lead_confirmation_is_recorded_and_readiness_is_derived",
+        "tests/premium/T11/test_package_binding.py::test_a_confirmation_for_another_device_sop_or_version_does_not_cover_the_package",
+        "tests/premium/T11/test_package_binding.py::test_only_the_project_owner_may_confirm_a_laboratory",
+        "tests/premium/T11/test_package_binding.py::test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover",
+        "tests/premium/T11/test_package_binding.py::test_automated_people_remain_software_proof_even_after_a_confirmation",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_person_reported_and_leaves_the_run_waiting",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_idempotent_because_a_retry_is_not_a_second_signature",
+        "tests/premium/T11/test_person_events.py::test_start_requires_the_persons_sign_off_and_never_reports_running",
+        "tests/premium/T11/test_person_events.py::test_only_a_lab_user_reports_a_bench_event",
+        "tests/premium/T11/test_person_events.py::test_a_foreign_project_member_cannot_reach_any_human_door",
+        "tests/premium/T11/test_person_events.py::test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped",
+        "tests/premium/T11/test_records.py::test_events_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_person_reported_event_cannot_be_written_as_a_system_event",
+        "tests/premium/T11/test_records.py::test_a_signature_cannot_be_written_twice_around_the_route",
+        "tests/premium/T11/test_records.py::test_the_handover_mode_and_confirmation_are_immutable",
+        "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
+        "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_is_a_file_not_a_scientific_verdict",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T11-AC4": {
+      "test_nodeids": [
+        "tests/premium/T11/test_package_binding.py::test_the_package_is_bound_to_its_protocol_samples_raw_files_device_and_sop",
+        "tests/premium/T11/test_package_binding.py::test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real_bench",
+        "tests/premium/T11/test_package_binding.py::test_the_lead_confirmation_is_recorded_and_readiness_is_derived",
+        "tests/premium/T11/test_package_binding.py::test_a_confirmation_for_another_device_sop_or_version_does_not_cover_the_package",
+        "tests/premium/T11/test_package_binding.py::test_only_the_project_owner_may_confirm_a_laboratory",
+        "tests/premium/T11/test_package_binding.py::test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover",
+        "tests/premium/T11/test_package_binding.py::test_automated_people_remain_software_proof_even_after_a_confirmation",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_person_reported_and_leaves_the_run_waiting",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_idempotent_because_a_retry_is_not_a_second_signature",
+        "tests/premium/T11/test_person_events.py::test_start_requires_the_persons_sign_off_and_never_reports_running",
+        "tests/premium/T11/test_person_events.py::test_only_a_lab_user_reports_a_bench_event",
+        "tests/premium/T11/test_person_events.py::test_a_foreign_project_member_cannot_reach_any_human_door",
+        "tests/premium/T11/test_person_events.py::test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped",
+        "tests/premium/T11/test_records.py::test_events_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_person_reported_event_cannot_be_written_as_a_system_event",
+        "tests/premium/T11/test_records.py::test_a_signature_cannot_be_written_twice_around_the_route",
+        "tests/premium/T11/test_records.py::test_the_handover_mode_and_confirmation_are_immutable",
+        "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
+        "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_is_a_file_not_a_scientific_verdict",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-20 12:43:02 +0800",
+  "completed_at": "2026-10-20 12:45:02 +0800",
+  "source_commit": "eb3a42300ee3778f721f7627cc68213e179f6b0c",
+  "source_digest": "025d5bef1fcf1241053e63236b22609a10fd964c5740e221ac013a802d839d76",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T11 -q -rxXs --junitxml=/workspace/ravel-worktrees/T11/docs/premium/evidence/T11/run-20261020-124313/cmd-02-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T11",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T11/run-20261020-124313/cmd-02-junit.xml",
+  "log_path": "docs/premium/evidence/T11/run-20261020-124313/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T11/run-20261020-124313/cmd-01.txt",
+      "sha256": "9378d83909682f97a729dba7cbc8a4eb98fb82ebc6ae3518d7b2b397fec216ef",
+      "size": 332
+    },
+    {
+      "ref": "docs/premium/evidence/T11/run-20261020-124313/cmd-02-junit.xml",
+      "sha256": "ab9cdadfc0cd200a59e12e09038307151f2ebb1f699ab1715f106b02a9263474",
+      "size": 4468
+    },
+    {
+      "ref": "docs/premium/evidence/T11/run-20261020-124313/cmd-02.txt",
+      "sha256": "bcac63c78ac83b4158fe4caed7e423f94151ce538b1d117f5074b84bcc9e7f86",
+      "size": 242
+    },
+    {
+      "ref": "docs/premium/evidence/T11/run-20261020-124313/cmd-03.txt",
+      "sha256": "77163312db36fc55126792fcd678eb5598706495edca739124ef9919544594de",
+      "size": 239
+    },
+    {
+      "ref": "docs/premium/evidence/T11/run-20261020-124313/commands.txt",
+      "sha256": "06d59630f7775fa1e48f582524acdf8e4aa22c444407d80bee08d55be407913d",
+      "size": 1191
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}

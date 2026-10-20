@@ -1,0 +1,5 @@
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade b8d3f2a6c9e1 -> c4e8d1a7f3b2, explicit deviation/event join and structured upload provenance

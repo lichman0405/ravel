@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "task_id": "T11",
+  "attempt": 2,
+  "reviewer_id": "independent-T11-review-2",
+  "base_sha": "9c58f3d",
+  "candidate_sha": "57c630187649de5f8e8d181aa63ac0b1203756e8",
+  "source_commit": "f4e5fd2fd96b3c5395dd73867dc481efb503b184",
+  "source_digest": "278d5847348cf7cbd56df631093c338f9cd3a096c99155c8b26d84261fde702a",
+  "reviewed_at": "2026-10-20 13:45 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T11-AC1",
+      "result": "PASS",
+      "evidence": "Authorization and durable refusal are independently re-verified on a fresh database. The project comes from the authenticated principal's route path and a PostgreSQL membership check; _human_operator (routes/lab.py:509) gates all five person doors on LAB_USER and _lab_lead (routes/lab.py:532) gates lead confirmation on PROJECT_OWNER, with no body or query project_id. Refusals stay byte-free and durable: all five upload outcomes (wrong contract version, late, unknown output, wrong sample, accepted) call _record_receipt at routes/lab.py:837, 858, 879, 903 and 929, and each call supplies the caller's sample_id and declared_protocol_version (routes/lab.py:846-847, 867-868, 888-889, 912-913, 938-939); the receipt row stores them structurally (tables.py:1804-1805) with a positive-value check ck_lab_upload_receipts_declared_protocol_version_is_positive (tables.py:1770-1771). Refused paths create no artifact version (test_records.py:302). Receipts and the deviation link are append-only under the ravel_append_only trigger (test_records.py:184, 332). _upload_target (routes/lab.py:1608) resolves the handover by declared version and arrived_outputs (repositories/lab.py:538) filters by lab-upload provenance, so an old-version file cannot answer a new run. Tests covering the refusal, authorization and provenance limits: test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt, test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run, test_an_upload_for_a_sample_the_package_never_bound_is_refused, test_a_refused_upload_stored_no_artifact, test_a_deviation_for_another_contract_version_is_refused, test_only_a_lab_user_reports_a_bench_event, test_only_the_project_owner_may_confirm_a_laboratory and test_a_foreign_project_member_cannot_reach_any_human_door. The entire T11 suite (34 tests) passed in this review."
+    },
+    {
+      "id": "T11-AC2",
+      "result": "PASS",
+      "evidence": "The review-1 P1 is fixed and verified. report_deviation builds the provenance set sample_id/raw_output_ref/raw_output_sha256/protocol_version (routes/lab.py:1457-1462); when the task has no handover and any of them was supplied, it returns 409 before writing any deviation or event (routes/lab.py:1464-1475), and test_a_deviation_with_provenance_is_refused_when_nobody_is_holding_it proves 409 with no rows (test_uploads_and_deviations.py:413). A bare observation with no provenance is still recorded with 201 (test_uploads_and_deviations.py:459). On the handover path the DEVIATION_REPORTED LabEvent carries sample_id, raw_output_ref, raw_output_sha256 and the verbatim deviation_note (routes/lab.py:1523-1535); after session.flush() an explicit lab_deviation_links row is written with real foreign keys to project, node, handover, deviation and event plus two unique constraints keeping the pairing one-to-one (routes/lab.py:1541-1552), and the response exposes it as deviation_event_link (routes/lab.py:1579-1581). The link table is in the migration, is append-only, and direct UPDATE/DELETE are rejected (test_records.py:332). The tasklog's old AC2 claim was corrected (docs/premium/tasklogs/T11.md:21, 97, 132), so it no longer claims both records store all fields. The migration was exercised up, down and up again in this review with the expected catalog state."
+    },
+    {
+      "id": "T11-AC3",
+      "result": "PASS",
+      "evidence": "Person-reported and never-RUNNING properties are unchanged by the delta and re-verified by the independent suite. LabEvent.person_reported is Literal[True] (domain/lab.py:297), LabEventRow has CHECK (person_reported) named events_are_person_reported (tables.py:1547), and test_a_person_reported_event_cannot_be_written_as_a_system_event rejects a raw false insert (test_records.py:76). The handover is WAITING_EXTERNAL at submit and has no RUNNING state; test_sign_off_is_person_reported_and_leaves_the_run_waiting and test_start_requires_the_persons_sign_off_and_never_reports_running (test_person_events.py:34, 100) assert it. Start requires a prior ACKNOWLEDGED event for the same handover. Duplicate sign-off/start remain idempotent through record_milestone plus the partial unique indexes uq_lab_events_acknowledged/start_reported/stop_confirmed (tables.py:1557-1569; test_person_events.py:79). System cancellation writes no lab event and leaves a derived awaiting_manual_stop_confirmation, with a late upload receiving a REJECTED_LATE receipt and no artifact; test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped (test_person_events.py:250) passed in this run."
+    },
+    {
+      "id": "T11-AC4",
+      "result": "PASS",
+      "evidence": "The internal software-handover scope is labelled correctly and real acceptance is not claimed. The review-1 P2 is fixed T11-locally without touching T12: the backend name is derived from the mode and is not a constructor input (backend.py:74 REAL_BACKEND_NAME='human-lab', 81 SIMULATED_BACKEND_NAME='mock-human-lab', 120 field(init=False), 133-142 __post_init__), the handover records backend=self.name (backend.py:212), live_lab=True with no covering lead confirmation is refused rather than silently recorded as simulated (backend.py:193-202; test_package_binding.py:86), and parse_ref accepts both prefixes (backend.py:447-460). T12's classifier is unchanged: is_mock_name runs before the human-lab check, so mock-human-lab is SIMULATED and only human-lab is HUMAN_LAB. test_the_backend_name_is_derived_from_the_mode pins the class attribute and both instance names (test_execution_typing.py:79); test_a_simulated_handover_cannot_be_reported_as_human_lab_evidence builds a real report over a SIMULATED handover execution and asserts data_mode SIMULATED and evidence SIMULATED, never HUMAN_LAB (test_execution_typing.py:90); test_a_real_handover_is_reported_as_human_lab_evidence asserts REAL/HUMAN_LAB (test_execution_typing.py:120). Every lab surface still reports evidence_execution_type and real_lab_acceptance={status: BLOCKED_EXTERNAL, task: T26} (routes/lab.py:230, 422, 438, 1586-1587), instrument_state and scientific_verdict stay null, and no test claims a real laboratory. Real human-lab acceptance remains BLOCKED_EXTERNAL (T26/B05) and is explicitly not claimed by this PASS."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T11/run-20261020-132714/manifest.json"
+  ],
+  "independent_verification": {
+    "environment": "WSL Ubuntu 24.04 container ravel-premium-ubuntu24:latest with the candidate worktree mounted at /workspace and the existing named venv volume ravel-premium-venv-t11; PostgreSQL 16 container at 127.0.0.1:55432. A fresh database ravel_t11_review2_test was created for this review. The implementer's gate run-id was not reused as evidence; the manifest was inspected separately for integrity.",
+    "commands": [
+      {
+        "command": "psql: DROP DATABASE IF EXISTS / CREATE DATABASE ravel_t11_review2_test",
+        "result": "fresh database created",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m alembic upgrade head (RAVEL_POSTGRES_DB=ravel_t11_review2_test)",
+        "result": "upgrade to c4e8d1a7f3b2; alembic heads reports the single head c4e8d1a7f3b2",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m alembic downgrade -1",
+        "result": "clean downgrade to b8d3f2a6c9e1; lab_deviation_links absent and the receipt provenance columns absent",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m alembic upgrade head (second time)",
+        "result": "clean re-upgrade; catalog shows lab_deviation_links with a primary key, five foreign keys (project, node, handover, deviation, event), both unique constraints, the project/handover index and the ravel_append_only trigger; receipt check ck_lab_upload_receipts_declared_protocol_version_is_positive present; 0 link rows",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m pytest tests/premium/T11 -q -rxXs --junitxml=/artifacts/t11-junit.xml -p no:cacheprovider (RAVEL_TEST_DB=ravel_t11_review2_test)",
+        "result": "34 passed, 0 skipped, 0 failed, 0 errors; JUnit nodeids compared with the 34 T11 acceptance-map nodeids: 34 mapped, 34 ran, mapped_not_ran=[], ran_not_mapped=[]",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m pytest tests/premium/T12 -q",
+        "result": "34 passed, 0 skipped, 0 failed, 0 errors",
+        "exit_code": 0
+      },
+      {
+        "command": "make lint",
+        "result": "ruff: All checks passed!; pyright: 0 errors, 0 warnings, 0 informations",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m pytest tests/integration/backends/test_lab_backend.py tests/integration/gateway/test_lab_handover.py -q",
+        "result": "30 passed, 0 skipped, 0 failed, 0 errors",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m pytest tests/acceptance/test_phase11_humanlab.py -q",
+        "result": "3 passed",
+        "exit_code": 0
+      },
+      {
+        "command": ".venv/bin/python -m pytest tests/acceptance/test_phase10_backends.py::test_p10_07_nothing_else_in_ravel_can_be_handed_work tests/acceptance/test_phase10_backends.py::test_p10_06_the_deployment_registers_the_mocks_and_nothing_else -q",
+        "result": "2 passed; cross-checks the backend registry/class-attribute regression",
+        "exit_code": 0
+      },
+      {
+        "command": "scripts.premium_task.source_digest at HEAD (57c6301) and at f4e5fd2",
+        "result": "both 278d5847348cf7cbd56df631093c338f9cd3a096c99155c8b26d84261fde702a; f4e5fd2 is an ancestor of HEAD; branch cc/T11-human-lab",
+        "exit_code": 0
+      },
+      {
+        "command": "git diff --name-only ef131f4..57c6301 -- src/ravel/reports tests/premium/T12; git diff --name-only 9c58f3d..57c6301 -- src/ravel/reports tests/premium/T12",
+        "result": "empty for both ranges; no T12 file was modified by the delta or by the branch",
+        "exit_code": 0
+      },
+      {
+        "command": "parsed comparison of the T11 section of docs/premium/acceptance-map.json against b02b5e8",
+        "result": "status RUNNING, classification internal, database_suite true, 34 unique nodeids; alembic argv sets RAVEL_POSTGRES_DB=ravel_t11_test (isolated database); only the T11 section changed and no other task's section was altered",
+        "exit_code": 0
+      },
+      {
+        "command": "re-verification of docs/premium/evidence/T11/run-20261020-132714/manifest.json",
+        "result": "result PASS, exit_code 0, source_commit f4e5fd2, source_digest 278d5847..., JUnit 34 cases / 0 skipped / 0 failures / 0 errors; all five artifact sha256 and size values match the files on disk",
+        "exit_code": 0
+      }
+    ],
+    "worktree": {
+      "head": "57c630187649de5f8e8d181aa63ac0b1203756e8",
+      "branch": "cc/T11-human-lab",
+      "clean_before_review_commit": true,
+      "review_file": "docs/premium/reviews/T11/2.json"
+    }
+  },
+  "prior_findings_resolution": [
+    {
+      "finding": "review 1 F1 (P1): a no-handover deviation silently discarded sample_id/raw_output_ref/raw_output_sha256/protocol_version, and the deviation had no explicit link to its event",
+      "status": "RESOLVED",
+      "evidence": "409 before any write when provenance is supplied without a handover (routes/lab.py:1457-1475; test_uploads_and_deviations.py:413); bare observation still 201 (test_uploads_and_deviations.py:459); handover path persists the fields on the person-reported event and writes an append-only, FK-backed, unique lab_deviation_links row after flush, exposed as deviation_event_link (routes/lab.py:1537-1552, 1579-1581; test_records.py:332); migration c4e8d1a7f3b2 verified up/down/up; tasklog AC2 corrected."
+    },
+    {
+      "finding": "review 1 F2 (P2): a SIMULATED lab handover was recorded with backend human-lab, so T12 could classify its execution as HUMAN_LAB evidence",
+      "status": "RESOLVED",
+      "evidence": "The backend name is now derived from the mode with no constructor input (backend.py:74, 81, 120, 133-142), live_lab=True without a covering confirmation is refused (backend.py:193-202), and parse_ref accepts both prefixes (backend.py:447-460). A SIMULATED handover therefore records mock-human-lab, which T12's unchanged classifier types SIMULATED; a REAL handover records human-lab and types HUMAN_LAB. test_execution_typing.py:79/90/120 prove both directions through assembled reports. No T12 file was modified."
+    },
+    {
+      "finding": "review 1 F3 (P3): record_milestone bypassed the repository project authorization",
+      "status": "RESOLVED",
+      "evidence": "record_milestone now calls self._authorize(event) before the insert (src/ravel/state/repositories/lab.py:263-269)."
+    },
+    {
+      "finding": "review 1 F4 (P3): upload receipts stored no structured sample_id/declared_protocol_version",
+      "status": "RESOLVED",
+      "evidence": "Both nullable columns are added by migration c4e8d1a7f3b2 with a positive-value check (tables.py:1770-1771, 1804-1805), and all five _record_receipt call sites pass both values (routes/lab.py:846-847, 867-868, 888-889, 912-913, 938-939)."
+    },
+    {
+      "finding": "review 1 F5 (P3): concurrent first uploads can duplicate artifact rows and OUTPUT_UPLOADED events",
+      "status": "RECORDED_KNOWN_GAP",
+      "evidence": "Explicitly recorded as not fixed at docs/premium/tasklogs/T11.md:44 and :181; the tasklog states the correct fix needs a shared-table unique constraint plus idempotent retry and is outside the T11-local scope. Carried forward as the only current advisory below."
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/repositories/lab.py",
+      "line": 655,
+      "trigger": "record_upload performs a read-then-insert: it looks for an existing artifact by (node, output, provenance) and, if absent, registers a new artifact; artifacts have no unique constraint on (project, node, name, provenance) (tables.py:980), and no unique constraint prevents a duplicate OUTPUT_UPLOADED event for the same handover/digest. Two concurrent first uploads for the same output can both miss and create two artifacts, each with its own event; two concurrent corrections can both compute the same next version and one hits the (artifact_id, version) unique constraint as an unhandled IntegrityError. Sequential replay is safe and tested. No concurrent-upload test exists.",
+      "impact": "A double-submitted upload can duplicate artifact rows and person-reported events. The run does not complete falsely (arrived_outputs collapses by name and provenance) and no state transition is bypassed; this is audit cleanliness and robustness, not a scientific-state or authority violation.",
+      "acceptance_id": "T11-AC1",
+      "required_fix": "Add a unique index on lab uploads (project_id, node_id, name, provenance) or serialize on the handover with a row/advisory lock, translate the version-number conflict into an idempotent retry or a clear 409, and add a concurrent-upload test.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Real human-lab acceptance remains BLOCKED_EXTERNAL (T26, blocker B05): no real laboratory, operator or instrument exists in this task. The REAL backend branch is implemented and exercised only as software proof (live_lab=True plus a covering lead confirmation); it has not seen hardware, a real instrument state or a real measurement.",
+    "The gate manifest's data_mode=REAL is the premium runner's hardcoded field, not a real-lab claim. The 34 tests exercise SIMULATED software handovers against real PostgreSQL.",
+    "The P3 concurrent-first-upload duplication is accepted only because it is explicitly recorded as a known gap at docs/premium/tasklogs/T11.md:44 and :181; it is not claimed fixed.",
+    "T12's classifier still trusts the backend name rather than the handover execution_mode. T11 closes its own paths by deriving mock-human-lab/human-lab from the mode, but an out-of-band writer that records a simulated execution as human-lab would reintroduce the classification error; a stronger cross-task invariant can be added at T12 integration.",
+    "Migration c4e8d1a7f3b2 is a unique revision and a single head in this review (verified locally), but src/ravel/state/migrations/** is a shared-file lock domain: the Supervisor must reconfirm the global single head and revision numbering at integration per ENGINEERING_PROTOCOL.md:19. Accepted advisory, not a defect.",
+    "The suite does not construct two simultaneous different-version handovers; the old-version-cannot-answer-new-run property is verified from _upload_target and provenance scoping plus the version-mismatch test, not by a dedicated two-handover test.",
+    "No concurrent upload, concurrent lead-confirmation or concurrent cancel-vs-upload test exists (the concurrent-upload race is the recorded P3 gap). Sequential duplicate sign-off/start and system-cancel-then-stop are tested.",
+    "FACT refusal for a simulated lab execution is verified compositionally rather than by one combined test: test_execution_typing proves a SIMULATED handover execution is typed SIMULATED, and T12's report verification tests the generic construction of SIMULATED_AS_FACT for simulated execution refs. No single T11 test drives a FACT claim over a lab handover execution and asserts the refusal end to end.",
+    "acceptance-map.json still records T11 status RUNNING; the Supervisor updates it at integration.",
+    "npm/workspace dependency advisories noted elsewhere do not apply to T11's Python-only delta."
+  ],
+  "integration_candidate": false
+}
