@@ -1542,12 +1542,47 @@
         "make premium-task TASK=T14"
       ],
       "classification": "internal",
-      "status": "PLANNED",
+      "status": "RUNNING",
       "test_nodeids": [
-        "tests/premium/T14"
+        "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
+        "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
+        "tests/premium/T14/test_gateway_integration.py::test_offline_restore_keeps_the_session_then_reconnects_and_logout_revokes",
+        "tests/premium/T14/test_security_contract.py::test_the_shipped_primitives_refuse_foreign_senders_and_plaintext_tokens",
+        "tests/premium/T14/test_security_contract.py::test_the_window_bundle_keeps_the_renderer_sandboxed_and_unprivileged",
+        "tests/premium/T14/test_security_contract.py::test_the_renderer_bundle_cannot_read_a_token_or_call_the_gateway_itself",
+        "tests/premium/T14/test_security_contract.py::test_the_bridge_and_desktop_service_have_no_scientific_dag_mutation",
+        "tests/premium/T14/test_security_contract.py::test_the_windows_package_is_portable_x64_internal_and_exactly_pinned"
       ],
-      "manual_evidence_refs": [],
+      "manual_evidence_refs": [
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/01-login.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/04-offline.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/09-packaged-authenticated.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/10-packaged-window-authenticated.png",
+        "apps/desktop/THIRD_PARTY_LICENSES.md"
+      ],
       "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "upgrade",
+            "head"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "bash",
+            "tests/premium/T14/run_node_suite.sh"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
+          "external": true
+        },
         {
           "argv": [
             ".venv/bin/python",
@@ -1558,12 +1593,21 @@
             "-rxXs"
           ],
           "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
           "needs_database": false,
           "external": false
         }
       ],
       "fill_rule": "T03 frozen plan: each AC has a unique id, a type, and expected evidence; internal tests must be concrete nodeids before a task can PASS.",
-      "database_suite": false,
+      "database_suite": true,
       "acceptance": [
         {
           "id": "T14-AC1",

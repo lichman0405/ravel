@@ -1,0 +1,193 @@
+{
+  "task": "T14",
+  "kind": "windows-electron-evidence",
+  "started_at": "2026-10-20T05:51:55.249Z",
+  "completed_at": "2026-10-20T05:52:18.917Z",
+  "platform": "win32",
+  "versions": {
+    "electron": "44.9.1",
+    "playwright_core": "1.64.1",
+    "node": "22.23.3",
+    "windows": "10.0.26300"
+  },
+  "account": {
+    "username": "desktop-owner"
+  },
+  "gateway_origin": "http://127.0.0.1:61350",
+  "data_mode": "REAL",
+  "checks": {
+    "window": {
+      "title": "RAVEL",
+      "url": "file:///C:/Users/lishi/code/ravel-worktrees/T14/apps/desktop/dist/renderer/index.html",
+      "visible": true
+    },
+    "renderer": {
+      "require": "undefined",
+      "process": "undefined",
+      "module": "undefined",
+      "Buffer": "undefined",
+      "bridge": [
+        "connection",
+        "listProjects",
+        "login",
+        "logout",
+        "onConnectionStatus",
+        "reconnect",
+        "session",
+        "version"
+      ]
+    },
+    "safe_storage": {
+      "available": true,
+      "platform": "win32"
+    },
+    "wrong_password": {
+      "rejected": true,
+      "message": "The username or password is not correct.",
+      "session_file_absent": true
+    },
+    "login": {
+      "authenticated": true,
+      "project_title": "Catalyst screen",
+      "project_visible": true,
+      "status": "Connected"
+    },
+    "session_file": {
+      "envelope_keys": [
+        "ciphertext",
+        "format",
+        "version"
+      ],
+      "size": 682,
+      "contains_plaintext_token": false,
+      "refresh_fingerprint": "a780a1bca15e99da"
+    },
+    "security": {
+      "window_open": "null",
+      "window_count_unchanged": true,
+      "navigation_blocked": true,
+      "local_file_blocked": true,
+      "bridge_names": [],
+      "local_storage_empty": true,
+      "no_token_in_dom": true,
+      "unconfigured_origin_blocked": true,
+      "attacker_requests": 0
+    },
+    "hostile_window": {
+      "same_document": true,
+      "same_preload": true,
+      "bridge": [
+        "connection",
+        "listProjects",
+        "login",
+        "logout",
+        "onConnectionStatus",
+        "reconnect",
+        "session",
+        "version"
+      ],
+      "ipc_refused": true,
+      "refusal": "Error invoking remote method 'ravel:session:read': Error: IPC sender refused",
+      "window_open": "null",
+      "windows_after": 2
+    },
+    "restart_restore": {
+      "authenticated": true,
+      "login_form": false,
+      "refresh_rotated": true,
+      "refresh_fingerprint_before": "a780a1bca15e99da",
+      "refresh_fingerprint_after": "c56ff2f7b31d0f2e"
+    },
+    "offline": {
+      "status": "Offline",
+      "banner": "The Gateway is offline. The Gateway could not be reached.Reconnect",
+      "reconnect_while_down_still_offline": true
+    },
+    "reconnect": {
+      "status": "Connected",
+      "banner_cleared": true
+    },
+    "supervisor_survives_desktop": {
+      "http_status": 200,
+      "session_issued": true
+    },
+    "logout": {
+      "authenticated": false,
+      "session_file_absent": true
+    },
+    "restart_after_logout": {
+      "login_form": true,
+      "session_restored": false
+    },
+    "packaged": {
+      "executed": true,
+      "path": "apps/desktop/release/RAVEL-Desktop-0.1.0-win-x64-portable.exe",
+      "sha256": "1878aae1777ccd9eecd1795a791cfd38163f21f525a14afe185c9cf563ea3fa1",
+      "size": 100251514,
+      "launch": "portable-process-window",
+      "reason": null,
+      "authenticated": null,
+      "window_title": "RAVEL",
+      "process": "RAVEL Desktop",
+      "process_id": 39660,
+      "portable_wrapper_running": true,
+      "desktop_screenshot": {
+        "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/08-packaged-window.png",
+        "sha256": "5955dc2352e87706a980ef26a3da87ccbf7d71230698ebc9b8199fd1a42e927f",
+        "size": 136219
+      }
+    }
+  },
+  "screenshots": [
+    {
+      "name": "01-login",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/01-login.png",
+      "sha256": "340f216d0589769996dd7d89031c1f6579572112db15429eef997c772c1a1ee4",
+      "size": 40433
+    },
+    {
+      "name": "02-authenticated",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/02-authenticated.png",
+      "sha256": "e9212321335dfb791671726e1c79878d0050bc7afe4bf8c838d4a241af3aac95",
+      "size": 39662
+    },
+    {
+      "name": "03-restored",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/03-restored.png",
+      "sha256": "e9212321335dfb791671726e1c79878d0050bc7afe4bf8c838d4a241af3aac95",
+      "size": 39662
+    },
+    {
+      "name": "04-offline",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/04-offline.png",
+      "sha256": "c0de1b16fe9b84d959a7ec85428333fcddc0a15929d1dd7023f5029e11d760a9",
+      "size": 46818
+    },
+    {
+      "name": "05-reconnected",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/05-reconnected.png",
+      "sha256": "e9212321335dfb791671726e1c79878d0050bc7afe4bf8c838d4a241af3aac95",
+      "size": 39662
+    },
+    {
+      "name": "06-signed-out",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/06-signed-out.png",
+      "sha256": "340f216d0589769996dd7d89031c1f6579572112db15429eef997c772c1a1ee4",
+      "size": 40433
+    },
+    {
+      "name": "07-login-after-logout",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/07-login-after-logout.png",
+      "sha256": "340f216d0589769996dd7d89031c1f6579572112db15429eef997c772c1a1ee4",
+      "size": 40433
+    },
+    {
+      "name": "08-packaged-window",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-135155/screenshots/08-packaged-window.png",
+      "sha256": "5955dc2352e87706a980ef26a3da87ccbf7d71230698ebc9b8199fd1a42e927f",
+      "size": 136219
+    }
+  ],
+  "result": "PASS",
+  "error": null
+}
