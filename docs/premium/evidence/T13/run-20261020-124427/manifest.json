@@ -1,0 +1,190 @@
+{
+  "run_id": "run-20261020-124427",
+  "task_id": "T13",
+  "acceptance_map": {
+    "T13-AC1": {
+      "test_nodeids": [
+        "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
+        "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
+        "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
+        "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
+        "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_deployment_retention.py::test_the_application_takes_its_replay_window_from_the_environment",
+        "tests/premium/T13/test_deployment_retention.py::test_the_entrypoint_refuses_a_malformed_window_before_serving",
+        "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
+        "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
+        "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
+        "tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input",
+        "tests/premium/T13/test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine",
+        "tests/premium/T13/test_pagination.py::test_a_keyset_cursor_does_not_shift_when_a_row_is_inserted_between_pages",
+        "tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted",
+        "tests/premium/T13/test_probe_coverage.py::test_every_effective_v1_route_can_be_addressed_by_the_shared_probe_table",
+        "tests/premium/T13/test_resync.py::test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence",
+        "tests/premium/T13/test_resync.py::test_a_cursor_inside_the_window_still_replays_normally",
+        "tests/premium/T13/test_stream.py::test_the_stream_is_scoped_to_one_project_and_its_sequence_only_moves_forward",
+        "tests/premium/T13/test_stream.py::test_a_reconnect_from_the_last_processed_seq_loses_nothing_and_repeats_nothing",
+        "tests/premium/T13/test_stream.py::test_a_revoked_membership_closes_an_open_stream_within_five_seconds"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T13-AC2": {
+      "test_nodeids": [
+        "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
+        "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
+        "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
+        "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
+        "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_deployment_retention.py::test_the_application_takes_its_replay_window_from_the_environment",
+        "tests/premium/T13/test_deployment_retention.py::test_the_entrypoint_refuses_a_malformed_window_before_serving",
+        "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
+        "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
+        "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
+        "tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input",
+        "tests/premium/T13/test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine",
+        "tests/premium/T13/test_pagination.py::test_a_keyset_cursor_does_not_shift_when_a_row_is_inserted_between_pages",
+        "tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted",
+        "tests/premium/T13/test_probe_coverage.py::test_every_effective_v1_route_can_be_addressed_by_the_shared_probe_table",
+        "tests/premium/T13/test_resync.py::test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence",
+        "tests/premium/T13/test_resync.py::test_a_cursor_inside_the_window_still_replays_normally",
+        "tests/premium/T13/test_stream.py::test_the_stream_is_scoped_to_one_project_and_its_sequence_only_moves_forward",
+        "tests/premium/T13/test_stream.py::test_a_reconnect_from_the_last_processed_seq_loses_nothing_and_repeats_nothing",
+        "tests/premium/T13/test_stream.py::test_a_revoked_membership_closes_an_open_stream_within_five_seconds"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T13-AC3": {
+      "test_nodeids": [
+        "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
+        "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
+        "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
+        "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
+        "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_deployment_retention.py::test_the_application_takes_its_replay_window_from_the_environment",
+        "tests/premium/T13/test_deployment_retention.py::test_the_entrypoint_refuses_a_malformed_window_before_serving",
+        "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
+        "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
+        "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
+        "tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input",
+        "tests/premium/T13/test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine",
+        "tests/premium/T13/test_pagination.py::test_a_keyset_cursor_does_not_shift_when_a_row_is_inserted_between_pages",
+        "tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted",
+        "tests/premium/T13/test_probe_coverage.py::test_every_effective_v1_route_can_be_addressed_by_the_shared_probe_table",
+        "tests/premium/T13/test_resync.py::test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence",
+        "tests/premium/T13/test_resync.py::test_a_cursor_inside_the_window_still_replays_normally",
+        "tests/premium/T13/test_stream.py::test_the_stream_is_scoped_to_one_project_and_its_sequence_only_moves_forward",
+        "tests/premium/T13/test_stream.py::test_a_reconnect_from_the_last_processed_seq_loses_nothing_and_repeats_nothing",
+        "tests/premium/T13/test_stream.py::test_a_revoked_membership_closes_an_open_stream_within_five_seconds"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T13-AC4": {
+      "test_nodeids": [
+        "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
+        "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
+        "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
+        "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
+        "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_deployment_retention.py::test_the_application_takes_its_replay_window_from_the_environment",
+        "tests/premium/T13/test_deployment_retention.py::test_the_entrypoint_refuses_a_malformed_window_before_serving",
+        "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
+        "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
+        "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
+        "tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input",
+        "tests/premium/T13/test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine",
+        "tests/premium/T13/test_pagination.py::test_a_keyset_cursor_does_not_shift_when_a_row_is_inserted_between_pages",
+        "tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted",
+        "tests/premium/T13/test_probe_coverage.py::test_every_effective_v1_route_can_be_addressed_by_the_shared_probe_table",
+        "tests/premium/T13/test_resync.py::test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence",
+        "tests/premium/T13/test_resync.py::test_a_cursor_inside_the_window_still_replays_normally",
+        "tests/premium/T13/test_stream.py::test_the_stream_is_scoped_to_one_project_and_its_sequence_only_moves_forward",
+        "tests/premium/T13/test_stream.py::test_a_reconnect_from_the_last_processed_seq_loses_nothing_and_repeats_nothing",
+        "tests/premium/T13/test_stream.py::test_a_revoked_membership_closes_an_open_stream_within_five_seconds"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-20 12:44:23 +0800",
+  "completed_at": "2026-10-20 12:45:56 +0800",
+  "source_commit": "7957ba512fd6513cd7ecf3aa5f0f201d3edf0a21",
+  "source_digest": "b09a58cd8d2284e115ce60a7f556f6d4ce6df5028d7e53d0c4d38131910bba37",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T13 -q -rxXs --junitxml=/workspace/ravel-worktrees/T13/docs/premium/evidence/T13/run-20261020-124427/cmd-02-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T13",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T13/run-20261020-124427/cmd-02-junit.xml",
+  "log_path": "docs/premium/evidence/T13/run-20261020-124427/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/cmd-01.txt",
+      "sha256": "ebb96997b93b7474fbfa74e1b295738018ac01fb87c2540460dd81f850a31c63",
+      "size": 172
+    },
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/cmd-02-junit.xml",
+      "sha256": "0cca72409660284d8a7af17b81d1f7c383774139bb6b074d9b25ce09e12690d5",
+      "size": 3088
+    },
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/cmd-02.txt",
+      "sha256": "2859e63094ed105442ba12035c99131b0d87808cfd9115179635eb71831b2ce2",
+      "size": 1716
+    },
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/cmd-03.txt",
+      "sha256": "2600fe9988fef1b9078793ae884d1a251358e81d75dd9479ae6a5d860b8907e5",
+      "size": 239
+    },
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/cmd-04.txt",
+      "sha256": "01b2e3cd3b1103919a1548ec59cc29ebe7bbcf5f6d3210b7ee0b0e95a776258c",
+      "size": 207
+    },
+    {
+      "ref": "docs/premium/evidence/T13/run-20261020-124427/commands.txt",
+      "sha256": "2479cc2b60300cd04c2ea5c775de86f5591f4d93b7d816623fc4577513a29c5c",
+      "size": 2898
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}
