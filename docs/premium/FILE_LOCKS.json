@@ -97,6 +97,30 @@
       "branch": "cc/T14-desktop-shell",
       "granted_at": "2026-10-20 Asia/Shanghai",
       "release_condition": "T14 integrated"
+    },
+    {
+      "path": "packages/api-client/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 regeneration integrated"
+    },
+    {
+      "path": "tests/premium/T13/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 regeneration integrated"
+    },
+    {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 regeneration integrated"
     }
   ],
   "shared_paths": [

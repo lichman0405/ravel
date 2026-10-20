@@ -233,7 +233,7 @@
       "note": "T12 DONE：独立 review 3 APPROVE（reviews/T12/3.json，AC1–AC4 PASS；candidate 74d4c42，digest 57ad559b…）；任务门禁 run-20261020-115022 PASS（34 tests、alembic+lint 0）；集成候选门禁 run-20261020-115756 PASS（source 7d9c834，34 tests）；ff-only 合入 2c4354d。报告 provenance 类型推导、冲突检测、冻结 snapshot/append-only 表；P3 复合外键 advisory 记录。"
     },
     "T13": {
-      "status": "DONE",
+      "status": "RUNNING",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T13",
       "base_sha": "463376a",
@@ -247,7 +247,7 @@
       "integration_merge_sha": "ec7dc01",
       "blocker_refs": [],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T13 DONE：独立 review 3 APPROVE（reviews/T13/3.json；AC1–AC4 PASS，AC5 不存在记为 N/A）；任务门禁 run-20261020-130223 PASS（20 tests、alembic+lint+tsc 0）；CRLF determinism 缺陷已在 bb7d7fe 修复并由 reviewer 双向复现（CRLF 通过、真实内容变更失败）；集成候选 75962ce/ec7dc01 门禁 run-20261020-130628 PASS（20 tests、4 commands 0；source digest 含已集成 T10，T13 文件子树与 source commit 无差异）；ff-only 合入 integration。P3 advisory：npm install 无 lockfile；scripts/run_gateway.py 边界扩展由 Supervisor 记录；client token ergonomics；CRLF 归一化在 LF checkout 上为 no-op（仅测试覆盖建议）。"
+      "note": "T13 已集成后被跨任务回归发现集成缺陷：T11 修改了被 /v1 使用的 DeviationRequest 字段，已提交的 generated client/openapi.json 与集成后 create_app 的实际 schema 不一致，T13 determinism 测试在 integration 上失败。重新打开 T13，仅重新生成客户端并重跑门禁/独立 delta review；原 review 3 与集成证据保留。"
     },
     "T14": {
       "status": "RUNNING",
