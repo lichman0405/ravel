@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "task_id": "T10",
+  "attempt": 1,
+  "reviewer_id": "independent-T10-review",
+  "base_sha": "9c58f3d",
+  "candidate_sha": "ab1834d5dfa2ba3574ab7011212ee37dce2208e3",
+  "source_digest": "0f2c5dadcd3d3ef12b84df7ae7857d419b9236286ab0e006a27cebb7c6253748",
+  "reviewed_at": "2026-10-20 12:58 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T10-AC1",
+      "result": "PASS",
+      "evidence": "tests/premium/T10/test_ac1_refusals.py, 62 cases, all passing. Every one of the 17 REQUIRED_TERMS is removed in turn and refused with MISSING_SCIENTIFIC_PARAMETER; blank temperature and pressure are refused as missing rather than defaulted to zero; DFT, conductivity, MD, NPT, Gibbs, CFCMC and pore-size distribution are refused as UNSUPPORTED_ENVIRONMENT, as is a non-raspa software requirement; framework, molecule, force-field and molecule-definition names containing '../', '/', backslash, an absolute path, whitespace, a newline or an unsupported suffix are refused by the bare-name rule; unsupported units and unusable sampling values are refused; tampered input bytes, an input the contract never named and a named input that was not resolved are refused; a non-empty workspace is never overwritten; a positive control builds. I re-read build_input_package (src/ravel/compute/raspa/package.py:444-480): all validation runs before _require_empty and before the first write, so a refusal has no file side effect, and test_ac4_scope.py:58 monkeypatches subprocess.run/Popen to raise while a package still builds, proving the build spawns no process. Independent rerun at candidate ab1834d on the isolated ravel_t10_review_test database: all 62 AC1 cases passed (part of 140 passed, exit 0)."
+    },
+    {
+      "id": "T10-AC2",
+      "result": "PASS",
+      "evidence": "tests/premium/T10/test_ac2_package.py (21), test_ac2_environment_probe.py (15) and test_ac2_parser.py (19), all passing. Package: the same contract built in two directories produces byte-identical manifest and simulation.input and the same package_sha256; a contract-version change, one changed scientific value and a changed acceptance criterion each produce a new package; the manifest has no timestamp or host path; the digest is recomputable; the four inputs are verified byte-for-byte against the pinned official digests; strict verification refuses edited input bytes, an edited manifest and an unlisted extra file; the parser schema digest recorded in the package equals the SHA-256 of schemas/premium/compute/raspa_result.schema.json (fc83e7976667cf2b21c8769552daece41354d80c034dd19a1484c746ff43d826), which I recomputed. Probe: the real subprocess path is exercised with sys.executable; missing software, a 2.1 binary, a binary with no version line, a non-zero probe, a missing or non-MIT licence, missing or edited data, and a binary digest mismatch or unreadable binary are all refused, every refusal names MASTER as the return route, and the refusal set is closed. Parser: the official fixture yields NORMAL with the exact official values (2.8975450000 molecules/unit cell, 0.5023401474 mol/kg framework, 8.0587717205 mg/g, 5 block means, 0 warnings, seed 1621335350); too few blocks or relative standard error above 0.05 yields NON_CONVERGED; a missing finish line, warnings, temperature/seed/version mismatch, unit-conversion disagreement, non-zero exit and non-UTF-8 bytes yield SOFTWARE_FAILURE; provenance is a required SourceKind and both fixture kinds are SIMULATED. Provenance was verified independently against upstream: refs/tags/v2.0.47 is 673ad2d52a9c11e5ee7db9e5e7339663bfabecf9; I downloaded all six pinned files and the official reference output at that commit and every SHA-256 matched provenance.py, including COPYING aebcbd8e..., MFI_SI.cif 65ffb4fe..., the force field 9696a674..., pseudo atoms aaab675a..., methane.def 5281d172... and the reference output aac482cb.... Independent rerun: all 55 AC2 cases passed."
+    },
+    {
+      "id": "T10-AC3",
+      "result": "PASS",
+      "evidence": "tests/premium/T10/test_ac3_ledger_trace.py, 16 cases, all passing against the real PostgreSQL fixture: real ExecutionContract, AcceptanceContract, artifact versions, EvidenceSource rows and an ExecutionRecord; the only double is the in-memory ArtifactStore named in the module docstring. The end-to-end trace returns 15 items in order: EXECUTION_CONTRACT, EXECUTION, ACCEPTANCE_CONTRACT, 4x INPUT, 6x SOURCE, UNITS, RESULT. The package is built from the frozen rows; tracing twice writes nothing (artifact and execution counts unchanged, identical trace document). Refused by name: a fixture registered as a computation, a missing input artifact row, a missing readable source row, a missing execution, an execution not naming the result, claimed bytes differing from the stored bytes, a criteria digest differing from the frozen acceptance contract, unfrozen criteria, a package built from other scientific terms, a contract not in the project, a result naming another package, an edited manifest digest, and a cross-package result. On freeze ordering, the production DAG gate (src/ravel/domain/dag.py:285-290) already refuses RUNNING for COMPUTATION/EXPERIMENT nodes without frozen acceptance criteria, and the ledger adds a second check that the acceptance contract was not frozen after the result artifact version (src/ravel/compute/raspa/ledger.py:317). Independent rerun: all 16 AC3 cases passed on the isolated database."
+    },
+    {
+      "id": "T10-AC4",
+      "result": "PASS",
+      "evidence": "tests/premium/T10/test_ac4_scope.py, 7 cases, all passing. There is one route, raspa/gcmc-gas-adsorption; the support matrix names real_run_task T25, real_run_status BLOCKED_EXTERNAL, a concrete blocker and unlock, and evidence_scope 'implementation and deterministic verification only; no real RASPA execution is claimed by T10'. The unsupported methods are named rather than implied. Building a package with subprocess.run and Popen monkeypatched to raise still succeeds, so package construction executes no process. Every manifest carries the external blocker. The official output is evidence only and is labelled REFERENCE_FIXTURE/SIMULATED; a synthetic output is TEST_FIXTURE/SIMULATED; SourceKind is a closed vocabulary and a fixture can never produce COMPUTATION. The retained failed run run-20261020-123832 has preflight_exit 1, empty commands and blocked_reason 'preflight failed'; it is a backend preflight failure, not a product result, and the tasklog records the Docker-socket cause. The PASS gate run-20261020-124002 records source_commit 5bf73b5, the same source_digest as the candidate, and 140 JUnit tests with 0 failures, 0 errors and 0 skipped."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T10/run-20261020-124002/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "src/ravel/compute/raspa/parser.py",
+      "line": 425,
+      "trigger": "An output whose temperature, pressure and seed match the frozen contract but whose 'Number of cycles' or 'Number of initializing cycles' lines state different values. state_ok (lines 394-398) compares only T, P and seed; cycles and initialization are parsed at lines 425-427 and copied into the result but never compared to contract.cycles or contract.initialization_cycles. A text-edited official output, or an output from a different simulation.input at the same state point and seed, is classified NORMAL.",
+      "impact": "The frozen contract makes cycles and initialization_cycles required scientific terms and the generated simulation.input fixes them. The parser and the ledger trace will nonetheless accept a result from a different run length, with different statistics and a different job than the one reviewed, as a NORMAL result of this contract. AC2 remains met as written because the card requires the three classifications and the package-side tamper checks, and because the parser records the actual cycles in the result document; but T25 must not wire this parser into a real run without closing the comparison.",
+      "acceptance_id": "T10-AC2",
+      "required_fix": "Compare the parsed cycles and initialization cycles to contract.cycles and contract.initialization_cycles, either in state_ok or in a dedicated sampling_matches_contract ResultCheck, and add a test that edits the cycle lines of the official fixture and expects SOFTWARE_FAILURE or a named refusal.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/compute/raspa/ledger.py",
+      "line": 317,
+      "trigger": "_acceptance compares acceptance.frozen_at to the result artifact version's created_at, not to the execution's started_at, although ExecutionRecord.started_at is available. The branch is not covered by a test: test_criteria_written_to_fit_the_result is refused earlier on the criteria digest, and no test constructs a frozen-after-start ordering.",
+      "impact": "The production DAG already prevents the stated requirement: can_enter_running (src/ravel/domain/dag.py:285-290) refuses RUNNING for a COMPUTATION or EXPERIMENT node without frozen acceptance, so criteria are frozen before a run in the production path. The trace's own ordering audit is weaker than that invariant and would accept criteria frozen after raw output existed if it were ever called outside the DAG gate. Defense-in-depth only, with no effect on T10-AC3 as the production path stands.",
+      "acceptance_id": "T10-AC3",
+      "required_fix": "Pass ExecutionRecord.started_at into _acceptance and require acceptance.frozen_at <= started_at (or record the DAG transition as the explicit guard in the trace), and add a database test that freezes acceptance after execution start but before the result artifact version.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/compute/raspa/parser.py",
+      "line": 360,
+      "trigger": "parse_raspa_output receives the contract and package digest but not the package manifest, and takes its min_blocks, maximum relative standard error and numeric relative tolerance from the module-level CONVERGENCE_POLICY (src/ravel/compute/raspa/package.py:101). The package pins its own convergence section and parser schema digest, and trace_result compares units and contract digests but never compares the result's convergence section to the manifest's. If the code policy changes after a package is built, the same output is evaluated and recorded under a different policy than the one the package fixed.",
+      "impact": "The package claim that these standards were fixed before the run is not enforced at parse time or at trace time. A future policy-version bump silently re-scores outputs for older packages. No T10 test can catch this because package and parser share the same constants.",
+      "acceptance_id": "T10-AC2",
+      "required_fix": "Pass the package manifest or its convergence section to parse_raspa_output, verify policy_version and the four thresholds against it, record the manifest's values in the result, and have trace_result compare result.convergence to manifest.convergence; add a test that builds a package with a different policy_version and confirms the parser or trace refuses it.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/compute/raspa/ledger.py",
+      "line": 492,
+      "trigger": "trace_result takes project_id and node_id as separate arguments and never compares manifest['project_id'] or manifest['node_id'] to them. _verify_manifest checks only the package digest, so a hand-built manifest that names another project or node, with its digest recomputed, traces successfully against the caller's scoped ids.",
+      "impact": "There is no privilege escalation: every row lookup is project-scoped, and the contract, acceptance contract and result artifact are each checked against the caller's node. The trace document would carry a manifest whose embedded identities contradict its refs, which could confuse a later Master or human review. Defense-in-depth.",
+      "acceptance_id": "T10-AC3",
+      "required_fix": "At the start of trace_result, assert manifest['project_id'] == project_id and manifest['node_id'] == node_id, and add a test with a recomputed-digest manifest naming another project or node.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Real RASPA execution is T25 and remains BLOCKED_EXTERNAL. No test or gate claims a real run, and the gate manifest's data_mode=REAL is the runner's hardcoded field for the gate environment, not a real-computation claim.",
+    "The new route is a library-level implementation: no production activity calls build_input_package, probe_environment, parse_raspa_output or trace_result, and the worker registry still registers the older preparation/raspa.py RaspaMaterializer. T10-AC4 scopes this as implementation and deterministic verification only; T25 must wire the probe, package, parser and trace into the real start and Review paths.",
+    "The package fixes RASPA 2.0.x and the reference-data digests but does not require a specific binary SHA-256. probe_environment supports expected_binary_sha256, but no production caller supplies it; T25 should pin the binary digest so a rebuild cannot silently change the numerics.",
+    "The convergence policy (5 blocks, relative standard error <= 0.05, numeric relative tolerance 1e-6) is a RAVEL-provisional threshold, marked PROVISIONAL and not literature-derived in package.py. The contract/CONTRACTS expectation that tolerances come from real Research or the frozen contract is not yet satisfied; T25 must either justify these values or move them into the frozen acceptance contract before a real result is reviewed.",
+    "The reference output fixture was written by RASPA 2.0.45 (as its own version line says) while the pinned repository tag is v2.0.47. Both are in the supported 2.0 series and the fixture is SIMULATED, but the exact build behind the official output cannot be proven from the repository alone.",
+    "The retained failed-run evidence (evidence/T10/run-20261020-123832) records only preflight_exit 1, empty commands and blocked_reason 'preflight failed'. The Docker-socket diagnosis is in the tasklog, not in the manifest or a captured preflight log, so the retained evidence does not independently distinguish an environment failure from a product failure.",
+    "The official MFI_SI.cif is a 1987 literature structure redistributed under the RASPA2 repository's MIT COPYING. Its citation is recorded in the source record and in the CIF header; third-party provenance of the underlying structure beyond that citation is not independently established by this review.",
+    "The source_digest could not be recomputed with the repository helper in this Windows checkout because ravel was not importable without the canonical container, so I reimplemented the T01 algorithm with git ls-tree and SHA-256. HEAD ab1834d, 5bf73b5 and 6961d78 all hash to 0f2c5dadcd3d3ef12b84df7ae7857d419b9236286ab0e006a27cebb7c6253748, and base 9c58f3d hashes to cdce7151e478ff0c83ff6a8aaeb82cc94bf4f15ac2642a019ad934473b481864, matching the gate manifest's claim for the candidate tree.",
+    "Independent gate reproduction at candidate ab1834d: alembic upgrade head on the isolated ravel_t10_review_test database exited 0; pytest tests/premium/T10 reported 140 passed in 13.93 s with JUnit tests=140, failures=0, errors=0, skipped=0; make lint reported ruff 'All checks passed!' and pyright '0 errors, 0 warnings, 0 informations'. The t10-build container was started with core.autocrlf=true and the worktree was clean at that HEAD."
+  ],
+  "integration_candidate": true
+}

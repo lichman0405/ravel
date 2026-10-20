@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/compute/raspa_result.schema.json",
+  "title": "RAVEL RASPA GCMC result document",
+  "description": "The parser's output for one RASPA output file. The status separates software failure from non-convergence from a normal result; the evidence class separates a real execution (COMPUTATION) from the official reference output or a synthetic fixture (SIMULATED). Values carry the units they were parsed in.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "route_id",
+    "method",
+    "software",
+    "package_sha256",
+    "scientific_contract_sha256",
+    "execution_contract",
+    "status",
+    "reason",
+    "source",
+    "state_point",
+    "sampling",
+    "blocks",
+    "loading",
+    "conversions",
+    "units",
+    "convergence",
+    "warnings",
+    "output"
+  ],
+  "properties": {
+    "schema": {"const": "ravel.raspa.result/1"},
+    "route_id": {"const": "raspa/gcmc-gas-adsorption"},
+    "method": {"const": "GCMC"},
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "version_series"],
+      "properties": {
+        "name": {"const": "RASPA"},
+        "version": {"type": ["string", "null"]},
+        "version_series": {"type": ["string", "null"]}
+      }
+    },
+    "package_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scientific_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_ref", "contract_version"],
+      "properties": {
+        "contract_ref": {"type": "string", "minLength": 1},
+        "contract_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "status": {"enum": ["NORMAL", "NON_CONVERGED", "SOFTWARE_FAILURE"]},
+    "reason": {"type": "string"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "evidence_class", "evidence_reason"],
+      "properties": {
+        "kind": {"enum": ["REAL_RUN", "REFERENCE_FIXTURE", "TEST_FIXTURE"]},
+        "evidence_class": {"enum": ["COMPUTATION", "SIMULATED"]},
+        "evidence_reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "state_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature_k", "pressure_pa", "seed"],
+      "properties": {
+        "temperature_k": {"type": ["number", "null"]},
+        "pressure_pa": {"type": ["number", "null"]},
+        "seed": {"type": ["integer", "null"]}
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cycles", "initialization_cycles"],
+      "properties": {
+        "cycles": {"type": ["integer", "null"]},
+        "initialization_cycles": {"type": ["integer", "null"]}
+      }
+    },
+    "blocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "values"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "values": {
+          "type": "array",
+          "items": {"type": "number"}
+        }
+      }
+    },
+    "loading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["molecules_per_unit_cell", "mol_per_kg", "mg_per_g"],
+      "properties": {
+        "molecules_per_unit_cell": {"$ref": "#/$defs/estimate"},
+        "mol_per_kg": {"$ref": "#/$defs/estimate"},
+        "mg_per_g": {"$ref": "#/$defs/estimate"}
+      }
+    },
+    "conversions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mol_per_kg_per_molecule_per_unit_cell", "mg_per_g_per_molecule_per_unit_cell"],
+      "properties": {
+        "mol_per_kg_per_molecule_per_unit_cell": {"type": ["number", "null"]},
+        "mg_per_g_per_molecule_per_unit_cell": {"type": ["number", "null"]}
+      }
+    },
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "pressure", "loading_primary", "loading_secondary", "seed"],
+      "properties": {
+        "temperature": {"const": "K"},
+        "pressure": {"const": "Pa"},
+        "loading_primary": {"const": "mol/kg framework"},
+        "loading_secondary": {"const": "molecules/unit cell"},
+        "seed": {"const": "dimensionless"}
+      }
+    },
+    "convergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "min_blocks",
+        "max_relative_standard_error",
+        "numeric_relative_tolerance",
+        "converged",
+        "checks"
+      ],
+      "properties": {
+        "policy_version": {"type": "string", "minLength": 1},
+        "min_blocks": {"type": "integer", "minimum": 1},
+        "max_relative_standard_error": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "numeric_relative_tolerance": {"type": "number", "exclusiveMinimum": 0},
+        "converged": {"type": "boolean"},
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "passed", "detail"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "passed": {"type": "boolean"},
+              "detail": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "warnings": {"type": ["integer", "null"]},
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "estimate": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["mean", "standard_error", "relative_standard_error"],
+      "properties": {
+        "mean": {"type": "number"},
+        "standard_error": {"type": "number", "minimum": 0},
+        "relative_standard_error": {"type": ["number", "null"], "minimum": 0}
+      }
+    }
+  }
+}
