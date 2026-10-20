@@ -1,0 +1,82 @@
+{
+  "task": "T14",
+  "kind": "windows-electron-evidence",
+  "started_at": "2026-10-20T05:43:32.781Z",
+  "completed_at": "2026-10-20T05:43:34.156Z",
+  "platform": "win32",
+  "versions": {
+    "electron": "44.9.1",
+    "playwright_core": "1.64.1",
+    "node": "26.7.0",
+    "windows": "10.0.26300"
+  },
+  "account": {
+    "username": "desktop-owner"
+  },
+  "gateway_origin": "http://127.0.0.1:65119",
+  "data_mode": "REAL",
+  "checks": {
+    "window": {
+      "title": "RAVEL",
+      "url": "file:///C:/Users/lishi/code/ravel-worktrees/T14/apps/desktop/dist/renderer/index.html",
+      "visible": true
+    },
+    "renderer": {
+      "require": "undefined",
+      "process": "undefined",
+      "module": "undefined",
+      "Buffer": "undefined",
+      "bridge": [
+        "connection",
+        "listProjects",
+        "login",
+        "logout",
+        "onConnectionStatus",
+        "reconnect",
+        "session",
+        "version"
+      ]
+    },
+    "safe_storage": {
+      "available": true,
+      "platform": "win32"
+    },
+    "wrong_password": {
+      "rejected": true,
+      "message": "The username or password is not correct.",
+      "session_file_absent": true
+    },
+    "login": {
+      "authenticated": true,
+      "project_title": "Catalyst screen",
+      "project_visible": true,
+      "status": "Connected"
+    },
+    "session_file": {
+      "envelope_keys": [
+        "ciphertext",
+        "format",
+        "version"
+      ],
+      "size": 682,
+      "contains_plaintext_token": false,
+      "refresh_fingerprint": "82e6a9d8e719b520"
+    }
+  },
+  "screenshots": [
+    {
+      "name": "01-login",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-134332/screenshots/01-login.png",
+      "sha256": "340f216d0589769996dd7d89031c1f6579572112db15429eef997c772c1a1ee4",
+      "size": 40433
+    },
+    {
+      "name": "02-authenticated",
+      "ref": "docs/premium/evidence/T14/windows-electron-20261020-134332/screenshots/02-authenticated.png",
+      "sha256": "e9212321335dfb791671726e1c79878d0050bc7afe4bf8c838d4a241af3aac95",
+      "size": 39662
+    }
+  ],
+  "result": "FAIL",
+  "error": "page.evaluate: ReferenceError: Cannot access 'window' before initialization\n    at eval (eval at evaluate (:370:30), <anonymous>:2:22)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+}
