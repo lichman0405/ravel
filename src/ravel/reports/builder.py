@@ -408,7 +408,19 @@ def _claim_conflicts(
         and resolved[evidence_id].execution_type is EvidenceExecutionType.SIMULATED
     }
     simulated_refs = _simulated_execution_refs(index, execution_refs)
-    if claim_request.claim_type is ClaimClass.FACT and (simulated_evidence or simulated_refs):
+    simulated_node: dict[str, dict[str, Any]] = {}
+    if (
+        claim_request.claim_type is ClaimClass.FACT
+        and claim_request.execution_node_id is not None
+        and not execution_refs
+    ):
+        # A FACT can name the node and its count instead of naming the run.
+        # The node's executions are then what the claim rests on, so they get
+        # the same backend and backend-job checks an explicit ref would get.
+        simulated_node = _simulated_node_executions(index, claim_request.execution_node_id)
+    if claim_request.claim_type is ClaimClass.FACT and (
+        simulated_evidence or simulated_refs or simulated_node
+    ):
         conflicts.append(
             _conflict(
                 ReportConflictCode.SIMULATED_AS_FACT,
@@ -421,8 +433,13 @@ def _claim_conflicts(
                     "statement": claim_request.statement,
                     "evidence_ids": list(cited),
                     "execution_refs": list(execution_refs),
+                    "execution_node_id": claim_request.execution_node_id,
                 },
-                original_record={**simulated_evidence, **simulated_refs},
+                original_record={
+                    **simulated_evidence,
+                    **simulated_refs,
+                    **simulated_node,
+                },
             )
         )
 
@@ -575,7 +592,10 @@ def _simulated_execution_refs(
     Simulatedness is not only a property of the evidence a claim lists. A
     claim can name an execution instead, and that execution can be a mock
     backend or can point at a mock backend job. Both are checked; a FACT that
-    rests on either is a simulated result presented as a fact.
+    rests on either is a simulated result presented as a fact. A claim that
+    names a node rather than an execution is handled by
+    `_simulated_node_executions`, which feeds that node's ledger executions
+    through this same check.
     """
     simulated: dict[str, dict[str, Any]] = {}
     for execution_id in execution_refs:
@@ -601,6 +621,20 @@ def _simulated_execution_refs(
             "non_real": reasons,
         }
     return simulated
+
+
+def _simulated_node_executions(index: LedgerIndex, node_id: str) -> dict[str, dict[str, Any]]:
+    """The node's executions, and their backend jobs, that are mocks.
+
+    A FACT may cite a node (optionally with a count) and no execution id. The
+    runs recorded against that node are then its basis, so none of them may be
+    simulated. Ids are sorted so two reports over one ledger render the same
+    conflict regardless of the order the rows were read in.
+    """
+    execution_ids = tuple(
+        sorted(execution.execution_id for execution in index.executions_for_node(node_id))
+    )
+    return _simulated_execution_refs(index, execution_ids)
 
 
 def _data_mode(index: LedgerIndex, evidence_refs: tuple[ReportEvidenceRef, ...]) -> ReportDataMode:
