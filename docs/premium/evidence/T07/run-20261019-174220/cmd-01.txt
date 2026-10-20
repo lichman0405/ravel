@@ -1,0 +1,5 @@
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade d1b8e4f6a2c9 -> 7e4c1b2a9d3f, account deactivations, recorded rather than overwritten

@@ -25,62 +25,6 @@
       "branch": "cc/T09-hpc-targets",
       "granted_at": "2026-10-19 Asia/Shanghai",
       "release_condition": "T09 integrated"
-    },
-    {
-      "path": "Makefile",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "pyproject.toml",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "docs/premium/acceptance-map.json",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "docs/premium/legacy-inventory.json",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "docs/premium/baseline-results.json",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "docs/premium/environment-mapping.json",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
-    },
-    {
-      "path": "docs/premium/tasklogs/T01.md",
-      "task_id": "T01",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T01-environment-gates",
-      "granted_at": "2026-10-17 13:40 Asia/Shanghai",
-      "release_condition": "T01 integrated"
     }
   ],
   "shared_paths": [
@@ -102,8 +46,8 @@
   ],
   "database_tests": {
     "mode": "SYSTEM_WIDE_EXCLUSIVE",
-    "lock_path": "/tmp/ravel-premium-locks/database-<hash>.lock",
-    "holder": "T01 task runner (per-run)"
+    "lock_path": "<git-common-dir>/../.ravel-test-locks/database-<sha256-prefix>.lock (override RAVEL_PREMIUM_LOCK_DIR)",
+    "holder": "the pytest process that owns the database fixture"
   },
   "lock_shape": {
     "path": null,

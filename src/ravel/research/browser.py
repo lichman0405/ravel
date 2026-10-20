@@ -29,6 +29,15 @@ points at the host's own network. Chromium issues all of those itself, so the
 check on the URL handed to `open` is not enough — the context installs a route
 handler that validates every request the browser makes, which is the same fix
 the fetcher applies at the transport. See `addressing` for what the policy is.
+
+**The browser is fail-closed until it can be isolated.** A route handler can
+refuse a URL, but it cannot pin the address Chromium's own resolver and socket
+use, and it cannot contain what a compromised renderer reads from the host.
+RAVEL therefore refuses to start Playwright at all unless a configured sandbox
+provider is one this build implements (`_require_sandbox` and
+`BOUND_SANDBOX_PROVIDERS`). The set is empty until T19 binds an isolated,
+egress-filtered sandbox; before that, research uses the HTTP/API paths, which
+are pinned.
 """
 
 from __future__ import annotations
@@ -66,6 +75,15 @@ _INSTALL_HINT = (
     "on a host without passwordless sudo an administrator has to run it"
 )
 
+#: Sandbox providers this build can confine Chromium with. Empty on purpose:
+#: Playwright makes its own connections, examines its own DNS, and reads its own
+#: files, so `addressing` can refuse a URL but cannot pin the address the
+#: browser process actually connects to. Until T19 binds a provider that runs
+#: Chromium inside an isolated, egress-filtered sandbox, no provider is
+#: compliant and the browser path is closed. Naming one in configuration is not
+#: the same as implementing it, so an unknown name is refused too.
+BOUND_SANDBOX_PROVIDERS: frozenset[str] = frozenset()
+
 
 class BrowserUnavailable(RuntimeError):
     """A browser could not be started.
@@ -87,6 +105,41 @@ class BrowserPolicy:
     #: access-limited rather than read. RAVEL reads what a page says; it does
     #: not solve challenges to get there.
     respect_challenges: bool = True
+
+
+def _require_sandbox(settings: Settings) -> None:
+    """Refuse to launch a browser that has no isolation behind it.
+
+    Checked in the public entry points, after the URL has been refused or
+    accepted by `addressing` and before Playwright is imported or a worker
+    thread is asked for anything. The ordering is deliberate: an unsafe URL is
+    a decision about the URL and is reported as `UnsafeURL` whether or not a
+    browser exists, while a safe URL on an unbound deployment is a browser that
+    must not start.
+
+    The provider name is configuration, not an implementation. Only a name this
+    build knows how to run under is accepted, and this build knows none until
+    T19 supplies the adapter; a typo therefore closes the path rather than
+    opening it.
+
+    Raises:
+        BrowserUnavailable: No sandbox provider is configured, or the named one
+            is not implemented by this build.
+    """
+    provider = (settings.research_browser_sandbox_provider or "").strip().casefold()
+    if not provider:
+        raise BrowserUnavailable(
+            "browser retrieval is disabled: RAVEL has no sandbox around Chromium, "
+            "so starting one on this host would make requests RAVEL cannot pin or "
+            "filter. Controlled HTTP/API research remains available; T19 binds a "
+            "sandbox provider and re-certifies browser egress"
+        )
+    if provider not in BOUND_SANDBOX_PROVIDERS:
+        raise BrowserUnavailable(
+            f"browser retrieval is disabled: {provider!r} is not a sandbox provider "
+            "implemented by this build. Configuring a name does not create the "
+            "isolation; T19 has to bind one"
+        )
 
 
 class BrowserNavigator:
@@ -114,8 +167,8 @@ class BrowserNavigator:
         """Navigate to a URL and read the rendered document.
 
         Raises:
-            BrowserUnavailable: Chromium could not be started, or the
-                navigation failed.
+            BrowserUnavailable: No compliant sandbox provider is bound, or
+                Chromium could not be started, or the navigation failed.
             addressing.UnsafeURL: The URL, or a URL the page navigated to
                 itself, is one RAVEL will not navigate to. The URL RAVEL was
                 given is refused from the calling thread, before the browser is
@@ -124,6 +177,7 @@ class BrowserNavigator:
                 route handler that checks every request the page makes.
         """
         addressing.guard(url, resolver=self.resolver)
+        _require_sandbox(self.settings)
         return self._on_worker(lambda: self._open(url))
 
     def links(self, url: str, *, limit: int = 50) -> list[str]:
@@ -134,10 +188,13 @@ class BrowserNavigator:
         order, so the caller can prefer what the page itself put first.
 
         Raises:
+            BrowserUnavailable: No compliant sandbox provider is bound, so the
+                browser is not started.
             addressing.UnsafeURL: The URL, or a URL the page navigated to
                 itself, is one RAVEL will not navigate to.
         """
         addressing.guard(url, resolver=self.resolver)
+        _require_sandbox(self.settings)
         return self._on_worker(lambda: self._links(url, limit))
 
     def close(self) -> None:

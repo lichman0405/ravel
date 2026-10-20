@@ -124,8 +124,13 @@ class _PinnedBackend(httpcore.SyncBackend):
     ) -> httpcore.NetworkStream:
         """Connect to the host, at an address that was checked first."""
         addresses = addressing.address_for(host, self._resolver)
-        if not addresses:  # pragma: no cover - connect_tcp is never given a bare name
-            raise addressing.UnsafeURL(host, "no address to connect to")
+        if not addresses:
+            # The name does not resolve. That is a fact about the network rather
+            # than a decision RAVEL made, so it is reported as the transport
+            # failure it is — `addressing.resolve` documents the same rule, and
+            # `Fetcher` turns this into an ACCESS_LIMITED retrieval rather than
+            # raising past a caller that is written to record one.
+            raise httpcore.ConnectError(f"could not resolve {host}")
         return super().connect_tcp(
             addresses[0],
             port,

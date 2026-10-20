@@ -63,6 +63,8 @@ any future one file bytes through.
 from __future__ import annotations
 
 import logging
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -72,6 +74,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from temporalio.exceptions import TemporalError
 
+from ravel.domain.artifacts import unusable_filename_reason
 from ravel.domain.dag import DagNode
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.lab import LabHandover
@@ -79,7 +82,11 @@ from ravel.domain.preparation import PreparationRecord
 from ravel.domain.roles import AgentRole
 from ravel.execution.temporal.contracts import ExternalResult
 from ravel.gateway.deps import GatewayState, GatewayStateDep, PrincipalDep
-from ravel.gateway.routes.artifacts import MAX_UPLOAD_BYTES, artifact_store
+from ravel.gateway.routes.artifacts import (
+    CHUNK_BYTES,
+    UploadTooLarge,
+    artifact_store,
+)
 from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
@@ -97,6 +104,13 @@ from ravel.state.repositories.records import (
 from ravel.state.store import ArtifactStoreError
 
 logger = logging.getLogger(__name__)
+
+
+def _file_chunks(path: Path) -> Iterator[bytes]:
+    """Read a spooled upload in bounded slices, so the store never sees it whole."""
+    with path.open("rb") as handle:
+        while chunk := handle.read(CHUNK_BYTES):
+            yield chunk
 
 router = APIRouter(prefix="/projects", tags=["lab"])
 
@@ -499,50 +513,84 @@ async def upload_output(
             is over the cap. 502 if the store refused the bytes. 503 if the
             deployment has no store at all.
     """
+    if filename:
+        reason = unusable_filename_reason(filename)
+        if reason is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"this filename cannot name an artifact: {reason}",
+            )
+
+    limit = state.settings.gateway_upload_limit_bytes
     declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+    if declared is not None and declared.isdigit() and int(declared) > limit:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"this deployment accepts uploads up to {MAX_UPLOAD_BYTES} bytes",
-        )
-    body = await request.body()
-    if len(body) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"this deployment accepts uploads up to {MAX_UPLOAD_BYTES} bytes",
+            detail=f"this deployment accepts uploads up to {limit} bytes",
         )
 
     store = artifact_store(state)
+    temporary = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        mode="w+b", prefix="ravel-lab-upload-", suffix=".body", delete=False
+    )
+    temporary_path = Path(temporary.name)
     try:
-        with state.database.transaction() as session:
-            node = _experiment_node(session, standing.project_id, task_id)
-            handover = _owed_handover(session, standing.project_id, node)
-            if not handover.answers(output):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        f"this handover owes no output called {output!r}; it owes "
-                        f"{list(handover.required_outputs)}. An upload answers a "
-                        "name the contract required, and a file that answers "
-                        "nothing is not part of a delivery."
-                    ),
+        stream = request.stream()
+        try:
+            async for chunk in stream:
+                if not chunk:
+                    continue
+                if temporary.tell() + len(chunk) > limit:
+                    raise UploadTooLarge(limit)
+                temporary.write(chunk)
+        finally:
+            await stream.aclose()
+        temporary.flush()
+        temporary.close()
+
+        try:
+            with state.database.transaction() as session:
+                node = _experiment_node(session, standing.project_id, task_id)
+                handover = _owed_handover(session, standing.project_id, node)
+                if not handover.answers(output):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"this handover owes no output called {output!r}; it owes "
+                            f"{list(handover.required_outputs)}. An upload answers a "
+                            "name the contract required, and a file that answers "
+                            "nothing is not part of a delivery."
+                        ),
+                    )
+                artifact, version = record_upload(
+                    session,
+                    store,
+                    handover,
+                    output=output,
+                    chunks=_file_chunks(temporary_path),
+                    uploaded_by=standing.user_id,
+                    filename=filename,
+                    media_type=media_type or _media_type(filename),
                 )
-            artifact, version = record_upload(
-                session,
-                store,
-                handover,
-                output=output,
-                chunks=[body],
-                uploaded_by=standing.user_id,
-                filename=filename,
-                media_type=media_type or _media_type(filename),
+                answered = arrived_outputs(session, handover)
+        except ArtifactStoreError as refused:
+            logger.warning(
+                "lab upload to project %s failed in the store: %s",
+                standing.project_id,
+                type(refused).__name__,
             )
-            answered = arrived_outputs(session, handover)
-    except ArtifactStoreError as refused:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="the artifact store refused the upload",
+            ) from refused
+    except UploadTooLarge as too_big:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"the artifact store refused the upload: {refused}",
-        ) from refused
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"this deployment accepts uploads up to {too_big.limit} bytes",
+        ) from too_big
+    finally:
+        temporary.close()
+        temporary_path.unlink(missing_ok=True)
 
     names = tuple(name for name, _artifact in answered)
     delivered, note = await _tell_the_run(

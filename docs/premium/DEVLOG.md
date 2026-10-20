@@ -39,6 +39,4 @@
 | 2026-10-19 Asia/Shanghai | Supervisor | B01/B02/B05 | 用户确认当前无真实MinIO、VM、HPC集群、真人实验、邮箱、专用VM池；DeepSeek key稍后提供 | BLOCKERS记录；T24–T29保持BLOCKED_EXTERNAL | 做无外部依赖任务 |
 | 2026-10-19 Asia/Shanghai | Supervisor | B03 | `*.sh text eol=lf` 修复shell CRLF；unit行1104 passed/2 skipped，PARTIALLY_CERTIFIED（systemd-analyze缺失） | .gitattributes commit 7975bbd，独立Review APPROVE；integration ff到f283f4c | 完整gate仍待B01/B02/B05 |
 | 2026-10-19 Asia/Shanghai | Supervisor | T07 | 派发Gateway安全任务；无外部资源依赖部分先实现 | T07 worktree，base be3866f | 独立Review |
-
-
-
+| 2026-10-20 Asia/Shanghai | Supervisor | T07 | 集成候选 merge b1ff5ab；容器门禁 run-20261020-103132 PASS（147 tests、lint 0、alembic head）；lab handover 17 passed；ff-only 推进 integration | integration HEAD 5de11b0；PROGRESS/T07=DONE（reviews/T07/1.json，source_digest 7cb2339e…）；8/30 DONE；T01/T07 文件锁释放 | 继续 T09 P1 修复 |
