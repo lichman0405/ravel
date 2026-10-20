@@ -1440,7 +1440,7 @@
         "make premium-task TASK=T13"
       ],
       "classification": "internal",
-      "status": "RUNNING",
+      "status": "DONE",
       "test_nodeids": [
         "tests/premium/T13/test_contract.py::test_the_published_v1_surface_matches_the_contract",
         "tests/premium/T13/test_contract.py::test_no_route_in_the_schema_can_write_the_scientific_dag",
