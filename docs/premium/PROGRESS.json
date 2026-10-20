@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "c59afb8",
+  "integration_head_sha": "f55602b",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -197,20 +197,23 @@
       "note": "T10 DONE：独立 review 1 APPROVE（reviews/T10/1.json，AC1–AC4 PASS）；任务门禁 run-20261020-124002 PASS（140 tests、alembic+lint 0）；集成候选 dca222f 门禁 run-20261020-130340 PASS（source digest 与 review 一致）；ff-only 合入 integration。真实 RASPA 运行仍为 BLOCKED_EXTERNAL(B05/T25)。P2：parser 的 state_ok 未把输出 cycles 与 contract cycles 比较，已列为 T25 实现前置条件（T25 必须补齐并加回归）；P3：ledger 冻结时间、收敛策略归属、trace identity 检查为 advisory。"
     },
     "T11": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T11",
       "base_sha": "9c58f3d",
-      "head_sha": "9c58f3d",
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
+      "head_sha": "27fec7d",
+      "source_digest": "278d5847348cf7cbd56df631093c338f9cd3a096c99155c8b26d84261fde702a",
+      "review_ref": "reviews/T11/2.json",
+      "gate_refs": [
+        "evidence/T11/run-20261020-132714/manifest.json",
+        "evidence/T11/run-20261020-135028/manifest.json"
+      ],
+      "integration_merge_sha": "918e003",
       "blocker_refs": [
         "B05"
       ],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T11 已派发；base 9c58f3d；边界：backends/lab/**、routes/lab.py、preparation/lab.py、domain/state（锁）、tests/premium/T11/**；真实真人实验属 T26（BLOCKED_EXTERNAL B05），等待实现、门禁与独立 Review。"
+      "note": "T11 DONE：review 1 FIX_REQUIRED 后修复 P1（无 handover 时 provenance 字段 409 拒绝；有 handover 时 append-only lab_deviation_links 显式链接）与 P2（SIMULATED 使用 mock-human-lab，T12 分类为 SIMULATED；REAL 仍为 human-lab；未改 T12 文件）；独立 review 2 APPROVE（reviews/T11/2.json，AC1–AC4 PASS）；任务门禁 run-20261020-132714 PASS（34 tests、alembic+lint 0）；集成候选 918e003 门禁 run-20261020-135028 PASS；ff-only 合入 integration。P3：并发首次上传可重复 artifact/event，已记录为 known gap。真实真人实验仍 BLOCKED_EXTERNAL(B05/T26)。"
     },
     "T12": {
       "status": "DONE",
