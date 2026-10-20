@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task_id": "T12",
+  "attempt": 3,
+  "reviewer_id": "independent-T12-AC1-AC4",
+  "base_sha": "96f15c0",
+  "candidate_sha": "74d4c42",
+  "source_digest": "57ad559b24e528cc9e7a70dc294c77750ea50ea2e36b5d808ff7de0da80da842",
+  "reviewed_at": "2026-10-20 11:54 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T12-AC1",
+      "result": "PASS",
+      "evidence": "Classification remains provenance-derived and unchanged: classify() resolves evidence, then source, then execution, then artifact; ReportRequest/EvidenceRequest/ClaimRequest still have no data_mode or execution_type field and reject extra kwargs; the six typing tests pass. The new node check derives simulatedness from the node's actual ledger execution rows and backend jobs (builder.py:626-638), never from a caller label, and the report's data_mode is still derived from provenance. No path lets a caller relabel simulated output as a real measurement or computation."
+    },
+    {
+      "id": "T12-AC2",
+      "result": "PASS",
+      "evidence": "Review-2 finding F7 is fixed. For a FACT claim with execution_node_id and no execution_refs, _simulated_node_executions (builder.py:626-638) enumerates every execution of that node in the project ledger, sorted by execution_id for determinism, and delegates to the same _simulated_execution_refs check (builder.py:587-623) used for explicit refs: it tests the execution backend and the backend job's backend. Any simulated row produces SIMULATED_AS_FACT with the node id in asserted and each original execution's backend, backend_job_backend and non_real reasons in original_record; the claim is not persisted and certified_json() raises. The check is independent of execution_count and evidence_ids (the predicate at builder.py:411-420 depends only on FACT, node presence and empty refs), so count=0, count=None and claims mixing evidence_ids are still checked; a simulated evidence adds simulated_evidence to the same conflict, a real evidence plus a mock node still conflicts, an unknown node still gets FABRICATED_EXECUTION, and explicit execution_refs (with their backend jobs) retain the review-1 F2 checks while the wrong-node/count checks are unchanged. Regression tests: test_a_counted_fact_on_a_mock_node_is_a_conflict (node + count=1, mock-compute execution -> SIMULATED_AS_FACT, data_mode SIMULATED, claims empty, export refused) and test_a_node_only_fact_on_a_mock_backend_job_is_a_conflict (node only, slurm execution pointing at a mock-compute job -> SIMULATED_AS_FACT, data_mode MIXED, claims empty, export refused). All earlier closures remain: MISSING_CITATION for every uncited claim type; execution-ref/backend-job simulatedness; unknown execution nodes; evidence-level FABRICATED_SOURCE for missing source refs; deterministic review ordering by (created_at, review_id); conflicts persisted with asserted/actual/original records and no failed claim row written. The gate run has 34 tests (2 new) with 0 failures/errors/skips, and its 34 JUnit nodeids are exactly the acceptance map's 34 nodeids (no diff in either direction). Independently re-ran the T12 suite in the canonical container: 34 passed, exit 0; make lint clean (ruff all checks passed; pyright 0 errors/0 warnings/0 informations)."
+    },
+    {
+      "id": "T12-AC3",
+      "result": "PASS",
+      "evidence": "The fix changes only builder.py and tests; no tables, columns, constraints, guards or migration were modified. MISSING_CITATION remains a new ReportConflictCode value stored in the existing scientific_reports.conflicts JSONB, and alembic still has a single head (a4d2e6f8b1c3). The 34-test gated suite still passes test_report_tables_are_outside_the_updatable_set, test_raw_update_and_delete_are_refused_for_every_report_table and test_reports_and_commentary_are_project_scoped against real PostgreSQL. The PASS run's alembic command was a no-op because the shared database was already at head; the migration blob (46d88efd7288101dc920860438dfef8e2b6cb930) is unchanged and was applied 7e4c1b2a9d3f -> a4d2e6f8b1c3 with exit 0 in run-20261020-111136/cmd-01.txt. The report_commentaries composite-FK gap remains advisory and documented in the tasklog."
+    },
+    {
+      "id": "T12-AC4",
+      "result": "PASS",
+      "evidence": "The two new tests write real PostgreSQL rows through the production repositories (a_prepared_node, a_real_execution, a_backend_job); MemoryStore remains the only doubled boundary (ArtifactStore), and no live network usage was added to src/ravel/reports or tests/premium/T12. The PASS manifest records data_mode REAL, external_resources [], database_lock true and exit_code 0. The mock backend/job values are fixture data in real ledger rows, which is the intended compute/lab V0 boundary."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T12/run-20261020-115022/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/tables.py",
+      "line": 1971,
+      "trigger": "report_commentaries has independent foreign keys to scientific_reports.report_id (line 1968) and projects.project_id (line 1971); no constraint ties the commentary's project_id to the report's project_id. Remains open and is documented as advisory in tasklogs/T12.md.",
+      "impact": "A raw insert can create a mismatch. Repository read paths filter commentary by both project_id and report_id after a project-scoped get(), so there is no cross-project disclosure through the canonical path; this is a defense-in-depth gap for future writers, not a blocker for AC3.",
+      "acceptance_id": "T12-AC3",
+      "required_fix": "Add a composite foreign key (report_id, project_id) referencing scientific_reports(report_id, project_id) with a matching unique key, or an equivalent trigger/check.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The PASS gate's alembic command was a no-op on a shared database already at a4d2e6f8b1c3. The migration blob (46d88efd7288101dc920860438dfef8e2b6cb930) is unchanged and was applied 7e4c1b2a9d3f -> a4d2e6f8b1c3 with exit 0 in run-20261020-111136/cmd-01.txt; the T12 gate still has no empty-database migration test.",
+    "data_mode is derived from all project executions, backend jobs and artifacts plus the cited evidence, not only the cited rows, so an unrelated simulated row makes a report SIMULATED/MIXED. The tasklog documents this conservative choice.",
+    "Fixture detection depends on the fixture: / fixture:// provenance convention; later Research/parser tasks must keep writing it for automatic SIMULATED classification.",
+    "No MCP read tool was added (optional in the task card); reads go through ScientificReportRepository.read()/certified_json()/commentary_for().",
+    "The frozen report schema has no fields for conflict details or per-claim execution_refs/node/count. A certified claim citing only an execution or node exports evidence_ids=[] with its basis visible only in report_claims; this is a general verifiability limitation of the frozen export, not a conflict-handling failure.",
+    "The node-wide simulatedness check applies when execution_refs is empty. With explicit refs, those refs and their backend jobs are checked and wrong-node refs are conflicted, but other uncited runs on the same node are not part of the cited basis; statement-level reliance on a particular run is not and cannot be checked by the builder. This is the pre-existing explicit-ref semantics.",
+    "acceptance-map.json still records T12 status PLANNED; the Supervisor updates it at integration (other task entries are likewise stale)."
+  ],
+  "integration_candidate": true
+}
