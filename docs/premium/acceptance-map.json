@@ -920,7 +920,10 @@
         "tests/premium/T09/test_ac4_credentials_and_safety.py::test_collect_refuses_without_an_object_store",
         "tests/premium/T09/test_ac4_credentials_and_safety.py::test_collect_will_not_read_outside_the_targets_root",
         "tests/premium/T09/test_ac4_credentials_and_safety.py::test_collect_reports_an_unlocatable_run_without_guessing",
-        "tests/premium/T09/test_ac4_credentials_and_safety.py::test_collect_reports_a_directory_with_no_submission_record"
+        "tests/premium/T09/test_ac4_credentials_and_safety.py::test_collect_reports_a_directory_with_no_submission_record",
+        "tests/premium/T09/test_ac2_action_quota.py::test_a_run_that_fails_before_acceptance_releases_the_slot",
+        "tests/premium/T09/test_ac2_action_quota.py::test_a_run_that_times_out_before_acceptance_keeps_the_slot",
+        "tests/premium/T09/test_ac2_action_quota.py::test_a_run_that_finishes_before_acceptance_is_not_a_failed_start"
       ],
       "manual_evidence_refs": [
         "tasklogs/T09.md",

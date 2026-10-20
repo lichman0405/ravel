@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "task_id": "T09",
+  "attempt": 2,
+  "reviewer_id": "independent-T09-recheck",
+  "base_sha": "96f15c0",
+  "candidate_sha": "72a4f66",
+  "source_digest": "c93da9b8bcf2111bb323eb52da9cde101027f10d4fb8434e3555f429c115e747",
+  "reviewed_at": "2026-10-20 11:00 Asia/Shanghai",
+  "decision": "FIX_REQUIRED",
+  "acceptance_results": [
+    {
+      "id": "T09-AC1",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac1_idempotency.py, 18 tests. Two concurrent submissions of the same work produce one job and one sbatch (test_two_concurrent_identical_submissions_create_one_job); a lost response with a visible job is adopted; a lost response with no job raises UNKNOWN and the retry does not sbatch again (test_a_lost_response_without_a_visible_job_is_unknown_and_not_resubmitted); a restarted worker adopts the record; unreadable, malformed and unknown-status records never reach sbatch. The new fence holds: with a foreign claim and a PREPARING record the call raises SlurmSubmissionUncertain without changing the record and with sbatch_calls()==0 (test_a_foreign_claim_with_an_existing_preparing_record_is_unknown), and a scheduler-visible job is adopted with sbatch_calls()==1 (test_a_foreign_claim_with_a_visible_job_adopts_it). Gate junit: 102 tests, 0 failures, 0 skips; the suite was re-run at HEAD 72a4f66 and passed (exit 0). Real HPC remains BLOCKED_EXTERNAL (T25)."
+    },
+    {
+      "id": "T09-AC2",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac2_parallel.py, 17 tests: quota=2 submits two and queues the third, release admits the third, quota=1 is serial, UNKNOWN holds a slot, the coordinator quota is min(T06 quota, target max_jobs), join waits only for the named required nodes and reports missing/timeout, and the production ProjectLoop peaks at 2 with concurrency=2 and at 1 with concurrency=1. tests/premium/T09/test_ac2_action_quota.py, 5 tests with the real ActionService, BudgetService and PostgreSQL: an ACCEPTED Action holds the project's one slot until _settle_node_action COMPLETED releases it; FAILED settles as FAILED_CONFIRMED and releases; TIMED_OUT records UNKNOWN and keeps the slot; settlement is idempotent; a terminal Action is ignored. Finding P1 below: a live Action still in CLAIMED is not settled for endings other than COMPLETED, so the review-mandated slot fix is incomplete. Gate junit: 102 tests, 0 failures, 0 skips."
+    },
+    {
+      "id": "T09-AC3",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac3_cancellation_and_states.py, 17 tests: a same-project/same-target job is cancelled; a job from another project or another target gets REFUSED_SCOPE and no scancel; no record is UNKNOWN_JOB; a terminal job is ALREADY_TERMINAL; a refused scancel is REFUSED; partition, account and generic rejections have their own states and are persisted so a retry does not re-ask the scheduler; a sacct delay is SACCT_DELAY and not a job state; absence from both queue and accounting is ABSENT, not success; unknown host key, changed key, missing known_hosts and an authentication fault are distinct. Both workflow cancellation sites use _cancel_job, which passes project_id only to backends whose cancel accepts it."
+    },
+    {
+      "id": "T09-AC4",
+      "result": "PASS",
+      "evidence": "tests/premium/T09/test_ac4_credentials_and_safety.py, 45 tests: support.REAL_HPC is False and the scripted cluster parses the real backend's command strings, so no test claims a real cluster; target document, repr, errors and status never contain the secret; credentials resolve only in the calling process and an unset/empty reference names the variable, not a value; the worker banner and default-target enforcement are covered; absolute/backslash/'..'/empty segments, workspace and entrypoint symlinks, out-of-root collection and software outside the catalog are refused before contact; missing metering is UNKNOWN and never zero; manifest, scheduler log and missing outputs are handled. real_hpc_check.py is not collected by pytest and defaults to BLOCKED_EXTERNAL with exit 3."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T09/run-20261020-104635/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "file": "src/ravel/execution/temporal/activities.py",
+      "line": 1310,
+      "trigger": "A run reaches a terminal state while its Action is still CLAIMED: the acceptance write after context.execution.start did not land (process death or a failed DB write after the start RPC), or a fast/mock run finishes before that write. _settle_node_action handles CLAIMED only when termination is COMPLETED (lines 1310-1314); for FAILED, CANCELLED, DEVIATION and TIMED_OUT it returns at line 1315.",
+      "impact": "The Action stays CLAIMED, which BUDGET_HOLDING_ACTION_STATUSES counts: the run's compute slot and budget reservation are held forever and the attempt stays PENDING. finish_node_run's idempotent early return (the Execution Record was already written) means no retry settles it, and T09 has no other reconciliation caller. For COMPLETED the settlement completes the Action before start_execution's record_accepted, which then raises ActionConflict, so a run that did start is reported to the worker as a failed start. This is the permanent-slot leak the P1 fix was required to close, in the claim/acceptance interleaving.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Settle a CLAIMED Action for every ending: COMPLETED -> record_accepted then complete(actual_cny='0'); FAILED/CANCELLED/DEVIATION -> record_failed_confirmed; TIMED_OUT -> record_unknown. Make start_execution's post-start acceptance write tolerate an Action the run already settled (re-read; if it is no longer CLAIMED, do not raise ActionConflict). Add CLAIMED+FAILED and CLAIMED+TIMED_OUT tests, plus a test for the completion race.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/backends/slurm/backend.py",
+      "line": 1219,
+      "trigger": "The remote claim is created once and never removed. A process that dies after mkdir <remote_dir>.claim and before writing a record (or whose lost sbatch created no job) leaves the claim behind; every later call is claimed=False, probes, finds nothing, and raises SlurmSubmissionUncertain. The SUBMITTING + grace-elapsed resubmission branch (line 610) is reachable only for a record without a claim, a state this backend's own writer never produces; test_a_confirmed_absence_after_the_grace_window_submits_once constructs that state by hand.",
+      "impact": "AC1's safety property (no automatic resubmit while unconfirmed) holds, but an attempt whose sbatch definitely produced no job can never be retried; it stays UNKNOWN until an operator removes the claim directory. The grace-resubmit branch and its test are not production-reachable.",
+      "acceptance_id": "T09-AC1",
+      "required_fix": "Release or rotate the claim when its owner can prove the attempt never landed after both probes and the grace window, or document operator-only recovery and make the test's precondition explicitly an externally cleared claim. If release is added, cover the production-reachable path.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/execution/supervisor.py",
+      "line": 468,
+      "trigger": "A target declares max_jobs smaller than the project's T06 quota (for example max_jobs=1, action_compute_per_project=2) and the project has several READY compute nodes. The supervisor passes only settings.action_compute_per_project to ProjectLoop; parallel_quota(project_quota, target_max_jobs) is used by ParallelSubmissionCoordinator only, and the target backend's submit does not check max_jobs.",
+      "impact": "The production start path can run more concurrent jobs on a target than its allowlisted max_jobs permits. The AC2 tests pass because they exercise the project quota, not a target bound.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Thread the selected target's max_jobs into the production admission/concurrency bound (min(project quota, max_jobs)) or enforce it in the Slurm target backend's submit with its own accounting; test the combined bound at the production boundary.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/execution/backends.py",
+      "line": 585,
+      "trigger": "A deployment runs two compute nodes under a T09 Slurm target. The production loop starts seats concurrently through the T06 quota semaphore, but no Temporal activity or supervisor code calls ParallelSubmissionCoordinator or join_required (only tests import them).",
+      "impact": "The AC2 'join waits only for the required two' behavior and the coordinator's READY/dependency/Review/budget admission checks are implemented and tested but not reachable from the production execution path; the AC2 join evidence is library-level only.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Wire the coordinator/join into the Temporal activity or supervisor path when the Supervisor authorizes that boundary, or record the internal AC2 join evidence as a library contract and keep production wiring as a blocking integration item.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/actions/repository.py",
+      "line": 163,
+      "trigger": "A node has more than one live Action (an older UNKNOWN left by a timed-out run plus a newer run's ACCEPTED Action) and a late or retried finish for the older run settles. live_for_node selects the newest live row for node_id only; it does not filter contract_version, attempt or kind.",
+      "impact": "The settlement could be applied to the newer run's Action using the older run's termination. The single-RUNNING DAG rule and finish_node_run's record-exists early return make this defensive today, but the binding is positional rather than by run identity.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Bind settlement to the Action that admitted the run (contract_version/attempt/kind, or store the Action id on the run) instead of the newest live row for the node.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/premium/T09/test_ac2_action_quota.py",
+      "line": 113,
+      "trigger": "The five settlement tests call _settle_node_action directly inside a test transaction; none drives finish_node_run. The call's placement inside the Execution Record transaction and the idempotent early-return path are not exercised.",
+      "impact": "A regression that moved the settlement outside the record transaction, or removed it on one ending path, would not fail the T09 suite; the record-and-slot atomicity is only statically verified.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "Add an activity-level test that drives finish_node_run with the real database for COMPLETED/FAILED/TIMED_OUT and asserts the record and the Action commit or roll back together, including the CLAIMED case from finding 1.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/execution/temporal/activities.py",
+      "line": 709,
+      "trigger": "_stop_for_deviation records JobState.CANCELLED and the detail 'the work has stopped pending Master's decision' even when _cancel_job returned False (the backend refused the stop). The new settlement maps DEVIATION to FAILED_CONFIRMED and releases the slot and budget reservation.",
+      "impact": "For a backend that cannot un-start the work, the slot and budget are released while the external work may still be running, and the record asserts a stop that did not happen. The requested mapping does not distinguish a refused cancellation.",
+      "acceptance_id": "T09-AC2",
+      "required_fix": "When the deviation stop is refused, record UNKNOWN (slot held) rather than FAILED_CONFIRMED, or state the refusal explicitly and keep the slot until the external stop is verified; correct the detail text.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "Real HPC certification is BLOCKED_EXTERNAL (T25); the scripted scheduler proves software semantics only, and the gate manifest's data_mode=REAL is the runner's hardcoded field, not a real-cluster claim.",
+    "The T09 gate needs T07's 7e4c1b2a9d3f migration; the first post-merge run failed without it. The final tree includes it and alembic upgrade head passed.",
+    "squeue failure plus an empty sacct keeps UNKNOWN/SACCT_DELAY; this is conservative but leaves some ended jobs uncertain.",
+    "resolve_uncertain accepts only a legal Slurm ref/job id, so an UNKNOWN slot cannot be freed with a non-Slurm observation.",
+    "The COMPLETED settlement relies on the Action's declared free price (estimated_cny=0, cost_known=True); real site pricing is T25.",
+    "The T09 action_quota tests use the real PostgreSQL and ActionService but call _settle_node_action directly (finding 6).",
+    "The production execution path does not yet consume ParallelSubmissionCoordinator/join_required or target max_jobs (findings 3 and 4).",
+    "The deviation-with-refused-cancel accounting remains a residual risk (finding 7)."
+  ],
+  "integration_candidate": true
+}

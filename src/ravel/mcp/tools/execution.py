@@ -32,7 +32,7 @@ from enum import StrEnum
 from typing import Any
 
 from ravel.actions.service import ActionService
-from ravel.domain.actions import ActionError, ResourceRequest
+from ravel.domain.actions import ActionConflict, ActionError, ResourceRequest
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import (
@@ -230,9 +230,22 @@ def start_execution(context: ToolContext) -> Any:
             raise
 
         with context.write() as session:
-            ActionService(session, context.project_id).record_accepted(
-                action.action_id
-            )
+            service = ActionService(session, context.project_id)
+            try:
+                service.record_accepted(action.action_id)
+            except ActionConflict:
+                # The run can finish before this write: `finish_node_run`
+                # settles the same Action in its own transaction, and an
+                # outcome is a later fact than acceptance, not a failed start.
+                # Only an outcome that exists may be tolerated; any other
+                # conflict still says the Action was not this caller's.
+                settled = service.get(action.action_id)
+                if settled.status not in (
+                    ActionStatus.COMPLETED,
+                    ActionStatus.FAILED_CONFIRMED,
+                    ActionStatus.UNKNOWN,
+                ):
+                    raise
         return _started(node, contract.version, started)
 
     return start_execution

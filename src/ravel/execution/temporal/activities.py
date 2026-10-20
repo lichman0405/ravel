@@ -1307,11 +1307,29 @@ def _settle_node_action(
             )
         else:
             return
-    if (
-        action.status is ActionStatus.CLAIMED
-        and termination is TerminationStatus.COMPLETED
-    ):
-        action = service.record_accepted(action.action_id)
+    if action.status is ActionStatus.CLAIMED:
+        # The acceptance write that follows `start_execution`'s external call
+        # may never have landed: the run can finish first, or the process can
+        # die between the start and that write. A CLAIMED Action is still the
+        # run's Action, and every ending settles it here rather than leaving a
+        # slot held on an outcome nothing else will report.
+        if termination is TerminationStatus.COMPLETED:
+            action = service.record_accepted(action.action_id)
+        elif termination in _CONFIRMED_ENDINGS:
+            service.record_failed_confirmed(
+                action.action_id, reason=f"the run ended {termination.value}"
+            )
+            return
+        else:
+            service.record_unknown(
+                action.action_id,
+                reason=(
+                    f"the run ended {termination.value}; whether the external "
+                    "work stopped is not known, so the slot stays held until "
+                    "reconciled"
+                ),
+            )
+            return
     if action.status is not ActionStatus.ACCEPTED:
         return
     if termination is TerminationStatus.COMPLETED:

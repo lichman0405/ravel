@@ -41,6 +41,36 @@ class FakeExecutionService:
         return True
 
 
+class SettlingExecutionService(FakeExecutionService):
+    """A run that ends before `start_execution` can record acceptance.
+
+    The external call returns after the durable run has already finished, as
+    an in-process or mock execution can. The Action is still CLAIMED at that
+    instant, and the restart/acceptance write must not turn the settled run
+    into a failed start.
+    """
+
+    def __init__(self, database: Database, project_id: str) -> None:
+        super().__init__()
+        self.database = database
+        self.project_id = project_id
+        self.action_id: str | None = None
+
+    async def start(self, node: Any, *, actor_id: str | None = None) -> bool:
+        self.calls.append(node.node_id)
+        with self.database.transaction() as session:
+            action = ActionService(session, self.project_id).live_for_node(node.node_id)
+            assert action is not None
+            self.action_id = action.action_id
+            _settle_node_action(
+                session,
+                project_id=self.project_id,
+                node_id=node.node_id,
+                termination=TerminationStatus.COMPLETED,
+            )
+        return True
+
+
 def _context(
     database: Database,
     project: Project,
@@ -76,6 +106,32 @@ def _held(database: Database, project_id: str) -> int:
         return ActionRepository(session, project_id).held_for_concurrency(
             kind=ActionKind.COMPUTE_SUBMIT
         )
+
+
+def _claimed_action(
+    database: Database, project_id: str, prepared: Prepared
+) -> str:
+    """An Action that was claimed and whose acceptance write never landed."""
+    with database.transaction() as session:
+        service = ActionService(session, project_id)
+        action = service.create(
+            kind=ActionKind.COMPUTE_SUBMIT,
+            payload={"attempt": 1},
+            actor=AgentRole.COMPUTE_WORKER.value,
+            requesting_binding="binding-compute_worker",
+            target_ref=f"node:{prepared.node_id}",
+            node_id=prepared.node_id,
+            contract_id=prepared.contract.contract_id,
+            contract_version=prepared.contract.version,
+            estimated_cny="0",
+            cost_known=True,
+        )
+        action, claimed = service.claim(
+            action.action_id, claimed_by=AgentRole.COMPUTE_WORKER.value
+        )
+        assert claimed is True
+        assert action.status is ActionStatus.CLAIMED
+        return action.action_id
 
 
 @pytest.mark.asyncio
@@ -235,6 +291,87 @@ def test_settlement_is_idempotent(
     with database.read_only() as session:
         assert ActionService(session, project.project_id).get(
             action_id
+        ).status is ActionStatus.COMPLETED
+    assert _held(database, project.project_id) == 0
+
+
+def test_a_run_that_fails_before_acceptance_releases_the_slot(
+    database: Database,
+    project: Project,
+    prepare: Any,
+) -> None:
+    """The acceptance write is not the only path out of CLAIMED.
+
+    A process can die between the external start and its acceptance write, or
+    the run can fail first. A CLAIMED Action still holds the slot; the ending
+    must settle it rather than leaving the claim held forever.
+    """
+    prepared: Prepared = prepare()
+    action_id = _claimed_action(database, project.project_id, prepared)
+
+    with database.transaction() as session:
+        _settle_node_action(
+            session,
+            project_id=project.project_id,
+            node_id=prepared.node_id,
+            termination=TerminationStatus.FAILED,
+        )
+
+    with database.read_only() as session:
+        assert ActionService(session, project.project_id).get(
+            action_id
+        ).status is ActionStatus.FAILED_CONFIRMED
+    assert _held(database, project.project_id) == 0
+
+
+def test_a_run_that_times_out_before_acceptance_keeps_the_slot(
+    database: Database,
+    project: Project,
+    prepare: Any,
+) -> None:
+    prepared: Prepared = prepare()
+    action_id = _claimed_action(database, project.project_id, prepared)
+
+    with database.transaction() as session:
+        _settle_node_action(
+            session,
+            project_id=project.project_id,
+            node_id=prepared.node_id,
+            termination=TerminationStatus.TIMED_OUT,
+        )
+
+    with database.read_only() as session:
+        stored = ActionService(session, project.project_id).get(action_id)
+        assert stored.status is ActionStatus.UNKNOWN
+        assert "stopped is not known" in (stored.uncertainty or "")
+    assert _held(database, project.project_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_finishes_before_acceptance_is_not_a_failed_start(
+    database: Database,
+    project: Project,
+    prepare: Any,
+    tmp_path: Path,
+) -> None:
+    """Acceptance is not a prerequisite for the run's own outcome.
+
+    The run can end before `start_execution` writes acceptance. Its settlement
+    is a later fact; the starter must record the start that did happen instead
+    of raising a conflict about an Action it already owns.
+    """
+    prepared: Prepared = prepare()
+    fake = SettlingExecutionService(database, project.project_id)
+    context = _context(database, project, tmp_path, fake)
+
+    started = await start_execution(context)(prepared.node_id)
+
+    assert started["started"] is True
+    assert started["refused"] is False
+    assert fake.action_id is not None
+    with database.read_only() as session:
+        assert ActionService(session, project.project_id).get(
+            fake.action_id
         ).status is ActionStatus.COMPLETED
     assert _held(database, project.project_id) == 0
 
