@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "task_id": "T12",
+  "attempt": 1,
+  "reviewer_id": "independent-T12-AC1-AC4",
+  "base_sha": "96f15c0",
+  "candidate_sha": "0f5b745",
+  "source_digest": "f22442589f15c57b0cdcfa30261e3c0377fb5363be6045f6a82368a0154b0b55",
+  "reviewed_at": "2026-10-20 11:29 Asia/Shanghai",
+  "decision": "FIX_REQUIRED",
+  "acceptance_results": [
+    {
+      "id": "T12-AC1",
+      "result": "PASS",
+      "evidence": "Classification is derived only from ledger rows. classify() looks up evidence, then source, then execution, then artifact (classification.py:186-202); is_simulated_artifact believes kind OR a mock-* created_by OR mock-*/fixture: provenance; a fixture:// URL and a fixture: provenance are SIMULATED; lab-upload:/EXPERIMENT is HUMAN_LAB; slurm:/COMPUTATION is COMPUTATION. ReportRequest/EvidenceRequest/ClaimRequest carry no data_mode or execution_type field and extra kwargs raise TypeError. In the canonical container the six typing tests pass: test_provenance_decides_every_execution_type (nine identifiers map to RESEARCH_SOURCE/COMPUTATION/HUMAN_LAB/SIMULATED, report MIXED, CERTIFIED HYPOTHESIS), test_mock_backend_job_status_marks_the_report_simulated, test_fixture_source_is_not_real_research_evidence (SIMULATED_AS_FACT, not exportable), test_a_relabelled_simulated_artifact_never_becomes_a_fact (kind edited to measurement, provenance still SIMULATED, original kind/provenance retained), test_report_requests_cannot_carry_a_type_or_mode, test_report_assembled_by_research_is_refused. No caller-supplied label reaches the classifier. The claim-tier bypass through execution_refs is recorded as a T12-AC2 finding; the evidence typing itself is correct."
+    },
+    {
+      "id": "T12-AC2",
+      "result": "FAIL",
+      "evidence": "The implemented checks pass their seven tests: fabricated top-level evidence_id -> FABRICATED_SOURCE with no invented row and no persisted claim/ref; asserted hash != ledger hash -> HASH_MISMATCH keeping the ledger hash; RESEARCH_SOURCE with empty locator -> MISSING_LOCATOR; wrong execution_count keeps the ledger count and execution ids; a computation claim without execution_refs -> MISSING_EXECUTION_REF; unknown execution_ref -> FABRICATED_EXECUTION; every conflict is REPORT_CONFLICT with asserted/actual/original_record, the failing claim is not persisted, and certified_json() raises ReportNotCertified. test_two_reports_over_one_ledger_render_the_same_facts also passes with distinct timestamps. However, four reachable verification holes remain: (1) a FACT/INFERENCE claim with no citations at all is accepted, and an empty ledger yields a CERTIFIED REAL report with empty evidence (finding F1); (2) a FACT claim backed only by execution_refs to a mock execution is certified because SIMULATED_AS_FACT is computed from evidence_ids only (finding F2); (3) execution_node_id is never resolved, and count 0 against a nonexistent node passes (finding F3); (4) a cited evidence row whose source_refs name a missing source is certified with only a missing_source_refs note (finding F4). The report is therefore not yet verifiable in all reachable paths."
+    },
+    {
+      "id": "T12-AC3",
+      "result": "PASS",
+      "evidence": "Review reads frozen criteria (frozen_criteria_ref/frozen_criteria_version) and the raw artifact version/hash/provenance from the ledger (test_review_reads_frozen_criteria_and_raw_artifact_metadata). A report's rendered facts, ledger_digest and JSON stay unchanged when later ledger rows are added (test_report_is_frozen_against_later_ledger_changes); regenerating creates a new report_id and there is no update path. Master commentary is a separate append-only row, one per report, cannot change rendered/claims/JSON, and only Master may write it (test_master_commentary_cannot_change_rendered_facts; test_only_master_may_explain_a_report[research|review|compute-worker]). Report and commentary reads are project-scoped; another project gets NotFound (test_reports_and_commentary_are_project_scoped). All four report tables are absent from UPDATABLE_TABLES and raw SQL UPDATE/DELETE is refused by the ravel_append_only triggers (test_persistence_guards.py). Migration a4d2e6f8b1c3 (down_revision 7e4c1b2a9d3f) creates scientific_reports, report_claims, report_evidence_refs and report_commentaries with the exact constraint/index names and column types found in tables.py, and calls guards.install; alembic reports a single head. The same migration blob (46d88efd7288101dc920860438dfef8e2b6cb930, unchanged at cd5345e, 4ff77e4 and 0f5b745) was applied 7e4c1b2a9d3f -> a4d2e6f8b1c3 with exit 0 in run-20261020-111136/cmd-01.txt. The review tie-order finding F5 and the commentary/project tie finding F6 are advisory and do not block this AC."
+    },
+    {
+      "id": "T12-AC4",
+      "result": "PASS",
+      "evidence": "Fixture provenance is explicit and classified SIMULATED: a fixture:// source and a fixture: artifact are reported as SIMULATED, and a FACT on the fixture evidence is REPORT_CONFLICT and cannot be exported (test_fixture_source_is_not_real_research_evidence). No live network usage exists in src/ravel/reports or tests/premium/T12 (grep for requests/httpx/urllib/socket/aiohttp finds only stale __pycache__ binaries; source URLs are example.org or fixture://). The only doubled boundary is MemoryStore implementing ArtifactStore; evidence, sources, artifacts, executions, backend jobs, reviews, deviations and all report rows are real PostgreSQL rows created through production repositories via tests/integration fixtures. The PASS manifest records data_mode REAL and external_resources []. Live Research is correctly deferred to the later live gate."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T12/run-20261020-111630/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "file": "src/ravel/reports/builder.py",
+      "line": 704,
+      "trigger": "A FACT or INFERENCE ClaimRequest with no evidence_ids, execution_refs, execution_node_id or execution_count is accepted: _check_request_shape (line 695) requires only a non-empty statement, and _claim_conflicts (line 329) returns no conflict for an empty citation set. A project with no ledger rows then produces a CERTIFIED, data_mode REAL report whose evidence_refs and claims[].evidence_ids are empty, and certified_json() exports it.",
+      "impact": "A certified scientific report can assert an unverifiable conclusion with no source or record at all, contrary to the T12 execution requirement that every conclusion cite an existing source/record and page range, and to the AC2 goal of a checkable report. The frozen schema permits empty evidence arrays, so nothing downstream catches it.",
+      "acceptance_id": "T12-AC2",
+      "required_fix": "In build_report/_check_request_shape, require every FACT and INFERENCE claim to cite at least one identifier that resolves in the project ledger, and reject or conflict when it does not; decide explicitly whether HYPOTHESIS is exempt (the existing mock-backend test uses an uncited HYPOTHESIS). Add regression tests for the empty-project certified report and for uncited FACT/INFERENCE claims.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/reports/builder.py",
+      "line": 389,
+      "trigger": "A FACT claim with evidence_ids=() and execution_refs=(mock execution id,), or with a real evidence id plus a mock execution ref, is accepted: `types` is built only from resolved evidence_ids, so the SIMULATED_AS_FACT branch at line 394 never fires, and _execution_conflicts only checks that the cited execution exists. Report status is CERTIFIED and data_mode is SIMULATED; the claim is persisted and exported, with evidence_ids=[] in the certified JSON and no execution_refs in that schema.",
+      "impact": "Simulated output can back a certified FACT claim by citing the execution record instead of an evidence row, bypassing the implementation's own invariant and conflict message that simulated output is never a fact. The certified export also hides the execution basis of the claim.",
+      "acceptance_id": "T12-AC2",
+      "required_fix": "Derive simulated-ness for FACT claims from execution_refs as well as evidence_ids: check each referenced execution's backend (is_simulated_backend) and its backend job, and raise SIMULATED_AS_FACT. Add a regression test with a mock execution cited only through execution_refs.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/reports/builder.py",
+      "line": 495,
+      "trigger": "A claim naming execution_node_id that does not exist in the project, with no execution_refs and execution_count=0, is accepted: the node id is only compared against known refs (line 496), and the count branch (line 517) computes len(executions_for_node(node_id)) == 0, so 0 == 0 passes. With execution_count=None no node check happens at all. The claim is persisted and the report is certified.",
+      "impact": "A fabricated execution node reference is accepted and can be presented as verified with a count of 0, while AC2 requires fabricated execution references to be rejected or conflicted. The count is validated against a node the ledger does not contain.",
+      "acceptance_id": "T12-AC2",
+      "required_fix": "Resolve execution_node_id against the project's DAG nodes (index.node_types) or executions and raise FABRICATED_EXECUTION or MISSING_EXECUTION_REF when it is absent; never treat an unknown node as zero executions. Add regression tests for an unknown node with count 0 and with no count.",
+      "advisory": false
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/reports/classification.py",
+      "line": 211,
+      "trigger": "An EvidenceRow whose source_refs contains a source_id absent from the project can be registered through EvidenceRepository.register (src/ravel/state/repositories/research.py:128) and cited in a report with a locator. _classify_evidence records the id in missing_source_refs but defaults the execution type to RESEARCH_SOURCE; build_report raises no conflict, persists the claim, and certifies the report.",
+      "impact": "A certified report can rest on a source that does not exist. The omission appears only as a note inside original_record, which is neither rejection nor REPORT_CONFLICT and does not prevent certified export. This is the nested form of AC2's fabricated source ID.",
+      "acceptance_id": "T12-AC2",
+      "required_fix": "When a cited evidence row has missing source_refs, emit FABRICATED_SOURCE (or a dedicated conflict code) with asserted/original_record and reject claims resting on it; consider validating source_refs at EvidenceRepository.register as well. Add a regression test.",
+      "advisory": false
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/reports/classification.py",
+      "line": 147,
+      "trigger": "LedgerIndex.load takes an unordered SELECT and sorts reviews by created_at only; two review rows with the same created_at keep PostgreSQL's arbitrary row order, which can differ between loads.",
+      "impact": "rendered.reviews.index (builder.py line 290) can order equal-timestamp reviews differently between two reports over one ledger, so byte-identical rendering is guaranteed only when timestamps differ; ledger_digest is unaffected because it canonical-sorts the review facts.",
+      "acceptance_id": "T12-AC2",
+      "required_fix": "Sort by (created_at, review_id) and add ORDER BY, then extend test_two_reports_over_one_ledger_render_the_same_facts with two reviews sharing a created_at.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/state/tables.py",
+      "line": 1971,
+      "trigger": "report_commentaries has separate foreign keys to scientific_reports.report_id and projects.project_id; no constraint ties the commentary's project_id to the report's project_id.",
+      "impact": "A raw insert can create a mismatch. Repository read paths filter commentary by both project_id and report_id after a project-scoped get(), so there is no cross-project disclosure through the current canonical path; this is a defense-in-depth gap for future writers.",
+      "acceptance_id": "T12-AC3",
+      "required_fix": "Add a composite foreign key (report_id, project_id) referencing scientific_reports(report_id, project_id) with a matching unique key, or an equivalent trigger/check.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The PASS gate's alembic command was a no-op on a shared database already at a4d2e6f8b1c3. The same migration blob (46d88efd7288101dc920860438dfef8e2b6cb930, unchanged at cd5345e, 4ff77e4 and 0f5b745) was applied 7e4c1b2a9d3f -> a4d2e6f8b1c3 with exit 0 in the failed run run-20261020-111136/cmd-01.txt. The T12 gate has no empty-database migration test; metadata/migration parity was checked statically.",
+    "data_mode is derived from all project executions, backend jobs and artifacts plus the cited evidence, not only the cited rows, so an unrelated simulated row makes a report SIMULATED/MIXED. The tasklog documents this conservative choice.",
+    "Fixture detection depends on the fixture: / fixture:// provenance convention; later Research/parser tasks must keep writing it for automatic SIMULATED classification.",
+    "No MCP read tool was added (optional in the task card); reads go through ScientificReportRepository.read()/certified_json()/commentary_for().",
+    "The frozen report schema has no fields for conflict details or per-claim execution_refs/count. Conflicted reports have no certified JSON, and a claim's execution basis is visible only if its execution ids are also listed in the report evidence index.",
+    "acceptance-map.json still records T12 status PLANNED; the Supervisor updates it at integration (other task entries are likewise stale)."
+  ],
+  "integration_candidate": true
+}
