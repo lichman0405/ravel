@@ -158,22 +158,24 @@
       "note": "未派发，未执行。"
     },
     "T09": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T09",
       "base_sha": "478b5ed",
-      "head_sha": "2121644",
-      "source_digest": null,
-      "review_ref": null,
+      "head_sha": "8aa2ac9",
+      "source_digest": "3f448ba5afabf4cc7e916d41695aa36697fe4fe9d120d8f413d08b9921827cdf",
+      "review_ref": "reviews/T09/3.json",
       "gate_refs": [
-        "evidence/T09/run-20261019-182413/manifest.json"
+        "evidence/T09/run-20261020-104635/manifest.json",
+        "evidence/T09/run-20261020-110357/manifest.json",
+        "evidence/T09/run-20261020-111915/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "98e82de",
       "blocker_refs": [
         "B05"
       ],
-      "last_updated": "2026-10-19 Asia/Shanghai",
-      "note": "T09 RUNNING：target registry/known_hosts/幂等提交/quota/收集；93 tests + lint PASS；内部用scripted scheduler，真实HPC为BLOCKED_EXTERNAL(B05)；等待独立Review。"
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T09 DONE��105 tests PASS��alembic+lint 0��independent review 3 APPROVE��target registry/known_hosts/atomic claim/UNKNOWN��Action slot settlement��ʵ��HPC��T25��ΪBLOCKED_EXTERNAL(B05)��P2/P3 advisory �Ѽ�¼��"
     },
     "T10": {
       "status": "TODO",

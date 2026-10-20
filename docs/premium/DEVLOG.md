@@ -40,3 +40,4 @@
 | 2026-10-19 Asia/Shanghai | Supervisor | B03 | `*.sh text eol=lf` 修复shell CRLF；unit行1104 passed/2 skipped，PARTIALLY_CERTIFIED（systemd-analyze缺失） | .gitattributes commit 7975bbd，独立Review APPROVE；integration ff到f283f4c | 完整gate仍待B01/B02/B05 |
 | 2026-10-19 Asia/Shanghai | Supervisor | T07 | 派发Gateway安全任务；无外部资源依赖部分先实现 | T07 worktree，base be3866f | 独立Review |
 | 2026-10-20 Asia/Shanghai | Supervisor | T07 | 集成候选 merge b1ff5ab；容器门禁 run-20261020-103132 PASS（147 tests、lint 0、alembic head）；lab handover 17 passed；ff-only 推进 integration | integration HEAD 5de11b0；PROGRESS/T07=DONE（reviews/T07/1.json，source_digest 7cb2339e…）；8/30 DONE；T01/T07 文件锁释放 | 继续 T09 P1 修复 |
+| 2026-10-20 Asia/Shanghai | Supervisor | T09 | 候选 merge 66927b0；候选门禁 run-20261020-111915 PASS（隔离测试库 105 tests、alembic+lint 0）；ff-only 推进 integration | integration HEAD 98e82de；PROGRESS/T09=DONE（reviews/T09/3.json APPROVE）；9/30 DONE；T09 文件锁释放；B05 仍为真实 HPC 外部阻塞 | 派发 T12 独立 Review |
