@@ -1,0 +1,24 @@
+===== command 1: .venv/bin/python -m alembic upgrade head =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+
+===== command 2: .venv/bin/python -m pytest tests/premium/T12 -q -rxXs --junitxml=/workspace/ravel-worktrees/T12/docs/premium/evidence/T12/run-20261020-111630/cmd-02-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T12 -q -rxXs --junitxml=/workspace/ravel-worktrees/T12/docs/premium/evidence/T12/run-20261020-111630/cmd-02-junit.xml
+
+.......................                                                  [100%]
+
+===== command 3: make lint =====
+exit_code=0 ok=True reason=None
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/T12'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+0 errors, 0 warnings, 0 informations
+make[1]: Leaving directory '/workspace/ravel-worktrees/T12'
+

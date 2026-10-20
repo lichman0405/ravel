@@ -54,6 +54,7 @@ from ravel.domain.enums import (
     CompletionStatus,
     Confidence,
     DecisionType,
+    EvidenceExecutionType,
     EvidenceSourceTier,
     FailureClass,
     FailurePolicy,
@@ -62,6 +63,8 @@ from ravel.domain.enums import (
     NodeStatus,
     NodeType,
     ProjectStatus,
+    ReportDataMode,
+    ReportStatus,
     RetryEpisodeStatus,
     RetryQuestion,
     ReviewCheckpoint,
@@ -1803,6 +1806,177 @@ class BudgetReservationRow(Base):
     reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ── Reports: immutable snapshots over the ledger ────────────────────────────
+
+
+class ScientificReportRow(Base):
+    """One frozen rendering of a project's ledger.
+
+    The row holds the derived data mode, the status and the deterministic
+    facts. `rendered` and `conflicts` are JSONB because they are aggregates of
+    rows this table does not own: counts by backend, the evidence index, and
+    the conflicting originals a report refused to correct. Neither is ever
+    updated — the table is append-only by omission from `UPDATABLE_TABLES` —
+    so a corrected report is a new `report_id`.
+    """
+
+    __tablename__ = "scientific_reports"
+    __table_args__ = (
+        _enum_constraint("data_mode", ReportDataMode),
+        _enum_constraint("status", ReportStatus),
+        CheckConstraint(
+            "char_length(title) BETWEEN 1 AND 500", name="title_has_length"
+        ),
+        CheckConstraint(
+            "status <> 'CERTIFIED' OR conflicts = '[]'::jsonb",
+            name="certified_has_no_conflicts",
+        ),
+        CheckConstraint(
+            "status <> 'REPORT_CONFLICT' OR jsonb_array_length(conflicts) > 0",
+            name="conflict_names_a_conflict",
+        ),
+        Index(
+            "ix_scientific_reports_project_generated",
+            "project_id",
+            "generated_at",
+        ),
+    )
+
+    report_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    data_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    limitations: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    rendered: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    conflicts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+
+
+class ReportClaimRow(Base):
+    """A claim a certified report makes.
+
+    Claims that failed verification are not rows here: they live in the report
+    row's `conflicts`, with the original ledger record they disagreed with. A
+    reader can therefore tell an omitted claim (never asserted) from a rejected
+    one (asserted and refused), which a silently dropped claim would erase.
+    """
+
+    __tablename__ = "report_claims"
+    __table_args__ = (
+        _enum_constraint("claim_type", ClaimClass),
+        CheckConstraint("position >= 1", name="position_is_positive"),
+        CheckConstraint(
+            "execution_count IS NULL OR execution_count >= 0",
+            name="execution_count_is_not_negative",
+        ),
+        UniqueConstraint(
+            "report_id", "position", name="one_claim_per_report_position"
+        ),
+        Index("ix_report_claims_report_position", "report_id", "position"),
+    )
+
+    report_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("scientific_reports.report_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    claim_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    claim_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    execution_refs: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    execution_node_id: Mapped[str | None] = mapped_column(ID)
+    execution_count: Mapped[int | None] = mapped_column(Integer)
+
+
+class ReportEvidenceRefRow(Base):
+    """One ledger row a report cites, with the type derived from its provenance.
+
+    `execution_type` is written once, by the builder, from the cited row. No
+    caller-facing method accepts it. `original_record` preserves the
+    provenance snapshot — backend, artifact kind and hash, source URL and hash
+    — so a Review seat reading the report sees why the type is what it is.
+    """
+
+    __tablename__ = "report_evidence_refs"
+    __table_args__ = (
+        _enum_constraint("execution_type", EvidenceExecutionType),
+        CheckConstraint("position >= 1", name="position_is_positive"),
+        UniqueConstraint(
+            "report_id", "position", name="one_evidence_ref_per_report_position"
+        ),
+        Index(
+            "ix_report_evidence_refs_report_position", "report_id", "position"
+        ),
+    )
+
+    report_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("scientific_reports.report_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    evidence_id: Mapped[str] = mapped_column(REF, primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    execution_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    locator: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    content_hash: Mapped[str | None] = mapped_column(String(128))
+    original_record: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+
+
+class ReportCommentaryRow(Base):
+    """Master's explanation, kept apart from the report's rendered facts.
+
+    A separate append-only table rather than a column on the report: attaching
+    commentary must not change a count, a claim or a rendering, and the surest
+    way to guarantee that is for commentary to be a different row that no
+    report read path merges into the frozen JSON.
+    """
+
+    __tablename__ = "report_commentaries"
+    __table_args__ = (
+        _enum_constraint("role", AgentRole),
+        CheckConstraint("char_length(body) > 0", name="commentary_is_not_empty"),
+        UniqueConstraint("report_id", name="one_commentary_per_report"),
+        Index(
+            "ix_report_commentaries_project_report", "project_id", "report_id"
+        ),
+    )
+
+    commentary_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    report_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("scientific_reports.report_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    author: Mapped[str] = mapped_column(REF, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 def _install_guards(_target: Any, connection: Any, **_: Any) -> None:

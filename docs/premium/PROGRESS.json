@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "5de11b0833403a0cd9d3b717b6d37687fd4b8b27",
+  "integration_head_sha": "2c4354d",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -175,7 +175,7 @@
         "B05"
       ],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T09 DONE��105 tests PASS��alembic+lint 0��independent review 3 APPROVE��target registry/known_hosts/atomic claim/UNKNOWN��Action slot settlement��ʵ��HPC��T25��ΪBLOCKED_EXTERNAL(B05)��P2/P3 advisory �Ѽ�¼��"
+      "note": "T09 DONE：105 tests PASS，alembic+lint 0；independent review 3 APPROVE；target registry/known_hosts/atomic claim/UNKNOWN；Action slot settlement；真实 HPC（T25）为 BLOCKED_EXTERNAL(B05)；P2/P3 advisory 已记录。"
     },
     "T10": {
       "status": "TODO",
@@ -206,32 +206,35 @@
       "note": "未派发，未执行。"
     },
     "T12": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T12",
       "base_sha": "96f15c0",
-      "head_sha": "96f15c0",
+      "head_sha": "7d9c834",
+      "source_digest": "cdce7151e478ff0c83ff6a8aaeb82cc94bf4f15ac2642a019ad934473b481864",
+      "review_ref": "reviews/T12/3.json",
+      "gate_refs": [
+        "evidence/T12/run-20261020-115022/manifest.json",
+        "evidence/T12/run-20261020-115756/manifest.json"
+      ],
+      "integration_merge_sha": "2c4354d",
+      "blocker_refs": [],
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T12 DONE：独立 review 3 APPROVE（reviews/T12/3.json，AC1–AC4 PASS；candidate 74d4c42，digest 57ad559b…）；任务门禁 run-20261020-115022 PASS（34 tests、alembic+lint 0）；集成候选门禁 run-20261020-115756 PASS（source 7d9c834，34 tests）；ff-only 合入 2c4354d。报告 provenance 类型推导、冲突检测、冻结 snapshot/append-only 表；P3 复合外键 advisory 记录。"
+    },
+    "T13": {
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T13",
+      "base_sha": "463376a",
+      "head_sha": "463376a",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T12 �ѷ�����base 96f15c0���߽磺reports/**��report tools��Evidence projection/schema ���������룻�ȴ�ʵ��������Review��"
-    },
-    "T13": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
-      "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "note": "T13 已派发；/v1 API、事件重连、生成客户端；等待实现与独立 Review。"
     },
     "T14": {
       "status": "TODO",
