@@ -117,7 +117,7 @@ class HumanLabBackend:
     #: deployment called `human-lab` would have its software proof classified
     #: as bench evidence. Declared here rather than as a property because the
     #: `WorkBackend` protocol reads it as an attribute.
-    name: str = field(init=False)
+    name: str = field(init=False, default=SIMULATED_BACKEND_NAME)
     #: Which kind of node this backend runs. A property of the backend rather
     #: than of a deployment's mood, and set here rather than passed in so that
     #: a laboratory backend cannot be pointed at a computation node.

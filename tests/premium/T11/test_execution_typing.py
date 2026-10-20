@@ -77,6 +77,9 @@ def assemble(database: Database, project_id: str, execution: ExecutionRecord):
 
 
 def test_the_backend_name_is_derived_from_the_mode(database: Database) -> None:
+    assert HumanLabBackend.name == SIMULATED_BACKEND_NAME, (
+        "callers read the class attribute for the default simulated backend"
+    )
     assert HumanLabBackend(database=database).name == SIMULATED_BACKEND_NAME
     assert HumanLabBackend(database=database, live_lab=True).name == REAL_BACKEND_NAME
     assert SIMULATED_BACKEND_NAME.startswith("mock"), (
