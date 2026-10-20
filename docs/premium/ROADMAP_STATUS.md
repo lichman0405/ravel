@@ -5,6 +5,6 @@
 计划依赖见ROADMAP.md；本文件只保存实际完成投影。
 
 - M0: 4/4 DONE
-- M1: 9/11 DONE
-- M2: 13/24 DONE
+- M1: 10/11 DONE
+- M2: 14/24 DONE
 - M3: 0/6 DONE

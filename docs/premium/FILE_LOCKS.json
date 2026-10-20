@@ -49,54 +49,6 @@
       "branch": "cc/T19-docker-sandbox",
       "granted_at": "2026-10-20 Asia/Shanghai",
       "release_condition": "T19 integrated"
-    },
-    {
-      "path": "apps/desktop/",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
-    },
-    {
-      "path": "tests/premium/T14/",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
-    },
-    {
-      "path": "package.json",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
-    },
-    {
-      "path": "pnpm-workspace.yaml",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
-    },
-    {
-      "path": "pnpm-lock.yaml",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
-    },
-    {
-      "path": "docs/premium/acceptance-map.json",
-      "task_id": "T14",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T14-desktop-shell",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T14 integrated"
     }
   ],
   "shared_paths": [

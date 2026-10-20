@@ -1542,7 +1542,7 @@
         "make premium-task TASK=T14"
       ],
       "classification": "internal",
-      "status": "RUNNING",
+      "status": "DONE",
       "test_nodeids": [
         "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
         "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
