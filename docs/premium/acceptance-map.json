@@ -985,10 +985,44 @@
       "classification": "internal",
       "status": "PLANNED",
       "test_nodeids": [
-        "tests/premium/T12"
+        "tests/premium/T12/test_evidence_typing.py::test_provenance_decides_every_execution_type",
+        "tests/premium/T12/test_evidence_typing.py::test_mock_backend_job_status_marks_the_report_simulated",
+        "tests/premium/T12/test_evidence_typing.py::test_fixture_source_is_not_real_research_evidence",
+        "tests/premium/T12/test_evidence_typing.py::test_a_relabelled_simulated_artifact_never_becomes_a_fact",
+        "tests/premium/T12/test_evidence_typing.py::test_report_requests_cannot_carry_a_type_or_mode",
+        "tests/premium/T12/test_evidence_typing.py::test_report_assembled_by_research_is_refused",
+        "tests/premium/T12/test_persistence_guards.py::test_report_tables_are_outside_the_updatable_set",
+        "tests/premium/T12/test_persistence_guards.py::test_raw_update_and_delete_are_refused_for_every_report_table",
+        "tests/premium/T12/test_report_verification.py::test_certified_report_indexes_ledger_rows_and_renders_counts",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_source_is_a_conflict_not_an_invented_row",
+        "tests/premium/T12/test_report_verification.py::test_hash_mismatch_keeps_the_ledger_hash_and_refuses_export",
+        "tests/premium/T12/test_report_verification.py::test_source_claim_without_a_locator_is_refused",
+        "tests/premium/T12/test_report_verification.py::test_wrong_execution_count_keeps_the_ledger_count",
+        "tests/premium/T12/test_report_verification.py::test_computation_claim_must_name_its_executions",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_execution_reference_is_a_conflict",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_report_is_frozen_against_later_ledger_changes",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_master_commentary_cannot_change_rendered_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[research]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[review]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[compute-worker]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_review_reads_frozen_criteria_and_raw_artifact_metadata",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_two_reports_over_one_ledger_render_the_same_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_reports_and_commentary_are_project_scoped"
       ],
       "manual_evidence_refs": [],
       "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "upgrade",
+            "head"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
         {
           "argv": [
             ".venv/bin/python",
@@ -1000,6 +1034,15 @@
           ],
           "allow_skips": false,
           "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
           "external": false
         }
       ],

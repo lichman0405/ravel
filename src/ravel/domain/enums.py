@@ -471,3 +471,57 @@ class ActionEvent(StrEnum):
     RELEASED = "RELEASED"
     OVERRUN = "OVERRUN"
 
+
+class ReportDataMode(StrEnum):
+    """What a report's evidence is made of, derived from provenance.
+
+    `SIMULATED` is not a weaker `REAL`: it is a different claim about what
+    exists. A report that mixed a real source with a mock run is `MIXED`, and
+    the distinction survives into every read so a simulated result can never
+    be quoted as a measurement by dropping the label.
+    """
+
+    REAL = "REAL"
+    SIMULATED = "SIMULATED"
+    MIXED = "MIXED"
+
+
+class EvidenceExecutionType(StrEnum):
+    """The four kinds of record a report claim may rest on.
+
+    The type is derived from the ledger row's own provenance — artifact kind
+    and provenance, the backend that ran the work, the source's access path —
+    and never from a label supplied by the report author. In particular a
+    mock backend's output is `SIMULATED` even if its artifact kind was edited
+    to look like a measurement.
+    """
+
+    RESEARCH_SOURCE = "RESEARCH_SOURCE"
+    COMPUTATION = "COMPUTATION"
+    HUMAN_LAB = "HUMAN_LAB"
+    SIMULATED = "SIMULATED"
+
+
+class ReportStatus(StrEnum):
+    """Whether a report may be exported as certified.
+
+    A `REPORT_CONFLICT` names at least one claim or reference the ledger did
+    not support. The conflicting records are kept beside it, so the report is
+    not corrected and the disagreement is not hidden.
+    """
+
+    CERTIFIED = "CERTIFIED"
+    REPORT_CONFLICT = "REPORT_CONFLICT"
+
+
+class ReportConflictCode(StrEnum):
+    """The ways a report can disagree with the ledger it indexes."""
+
+    FABRICATED_SOURCE = "FABRICATED_SOURCE"
+    FABRICATED_EXECUTION = "FABRICATED_EXECUTION"
+    HASH_MISMATCH = "HASH_MISMATCH"
+    MISSING_LOCATOR = "MISSING_LOCATOR"
+    MISSING_EXECUTION_REF = "MISSING_EXECUTION_REF"
+    WRONG_EXECUTION_COUNT = "WRONG_EXECUTION_COUNT"
+    SIMULATED_AS_FACT = "SIMULATED_AS_FACT"
+
