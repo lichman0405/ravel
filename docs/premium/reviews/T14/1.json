@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "task_id": "T14",
+  "attempt": 1,
+  "reviewer_id": "independent-T14-review",
+  "base_sha": "c59afb8cdb33de780bef9b5e9d29d14f125d87da",
+  "candidate_sha": "b3ce265fbae149da8f6153633bc3d425b609262e",
+  "source_commit": "0c18d7aebcc995fbd8130b89f036868e9465c33b",
+  "source_digest": "1614603e21d1c1d91f7be0af546151aac007fa1d3f9e926dc8b6df8479947d78",
+  "reviewed_at": "2026-10-20 14:23 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T14-AC1",
+      "result": "PASS",
+      "evidence": "The Windows evidence records a real Electron 44.9.1 window titled RAVEL (isVisible true), a rejected wrong password with no session file written, a real Gateway login as desktop-owner with the real PostgreSQL-backed project 'Catalyst screen', a DPAPI session envelope whose keys are exactly ciphertext/format/version with no plaintext token, a restart restore without a password with a changed SHA-256 refresh-token fingerprint (rotation), and logout deleting the session file followed by a login form after restart. I inspected result.json and the screenshots, re-verified all screenshot hashes, and independently reran the full driver against a database I seeded (ravel_t14_review_test) and a Gateway I started on port 18081: PASS with the same checks and 10 screenshots. The Linux integration cases exercise the same GatewayService/SessionStore classes against a real uvicorn Gateway and real PostgreSQL, including login, owned-project listing, offline restore, reconnect, refresh rotation and logout revoking the refresh token (401). Both the implementer's run-20261020-140104 and my independent run-20261020-141155 pass 8 pytest and 49 Node tests."
+    },
+    {
+      "id": "T14-AC2",
+      "result": "PASS",
+      "evidence": "As coded and as observed: contextIsolation=true, nodeIntegration=false, sandbox=true, webSecurity=true, webviewTag=false, allowRunningInsecureContent=false, navigateOnDragDrop=false, safeDialogs=true, nodeIntegrationInWorker=false and nodeIntegrationInSubFrames=false; the preload exposes exactly 8 names (connection, listProjects, login, logout, onConnectionStatus, reconnect, session, version) and only ipcRenderer.invoke/on; main-process handlers validate the sender and a hostile same-document renderer using the same preload received 'IPC sender refused'; setWindowOpenHandler denies and will-navigate/will-redirect/will-frame-navigate deny; there is no shell, child_process, @electron/remote, filesystem or environment bridge in apps/desktop/src; the CSP forbids connections, objects, frames, forms and base changes. In both the implementer's and my independent Windows run: window.open returned null, external navigation was blocked, a file:// fetch of .env was blocked, a fetch to a non-configured origin was blocked with attacker request count 0, localStorage/sessionStorage were empty, the DOM contained no JWT-shaped value, and the packaged renderer had the same bridge and no Node globals. The 49 Node tests include the security/contract/session-store suites, and the 5 pytest security cases re-audit both the source and the built bundles."
+    },
+    {
+      "id": "T14-AC3",
+      "result": "PASS",
+      "evidence": "In my independent Windows run, cutting the loopback proxy produced status Offline and the visible banner 'The Gateway is offline. The Gateway could not be reached.'; Reconnect while down stayed Offline; after restoring transport Reconnect returned Connected and the real project list. After the desktop exited, a direct HTTP login to the same Gateway returned 200 with a session, showing the desktop does not own or stop the server. The Linux integration case stops and restarts the real uvicorn Gateway on a new port and verifies restore, reconnect and logout revocation. LIMIT: this proves Gateway/Supervisor availability after desktop exit, not a full research-agent session; the desktop is a thin client with no Supervisor lifecycle control."
+    },
+    {
+      "id": "T14-AC4",
+      "result": "PASS",
+      "evidence": "I independently launched the real portable artifact (100,251,514 bytes, SHA256 1878aae1777ccd9eecd1795a791cfd38163f21f525a14afe185c9cf563ea3fa1, PE security directory size 0 so unsigned), observed a real top-level Windows window titled RAVEL belonging to process 'RAVEL Desktop', drove the packaged renderer through the app's own DevTools endpoint, and confirmed its URL is ...\\Temp\\...\\resources\\app.asar\\dist\\renderer\\index.html (not a browser page or the development directory). The packaged app rejected a wrong password, logged in to the real Gateway, listed the real project and wrote the DPAPI envelope; renderer screenshots 08/09 and the PrintWindow desktop screenshot 10 show the packaged app. The executable is the reviewed portable x64 build, and the driver recorded the same SHA256/size that certutil reports."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T14/run-20261020-140104/manifest.json",
+    "evidence/T14/windows-electron-20261020-135449/result.json"
+  ],
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "tests/premium/T14/electron/run-electron.cjs",
+      "line": 1,
+      "trigger": "Run make premium-task TASK=T14 on the Linux gate, then ask what protects the Windows-only Electron window, DPAPI and packaged-launch behavior from regression.",
+      "impact": "The authoritative Windows GUI and packaged-portable checks are a manually run host driver, not part of the reproducible gate; there is no Windows CI runner. The Linux gate covers the built main-process service, static bundle audits and Node tests only. No acceptance criterion is unmet because the evidence exists and I independently reproduced the whole flow, but a future change could regress a Windows-only surface without failing make premium-task.",
+      "acceptance_id": "T14-AC1",
+      "required_fix": "Add a Windows runner or a mandatory Supervisor integration-checklist step that runs run-electron.cjs with a fresh seed and records result.json for each release candidate.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "apps/desktop/electron-builder.yml",
+      "line": 12,
+      "trigger": "Clone the repository and attempt to verify the packaged artifact without rebuilding on Windows.",
+      "impact": "The 100,251,514-byte portable executable is ignored by apps/desktop/.gitignore:2 and is not retrievable from git, so package acceptance depends on an out-of-band artifact. The recorded SHA256/size and my independent hash verification bind the evidence to this host, but there is no repository-hosted copy.",
+      "acceptance_id": "T14-AC4",
+      "required_fix": "Publish the portable artifact as a retention-controlled release artifact, or record the exact builder image, commit and command used; not required for the internal V0 build.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "Makefile",
+      "line": 125,
+      "trigger": "make lint.",
+      "impact": "make lint covers Python only (ruff, pyright). Desktop TypeScript is type-checked by tsc --noEmit inside the Node gate command but has no ESLint/JS lint, so style and some non-type defects are not statically checked.",
+      "acceptance_id": null,
+      "required_fix": "Add an ESLint configuration and lint script to the desktop gate, or record the tsc-only policy as an accepted V0 decision.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/premium/T14/seed_account.py",
+      "line": 35,
+      "trigger": "Seed a database for the Windows launch test.",
+      "impact": "A fixed test password is compiled into the fixture. The script refuses any database not ending in _test and truncates it before seeding, so it cannot touch production state; it is not a product credential.",
+      "acceptance_id": "T14-AC1",
+      "required_fix": "Optional: read the password from an operator-provided environment variable in CI while keeping the _test guard and TRUNCATE.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/premium/T14/electron/run-electron.cjs",
+      "line": 752,
+      "trigger": "Inspect how the packaged renderer is automated.",
+      "impact": "The portable app is launched with --remote-debugging-port on loopback and driven over CDP; this is a test switch, not a production configuration. Real process/window introspection and a PrintWindow desktop screenshot cross-check the result, but native mouse/keyboard injection is not used.",
+      "acceptance_id": "T14-AC4",
+      "required_fix": "Optional: add a smoke check without the debugging switch (for example process/window plus a UI Automation probe) or document the CDP switch as the accepted harness.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "apps/desktop/src/main/main.ts",
+      "line": 147,
+      "trigger": "A renderer attempts to open an external URL, or an operator expects a validated external link to open in the system browser.",
+      "impact": "V0 denies window.open and all foreign navigation and does not register shell.openExternal, so there is no external-link surface on which to apply the task card's validated external-browser-open step. This is deny-by-default and more restrictive, not a security hole, but the step has no implemented entry point.",
+      "acceptance_id": "T14-AC2",
+      "required_fix": "If an external link is added, validate it against an explicit allowlist in the main process and open it with shell.openExternal; otherwise record the no-external-surface decision in the task record.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+      "line": 1,
+      "trigger": "Reproduce the Windows run from the evidence directory alone, after the later pytest gate has reset the shared _test database.",
+      "impact": "The result records the account username and Gateway loopback origin but not the seed command, database name or Gateway command. My first rerun against the implementer's post-gate database failed authentication because the later pytest fixtures had replaced the seeded account (the stored hash matched the integration fixture password, not the seed default). Re-running seed_account.py with its documented defaults and starting a Gateway against a fresh review database reproduced the entire flow. This is an evidence-completeness/reproducibility gap, not a product defect.",
+      "acceptance_id": "T14-AC1",
+      "required_fix": "Record the exact seed and Gateway commands and the database name in the Windows evidence directory (never the password).",
+      "advisory": true
+    }
+  ],
+  "independent_verification": [
+    {
+      "command": "Recomputed the gate source digest with scripts/premium_task.source_digest for c59afb8, 0c18d7a and b3ce265; git rev-parse HEAD",
+      "result": "c59afb8 => 5987ea6fbf56252083bc0595d7b85d224da0f2ec098a88efdb272645478d57ed; 0c18d7a and b3ce265 => 1614603e21d1c1d91f7be0af546151aac007fa1d3f9e926dc8b6df8479947d78; HEAD b3ce265fbae149da8f6153633bc3d425b609262e. The manifest's source_commit/source_digest pair matches the gate source, and the final HEAD is digest-equivalent because the later commits are record-only and excluded."
+    },
+    {
+      "command": "git diff --name-only c59afb8..b3ce265; git diff c59afb8..b3ce265 -- docs/premium/acceptance-map.json",
+      "result": "86 changed files, all within apps/desktop/**, tests/premium/T14/**, root package.json/pnpm-workspace.yaml/pnpm-lock.yaml, docs/premium/acceptance-map.json, docs/premium/tasklogs/T14.md and docs/premium/evidence/T14/**; zero out-of-boundary paths. The acceptance-map diff touches only the T14 section: status PLANNED->RUNNING, 8 concrete nodeids replacing tests/premium/T14, 6 manual evidence refs, 4 execution commands, database_suite false->true. No gateway, api-client, Makefile, shared-infrastructure or other-task change."
+    },
+    {
+      "command": "Validated docs/premium/evidence/T14/run-20261020-140104/manifest.json, its commands and every artifact sha256/size pair",
+      "result": "result PASS, preflight_exit 0, database_lock true, data_mode REAL, source_commit 0c18d7a, source_digest 1614603e..., all 4 commands exit 0 with skipped 0 and empty_selection false; JUnit tests=8 failures=0 errors=0 skipped=0; Node summary 49 tests/49 pass/0 fail/0 skipped/0 todo; all 6 artifact hashes and sizes match."
+    },
+    {
+      "command": "Independent gate in container ravel-premium-ubuntu24 (t14-review, host network) on a fresh database ravel_t14_review_test: RAVEL_TEST_DB=ravel_t14_review_test RAVEL_POSTGRES_DSN=postgresql+psycopg://ravel:ravel_dev_password@127.0.0.1:55432/ravel_t14_review_test make premium-task TASK=T14 (run-20261020-141155)",
+      "result": "PASS. source_commit b3ce265, source_digest 1614603e..., preflight_exit 0, database_lock true, data_mode REAL. alembic upgrade head exit 0; bash tests/premium/T14/run_node_suite.sh exit 0 (Node v22.23.3, pnpm 9.15.9, tests 49, pass 49, fail 0, skipped 0, todo 0); pytest tests/premium/T14 exit 0 with JUnit tests=8 failures=0 errors=0 skipped=0; make lint exit 0 (ruff All checks passed; pyright 0 errors, 0 warnings, 0 informations). The 8 JUnit nodeids equal the acceptance-map list exactly. Logs are retained outside git at /tmp/t14-review-evidence/T14/run-20261020-141155 because the reviewer may commit only this review file."
+    },
+    {
+      "command": "Compared the acceptance-map T14 nodeids with the executed JUnit testcases and checked the external marker",
+      "result": "8/8 concrete nodeids match exactly, all executed with 0 skips. bash tests/premium/T14/run_node_suite.sh is marked external: true and needs_database: false, justified because a cold environment needs the npm registry for pinned Node 22.23.3/pnpm 9.15.9 and locked dependencies; alembic and pytest are needs_database true and external false; make lint is external false. The manifest records external_resources as empty because the run used a warm store; the classification is conservative and correct. No other task section was altered."
+    },
+    {
+      "command": "Inspected docs/premium/evidence/T14/windows-electron-20261020-135449/result.json, all screenshot hashes/sizes, and screenshots 01-login, 02-authenticated, 03-restored, 04-offline, 05-reconnected, 09-packaged-authenticated and 10-packaged-window-authenticated",
+      "result": "All recorded checks are present and consistent: real window RAVEL, renderer globals undefined, 8-name bridge, safeStorage win32, wrong-password rejection, real login/project, DPAPI envelope keys only ciphertext/format/version, refresh fingerprint rotation, deny behaviors with attacker request count 0, hostile-window IPC refusal, offline/reconnect, Gateway 200 after desktop exit, logout/restart, and packaged app.asar login. The 04-offline screenshot visually shows the Offline badge and banner; 10 shows a real Windows title bar with Connected and the project. Hashes/sizes match the manifest entries."
+    },
+    {
+      "command": "Independent Windows rerun: seeded ravel_t14_review_test with tests/premium/T14/seed_account.py defaults; started uvicorn ravel.gateway.app:create_app --factory on 0.0.0.0:18081 against that DB; ran npx --yes --package=node@22.23.3 node tests/premium/T14/electron/run-electron.cjs --upstream-url http://172.28.49.206:18081 --portable apps/desktop/release/RAVEL-Desktop-0.1.0-win-x64-portable.exe --evidence-dir C:\\Users\\lishi\\AppData\\Local\\Temp\\t14-review-e2e-20261020-142500",
+      "result": "PASS with 10 screenshots. All 15 check groups recorded: window, renderer, safe_storage, wrong_password, login, session_file, security, hostile_window, restart_restore, offline, reconnect, supervisor_survives_desktop, logout, restart_after_logout, packaged. Packaged exit: sha256 1878aae1777ccd9eecd1795a791cfd38163f21f525a14afe185c9cf563ea3fa1, size 100251514, process 'RAVEL Desktop', renderer URL ...\\resources\\app.asar\\dist\\renderer\\index.html, CDP Chrome/152.0.7977.167, packaged login and DPAPI envelope. Note: a first attempt at 14:14 against the implementer's post-gate database failed at login because the later pytest gate had replaced the seeded account with the integration fixture (stored hash matched the fixture password 'a password the tests know'); after re-seeding, the full flow passed. The failure was environmental, not a product defect."
+    },
+    {
+      "command": "certutil -hashfile apps/desktop/release/RAVEL-Desktop-0.1.0-win-x64-portable.exe SHA256; ls -l; parsed the PE optional-header security data directory; git check-ignore -v",
+      "result": "SHA256 1878aae1777ccd9eecd1795a791cfd38163f21f525a14afe185c9cf563ea3fa1; size 100,251,514 bytes; PE magic 0x10b, security directory size 0 (Authenticode unsigned); path ignored by apps/desktop/.gitignore:2 (release/)."
+    },
+    {
+      "command": "Static inspection of apps/desktop/src/main/security.ts, main.ts, preload/preload.ts, renderer/index.html and the GatewayService imports; searched apps/desktop/src for child_process, shell.openExternal, @electron/remote, eval and new Function",
+      "result": "Secure preferences exactly as claimed; preload exposes exactly the 8 frozen names and only ipcRenderer.invoke/on; the main process validates the sender before every handler, denies window opening and foreign navigation, and has no shell/exec/fs/env bridge; the CSP is \"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'\"; the dangerous-API search returned no hits. GatewayService uses the T13 generated @ravel/api-client and exposes login/refresh/logout/list-projects only; it has no DAG mutation path."
+    },
+    {
+      "command": "Inspected the packaged app.asar against the reviewed build",
+      "result": "The asar's renderer/main/preload/shared files are byte-identical to the reviewed dist except a whitespace-only index.html difference and the stripped package.json; the packaged index.html carries the same CSP. This binds the launched packaged renderer to the reviewed source."
+    },
+    {
+      "command": "Final git status --porcelain=v1 --untracked-files=all; git rev-parse HEAD; git diff --check",
+      "result": "Status empty before writing this review (the only new path is this review file), HEAD b3ce265fbae149da8f6153633bc3d425b609262e, no whitespace errors."
+    }
+  ],
+  "residual_risks": [
+    "The Windows-only GUI, DPAPI and packaged-launch surface is not regression-gated by make premium-task; it remains a manually run host driver (P2 finding). I reproduced it once, but future candidates need the same run.",
+    "The portable executable is ignored by git and cannot be retrieved from the repository; only its SHA256 and size are recorded (P2 finding). Rebuild requires a Windows host and the pinned toolchain.",
+    "The 'supervisor survives desktop' check proves the Gateway still serves HTTP after the desktop exits; it does not run a full research-agent/Supervisor workflow. The desktop has no Supervisor lifecycle control, so the architectural claim is sound, but the evidence is Gateway availability.",
+    "DPAPI protection is asserted through safeStorage.isEncryptionAvailable()=true, the Windows platform value and the ciphertext-only envelope; I did not decrypt the envelope with an external DPAPI tool or test a different Windows user profile.",
+    "The packaged renderer is driven via a loopback --remote-debugging-port test switch; process/window introspection and a PrintWindow desktop screenshot cross-check it, but there is no native mouse/keyboard injection.",
+    "V0 has no external-link surface: window.open and foreign navigation are denied and shell.openExternal is not registered, so the task card's validated external-browser-open step has no entry point (P3 finding).",
+    "The internal Windows artifact is unsigned by design (PE security directory size 0); external distribution would require an operator-provided signing certificate.",
+    "The Node gate command is correctly marked external because a cold cache needs the npm registry; both gate runs used an already-warm store, so the cold-download path was not exercised in this review.",
+    "The implementer's authoritative Windows evidence (135449) predates the gate run that reset the shared _test database, so that exact database state is not retained; my fresh-seed rerun against ravel_t14_review_test reproduced the full flow.",
+    "My independent gate logs live at /tmp/t14-review-evidence/T14/run-20261020-141155 (WSL) and are not committed, because this review may only add docs/premium/reviews/T14/1.json. The committed implementer manifest and Windows evidence remain the repository record.",
+    "acceptance-map.json keeps T14 at RUNNING and this review does not modify it; integration into main and any status transition remain the Supervisor's decision."
+  ],
+  "integration_candidate": true
+}

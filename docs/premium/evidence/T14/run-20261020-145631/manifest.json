@@ -1,0 +1,170 @@
+{
+  "run_id": "run-20261020-145631",
+  "task_id": "T14",
+  "acceptance_map": {
+    "T14-AC1": {
+      "test_nodeids": [
+        "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
+        "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
+        "tests/premium/T14/test_gateway_integration.py::test_offline_restore_keeps_the_session_then_reconnects_and_logout_revokes",
+        "tests/premium/T14/test_security_contract.py::test_the_shipped_primitives_refuse_foreign_senders_and_plaintext_tokens",
+        "tests/premium/T14/test_security_contract.py::test_the_window_bundle_keeps_the_renderer_sandboxed_and_unprivileged",
+        "tests/premium/T14/test_security_contract.py::test_the_renderer_bundle_cannot_read_a_token_or_call_the_gateway_itself",
+        "tests/premium/T14/test_security_contract.py::test_the_bridge_and_desktop_service_have_no_scientific_dag_mutation",
+        "tests/premium/T14/test_security_contract.py::test_the_windows_package_is_portable_x64_internal_and_exactly_pinned"
+      ],
+      "manual_evidence_refs": [
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/01-login.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/04-offline.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/09-packaged-authenticated.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/10-packaged-window-authenticated.png",
+        "apps/desktop/THIRD_PARTY_LICENSES.md"
+      ]
+    },
+    "T14-AC2": {
+      "test_nodeids": [
+        "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
+        "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
+        "tests/premium/T14/test_gateway_integration.py::test_offline_restore_keeps_the_session_then_reconnects_and_logout_revokes",
+        "tests/premium/T14/test_security_contract.py::test_the_shipped_primitives_refuse_foreign_senders_and_plaintext_tokens",
+        "tests/premium/T14/test_security_contract.py::test_the_window_bundle_keeps_the_renderer_sandboxed_and_unprivileged",
+        "tests/premium/T14/test_security_contract.py::test_the_renderer_bundle_cannot_read_a_token_or_call_the_gateway_itself",
+        "tests/premium/T14/test_security_contract.py::test_the_bridge_and_desktop_service_have_no_scientific_dag_mutation",
+        "tests/premium/T14/test_security_contract.py::test_the_windows_package_is_portable_x64_internal_and_exactly_pinned"
+      ],
+      "manual_evidence_refs": [
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/01-login.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/04-offline.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/09-packaged-authenticated.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/10-packaged-window-authenticated.png",
+        "apps/desktop/THIRD_PARTY_LICENSES.md"
+      ]
+    },
+    "T14-AC3": {
+      "test_nodeids": [
+        "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
+        "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
+        "tests/premium/T14/test_gateway_integration.py::test_offline_restore_keeps_the_session_then_reconnects_and_logout_revokes",
+        "tests/premium/T14/test_security_contract.py::test_the_shipped_primitives_refuse_foreign_senders_and_plaintext_tokens",
+        "tests/premium/T14/test_security_contract.py::test_the_window_bundle_keeps_the_renderer_sandboxed_and_unprivileged",
+        "tests/premium/T14/test_security_contract.py::test_the_renderer_bundle_cannot_read_a_token_or_call_the_gateway_itself",
+        "tests/premium/T14/test_security_contract.py::test_the_bridge_and_desktop_service_have_no_scientific_dag_mutation",
+        "tests/premium/T14/test_security_contract.py::test_the_windows_package_is_portable_x64_internal_and_exactly_pinned"
+      ],
+      "manual_evidence_refs": [
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/01-login.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/04-offline.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/09-packaged-authenticated.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/10-packaged-window-authenticated.png",
+        "apps/desktop/THIRD_PARTY_LICENSES.md"
+      ]
+    },
+    "T14-AC4": {
+      "test_nodeids": [
+        "tests/premium/T14/test_gateway_integration.py::test_the_desktop_service_signs_in_and_lists_only_a_real_owned_project",
+        "tests/premium/T14/test_gateway_integration.py::test_membership_scoping_is_the_gateways_and_the_desktop_cannot_widen_it",
+        "tests/premium/T14/test_gateway_integration.py::test_offline_restore_keeps_the_session_then_reconnects_and_logout_revokes",
+        "tests/premium/T14/test_security_contract.py::test_the_shipped_primitives_refuse_foreign_senders_and_plaintext_tokens",
+        "tests/premium/T14/test_security_contract.py::test_the_window_bundle_keeps_the_renderer_sandboxed_and_unprivileged",
+        "tests/premium/T14/test_security_contract.py::test_the_renderer_bundle_cannot_read_a_token_or_call_the_gateway_itself",
+        "tests/premium/T14/test_security_contract.py::test_the_bridge_and_desktop_service_have_no_scientific_dag_mutation",
+        "tests/premium/T14/test_security_contract.py::test_the_windows_package_is_portable_x64_internal_and_exactly_pinned"
+      ],
+      "manual_evidence_refs": [
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/result.json",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/01-login.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/04-offline.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/09-packaged-authenticated.png",
+        "docs/premium/evidence/T14/windows-electron-20261020-135449/screenshots/10-packaged-window-authenticated.png",
+        "apps/desktop/THIRD_PARTY_LICENSES.md"
+      ]
+    }
+  },
+  "started_at": "2026-10-20 14:56:17 +0800",
+  "completed_at": "2026-10-20 14:58:07 +0800",
+  "source_commit": "49ff62f813882be11ad7e9e86c6770a2c7b7e140",
+  "source_digest": "708c66c5f7c8535f2fb878ac4057b922af1eed29cef18c60f4e2af17e9adb245",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "bash tests/premium/T14/run_node_suite.sh",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T14 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T14/docs/premium/evidence/T14/run-20261020-145631/cmd-03-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/candidate-T14",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T14/run-20261020-145631/cmd-03-junit.xml",
+  "log_path": "docs/premium/evidence/T14/run-20261020-145631/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/cmd-01.txt",
+      "sha256": "834a93907e82c62a7bccf6cd026ac61af3935d19fabe410506527a7aab298001",
+      "size": 3590
+    },
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/cmd-02.txt",
+      "sha256": "aedd184907b27fc3003331e32cdf8f3d843c9a30fdd88cf8bb394330112de56b",
+      "size": 12928
+    },
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/cmd-03-junit.xml",
+      "sha256": "568a26b7b5c157bbe43c798acd9494bd7abb141dfc4e143de03366bff0a820b7",
+      "size": 1498
+    },
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/cmd-03.txt",
+      "sha256": "bd4bbbea5eaced2f6a9cb71dd798468cb84295b66287cfee06f69add53d8e6ce",
+      "size": 726
+    },
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/cmd-04.txt",
+      "sha256": "4523d1c7ae90105d30e163d1ae83dbe0906cad94fad6350fc2b75da4b6e0b9bd",
+      "size": 259
+    },
+    {
+      "ref": "docs/premium/evidence/T14/run-20261020-145631/commands.txt",
+      "sha256": "59b37347d1bb47581d6658cbc4b1a779cc844f6db3968dc2bae27e6964f54b5c",
+      "size": 17988
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}

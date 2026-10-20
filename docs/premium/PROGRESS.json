@@ -250,18 +250,21 @@
       "note": "T13 重开修复完成：T11 修改 /v1 DeviationRequest 后，committed client/openapi.json 与集成后 create_app 的 schema 不一致，determinism 测试在 integration 失败；重新生成 client 并通过独立 delta review 4 APPROVE（reviews/T13/4.json，reviewed source 4ae5690，digest 37e8e82d…，T13 子树与 a91299c 相同）。任务门禁 run-20261020-142714 PASS（20 tests、alembic+lint+typecheck 0）；集成候选 cc/candidate-T13-regen（merge b00dd6c，evidence 943c4ce）门禁 run-20261020-144605 PASS（20 tests、source digest 与 review 一致）；ff-only 合入 integration 943c4ce。P3（npm 无 lockfile、run_gateway.py 边界扩展、client token ergonomics、CRLF 归一化 no-op、T12 carry-over 记录）保留为 advisory。"
     },
     "T14": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T14",
       "base_sha": "c59afb8",
-      "head_sha": "c59afb8",
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
+      "head_sha": "55b2d06",
+      "source_digest": "1614603e21d1c1d91f7be0af546151aac007fa1d3f9e926dc8b6df8479947d78",
+      "review_ref": "reviews/T14/1.json",
+      "gate_refs": [
+        "evidence/T14/run-20261020-140104/manifest.json",
+        "evidence/T14/run-20261020-145631/manifest.json"
+      ],
+      "integration_merge_sha": "8d2482a",
       "blocker_refs": [],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T14 已派发；base c59afb8；边界：apps/desktop/**、根 package/pnpm workspace 文件、tests/premium/T14/**、acceptance-map。Electron 安全外壳、登录、Windows 构建与启动测试；必须使用 T13 生成的客户端，桌面不得成为 source of truth，不绕过 gateway 权限。等待实现、门禁与独立 Review。"
+      "note": "T14 DONE。独立 review 1 APPROVE（reviews/T14/1.json，source 0c18d7a，digest 1614603e…）；任务门禁 run-20261020-140104 PASS（49 Node tests + 8 pytest + lint + alembic）；Windows 打包 E2E windows-electron-20261020-135449 PASS（10 screenshots、真实 Electron 44.9.1，portable EXE 未入 Git）。T13 修复后从 integration 4b1bca9 重建候选 cc/candidate-T14（merge 49ff62f，evidence 8d2482a），候选门禁 run-20261020-145631 PASS（digest 708c66c5… 覆盖已集成的 T10–T13；T14 源码/测试子树与 reviewed 55b2d06 无差异）；ff-only 合入 integration 8d2482a。T14 锁已释放。"
     },
     "T15": {
       "status": "TODO",

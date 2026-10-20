@@ -1,0 +1,2481 @@
+{
+  "package": "@ravel/desktop",
+  "version": "0.1.0",
+  "generated_at": "2026-10-20",
+  "command": "npx --yes --package=node@22.23.3 --package=pnpm@9.15.9 pnpm --dir apps/desktop licenses list --json",
+  "package_manager": "pnpm@9.15.9",
+  "scope": "The locked pnpm dependency graph of apps/desktop (runtime and build/test dependencies). Host absolute paths from pnpm are omitted.",
+  "package_count": 265,
+  "license_expression_count": 13,
+  "licenses": {
+    "(MIT OR CC0-1.0)": [
+      {
+        "name": "type-fest",
+        "versions": [
+          "0.13.1"
+        ],
+        "license": "(MIT OR CC0-1.0)",
+        "homepage": "https://github.com/sindresorhus/type-fest#readme",
+        "description": "A collection of essential TypeScript types"
+      }
+    ],
+    "(WTFPL OR MIT)": [
+      {
+        "name": "utf8-byte-length",
+        "versions": [
+          "1.0.5"
+        ],
+        "license": "(WTFPL OR MIT)",
+        "homepage": "https://github.com/parshap/utf8-byte-length#readme",
+        "description": "Get utf8 byte length of string"
+      }
+    ],
+    "0BSD": [
+      {
+        "name": "tslib",
+        "versions": [
+          "2.8.1"
+        ],
+        "license": "0BSD",
+        "homepage": "https://www.typescriptlang.org/",
+        "description": "Runtime library for TypeScript helper functions"
+      }
+    ],
+    "Apache-2.0": [
+      {
+        "name": "@malept/cross-spawn-promise",
+        "versions": [
+          "2.0.0"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/malept/cross-spawn-promise#readme",
+        "description": "Promisified version of cross-spawn"
+      },
+      {
+        "name": "detect-libc",
+        "versions": [
+          "2.1.2"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/lovell/detect-libc#readme",
+        "description": "Node.js module to detect the C standard library (libc) implementation family and version"
+      },
+      {
+        "name": "ejs",
+        "versions": [
+          "3.1.10"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/mde/ejs",
+        "description": "Embedded JavaScript templates"
+      },
+      {
+        "name": "exponential-backoff",
+        "versions": [
+          "3.1.3"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/coveooss/exponential-backoff#readme",
+        "description": "A utility that allows retrying a function with an exponential delay between attempts."
+      },
+      {
+        "name": "filelist",
+        "versions": [
+          "1.0.6"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/mde/filelist",
+        "description": "Lazy-evaluating list of files, based on globs or regex patterns"
+      },
+      {
+        "name": "jake",
+        "versions": [
+          "10.9.4"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/jakejs/jake#readme",
+        "description": "JavaScript build tool, similar to Make or Rake"
+      },
+      {
+        "name": "playwright-core",
+        "versions": [
+          "1.64.1"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://playwright.dev",
+        "description": "A high-level API to automate web browsers"
+      },
+      {
+        "name": "sumchecker",
+        "versions": [
+          "3.0.1"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://github.com/malept/sumchecker#readme",
+        "description": "Checksum validator"
+      },
+      {
+        "name": "typescript",
+        "versions": [
+          "5.6.3"
+        ],
+        "license": "Apache-2.0",
+        "homepage": "https://www.typescriptlang.org/",
+        "description": "TypeScript is a language for application scale JavaScript development"
+      }
+    ],
+    "BlueOak-1.0.0": [
+      {
+        "name": "chownr",
+        "versions": [
+          "3.0.0"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/chownr#readme",
+        "description": "like `chown -R`"
+      },
+      {
+        "name": "isexe",
+        "versions": [
+          "3.1.5",
+          "4.0.0"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/isexe#readme",
+        "description": "Minimal module to check if a file is executable."
+      },
+      {
+        "name": "minimatch",
+        "versions": [
+          "10.2.6"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/minimatch#readme",
+        "description": "a glob matcher in javascript"
+      },
+      {
+        "name": "minipass",
+        "versions": [
+          "7.1.3"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/minipass#readme",
+        "description": "minimal implementation of a PassThrough stream"
+      },
+      {
+        "name": "sax",
+        "versions": [
+          "1.6.1"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/sax-js#readme",
+        "description": "An evented streaming XML parser in JavaScript"
+      },
+      {
+        "name": "tar",
+        "versions": [
+          "7.5.22"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/node-tar#readme",
+        "description": "tar for node"
+      },
+      {
+        "name": "yallist",
+        "versions": [
+          "5.0.0"
+        ],
+        "license": "BlueOak-1.0.0",
+        "homepage": "https://github.com/isaacs/yallist#readme",
+        "description": "Yet Another Linked List"
+      }
+    ],
+    "BSD-2-Clause": [
+      {
+        "name": "@electron-internal/extract-zip",
+        "versions": [
+          "1.0.5"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/electron/extract-zip#readme",
+        "description": "Fast, safe, native zip extraction for Node.js. Drop-in replacement for extract-zip."
+      },
+      {
+        "name": "@electron/osx-sign",
+        "versions": [
+          "1.3.3"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/electron/osx-sign",
+        "description": "Codesign Electron macOS apps"
+      },
+      {
+        "name": "@electron/windows-sign",
+        "versions": [
+          "1.2.2"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/electron/windows-sign",
+        "description": "Codesign Electron Windows apps"
+      },
+      {
+        "name": "dotenv",
+        "versions": [
+          "16.6.1"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/motdotla/dotenv#readme",
+        "description": "Loads environment variables from .env file"
+      },
+      {
+        "name": "dotenv-expand",
+        "versions": [
+          "11.0.7"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/motdotla/dotenv-expand#readme",
+        "description": "Expand environment variables using dotenv"
+      },
+      {
+        "name": "http-cache-semantics",
+        "versions": [
+          "4.3.0"
+        ],
+        "license": "BSD-2-Clause",
+        "homepage": "https://github.com/kornelski/http-cache-semantics#readme",
+        "description": "Parses Cache-Control and other headers. Helps building correct HTTP caches and proxies"
+      }
+    ],
+    "BSD-3-Clause": [
+      {
+        "name": "asn1js",
+        "versions": [
+          "3.1.0"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/PeculiarVentures/ASN1.js#readme",
+        "description": "asn1js is a pure JavaScript library implementing this standard. ASN.1 is the basis of all X.509 related data structures and numerous other protocols used on the web"
+      },
+      {
+        "name": "bytestreamjs",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/PeculiarVentures/ByteStream.js#readme",
+        "description": "ByteStream is a library making possible to manipulates single bytes and bits on pure JavaScript"
+      },
+      {
+        "name": "duplexer2",
+        "versions": [
+          "0.1.4"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/deoxxa/duplexer2#readme",
+        "description": "Like duplexer but using streams3"
+      },
+      {
+        "name": "fast-uri",
+        "versions": [
+          "3.1.9"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/fastify/fast-uri",
+        "description": "Dependency-free RFC 3986 URI toolbox"
+      },
+      {
+        "name": "global-agent",
+        "versions": [
+          "3.0.0"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/gajus/global-agent#readme",
+        "description": "Global HTTP/HTTPS proxy configurable using environment variables."
+      },
+      {
+        "name": "pkijs",
+        "versions": [
+          "3.4.1"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/PeculiarVentures/PKI.js#readme",
+        "description": "Public Key Infrastructure (PKI) is the basis of how identity and key management is performed on the web today. PKIjs is a pure JavaScript library implementing the formats that are used in PKI applications. It is built on WebCrypto and aspires to make it possible to build native web applications that utilize X.509 and the related formats on the web without plug-ins"
+      },
+      {
+        "name": "roarr",
+        "versions": [
+          "2.15.4"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/gajus/roarr#readme",
+        "description": "JSON logger for Node.js and browser."
+      },
+      {
+        "name": "source-map",
+        "versions": [
+          "0.6.1"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/mozilla/source-map",
+        "description": "Generates and consumes source maps"
+      },
+      {
+        "name": "source-map-js",
+        "versions": [
+          "1.2.2"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/7rulnik/source-map-js",
+        "description": "Generates and consumes source maps"
+      },
+      {
+        "name": "sprintf-js",
+        "versions": [
+          "1.1.3"
+        ],
+        "license": "BSD-3-Clause",
+        "homepage": "https://github.com/alexei/sprintf.js#readme",
+        "description": "JavaScript sprintf implementation"
+      }
+    ],
+    "ISC": [
+      {
+        "name": "@isaacs/fs-minipass",
+        "versions": [
+          "4.0.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/fs-minipass#readme",
+        "description": "fs read and write streams based on minipass"
+      },
+      {
+        "name": "abbrev",
+        "versions": [
+          "4.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/abbrev-js#readme",
+        "description": "Like ruby's abbrev module, but in js"
+      },
+      {
+        "name": "at-least-node",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/RyanZim/at-least-node#readme",
+        "description": "Lightweight Node.js version sniffing/comparison"
+      },
+      {
+        "name": "cliui",
+        "versions": [
+          "8.0.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/yargs/cliui#readme",
+        "description": "easily create complex multi-column command-line-interfaces"
+      },
+      {
+        "name": "fs.realpath",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/fs.realpath#readme",
+        "description": "Use node's fs.realpath, but fall back to the JS implementation if the native one fails"
+      },
+      {
+        "name": "get-caller-file",
+        "versions": [
+          "2.0.5"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/stefanpenner/get-caller-file#readme",
+        "description": ""
+      },
+      {
+        "name": "glob",
+        "versions": [
+          "7.2.3"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/node-glob#readme",
+        "description": "a little globber"
+      },
+      {
+        "name": "graceful-fs",
+        "versions": [
+          "4.2.11"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/node-graceful-fs#readme",
+        "description": "A drop-in replacement for fs, making various improvements."
+      },
+      {
+        "name": "hosted-git-info",
+        "versions": [
+          "4.1.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/hosted-git-info",
+        "description": "Provides metadata and conversions from repository urls for GitHub, Bitbucket and GitLab"
+      },
+      {
+        "name": "inflight",
+        "versions": [
+          "1.0.6"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/inflight",
+        "description": "Add callbacks to requests in flight to avoid async duplication"
+      },
+      {
+        "name": "inherits",
+        "versions": [
+          "2.0.4"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/inherits#readme",
+        "description": "Browser-friendly inheritance fully compatible with standard node.js inherits()"
+      },
+      {
+        "name": "isexe",
+        "versions": [
+          "2.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/isexe#readme",
+        "description": "Minimal module to check if a file is executable."
+      },
+      {
+        "name": "json-stringify-safe",
+        "versions": [
+          "5.0.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/json-stringify-safe",
+        "description": "Like JSON.stringify, but doesn't blow up on circular refs."
+      },
+      {
+        "name": "lru-cache",
+        "versions": [
+          "6.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/node-lru-cache#readme",
+        "description": "A cache object that deletes the least-recently-used items."
+      },
+      {
+        "name": "minimatch",
+        "versions": [
+          "3.1.5",
+          "5.1.9",
+          "9.0.9"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/minimatch#readme",
+        "description": "a glob matcher in javascript"
+      },
+      {
+        "name": "nopt",
+        "versions": [
+          "9.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/nopt#readme",
+        "description": "Option parsing for Node, supporting types, shorthands, etc. Used by npm."
+      },
+      {
+        "name": "once",
+        "versions": [
+          "1.4.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/once#readme",
+        "description": "Run a function exactly one time"
+      },
+      {
+        "name": "picocolors",
+        "versions": [
+          "1.1.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/alexeyraspopov/picocolors#readme",
+        "description": "The tiniest and the fastest library for terminal output formatting with ANSI colors"
+      },
+      {
+        "name": "proc-log",
+        "versions": [
+          "6.1.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/proc-log#readme",
+        "description": "just emit 'log' events on the process object"
+      },
+      {
+        "name": "rimraf",
+        "versions": [
+          "2.6.3"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/rimraf#readme",
+        "description": "A deep deletion module for node (like `rm -rf`)"
+      },
+      {
+        "name": "semver",
+        "versions": [
+          "5.7.2",
+          "6.3.1",
+          "7.7.4",
+          "7.8.5"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/node-semver#readme",
+        "description": "The semantic version parser used by npm."
+      },
+      {
+        "name": "signal-exit",
+        "versions": [
+          "3.0.7"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/tapjs/signal-exit",
+        "description": "when you want to fire an event no matter how a process exits."
+      },
+      {
+        "name": "which",
+        "versions": [
+          "2.0.2",
+          "5.0.0",
+          "6.0.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/node-which#readme",
+        "description": "Like which(1) unix command. Find the first instance of an executable in the PATH."
+      },
+      {
+        "name": "wrappy",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/npm/wrappy",
+        "description": "Callback wrapping utility"
+      },
+      {
+        "name": "y18n",
+        "versions": [
+          "5.0.8"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/yargs/y18n",
+        "description": "the bare-bones internationalization library used by yargs"
+      },
+      {
+        "name": "yallist",
+        "versions": [
+          "4.0.0"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/isaacs/yallist#readme",
+        "description": "Yet Another Linked List"
+      },
+      {
+        "name": "yargs-parser",
+        "versions": [
+          "21.1.1"
+        ],
+        "license": "ISC",
+        "homepage": "https://github.com/yargs/yargs-parser#readme",
+        "description": "the mighty option parser used by yargs"
+      }
+    ],
+    "MIT": [
+      {
+        "name": "@electron/asar",
+        "versions": [
+          "3.4.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/asar",
+        "description": "Creating Electron app packages"
+      },
+      {
+        "name": "@electron/fuses",
+        "versions": [
+          "1.8.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/fuses#readme",
+        "description": "Flip Electron Fuses and customize your packaged build of Electron"
+      },
+      {
+        "name": "@electron/get",
+        "versions": [
+          "3.1.0",
+          "5.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/get#readme",
+        "description": "Utility for downloading artifacts from different versions of Electron"
+      },
+      {
+        "name": "@electron/notarize",
+        "versions": [
+          "2.5.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/notarize#readme",
+        "description": "Notarize your Electron app"
+      },
+      {
+        "name": "@electron/rebuild",
+        "versions": [
+          "4.2.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/rebuild",
+        "description": "Electron supporting package to rebuild native node modules against the currently installed electron"
+      },
+      {
+        "name": "@electron/universal",
+        "versions": [
+          "2.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/universal#readme",
+        "description": "Utility for creating Universal macOS applications from two x64 and arm64 Electron applications"
+      },
+      {
+        "name": "@esbuild/win32-x64",
+        "versions": [
+          "0.28.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/evanw/esbuild#readme",
+        "description": "The Windows 64-bit binary for esbuild, a JavaScript bundler."
+      },
+      {
+        "name": "@malept/flatpak-bundler",
+        "versions": [
+          "0.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/malept/flatpak-bundler#readme",
+        "description": "A small utility for packing files in a flatpak."
+      },
+      {
+        "name": "@noble/hashes",
+        "versions": [
+          "1.8.0",
+          "2.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://paulmillr.com/noble/",
+        "description": "Audited & minimal 0-dependency JS implementation of SHA, RIPEMD, BLAKE, HMAC, HKDF, PBKDF & Scrypt"
+      },
+      {
+        "name": "@oxc-project/types",
+        "versions": [
+          "0.154.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://oxc.rs",
+        "description": "Types for Oxc AST nodes"
+      },
+      {
+        "name": "@peculiar/asn1-schema",
+        "versions": [
+          "2.11.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/asn1-schema/tree/master/packages/schema#readme",
+        "description": "Decorators and helper APIs for declaring ASN.1 schemas in TypeScript."
+      },
+      {
+        "name": "@peculiar/json-schema",
+        "versions": [
+          "1.1.12"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/json-schema#readme",
+        "description": "This package uses ES2015 decorators to simplify JSON schema creation and use"
+      },
+      {
+        "name": "@peculiar/utils",
+        "versions": [
+          "2.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/pvtsutils#readme",
+        "description": "Modern byte, encoding, converter registry, and PEM utilities for TypeScript projects."
+      },
+      {
+        "name": "@peculiar/webcrypto",
+        "versions": [
+          "1.7.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/webcrypto#readme",
+        "description": "A WebCrypto Polyfill for NodeJS"
+      },
+      {
+        "name": "@rolldown/binding-win32-x64-msvc",
+        "versions": [
+          "1.2.14"
+        ],
+        "license": "MIT",
+        "homepage": "https://rolldown.rs/",
+        "description": "Fast JavaScript/TypeScript bundler in Rust with Rollup-compatible API."
+      },
+      {
+        "name": "@rolldown/pluginutils",
+        "versions": [
+          "1.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme",
+        "description": "Plugin utilities for Rolldown"
+      },
+      {
+        "name": "@sindresorhus/is",
+        "versions": [
+          "4.6.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/is#readme",
+        "description": "Type check values"
+      },
+      {
+        "name": "@szmarczak/http-timer",
+        "versions": [
+          "4.0.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/szmarczak/http-timer#readme",
+        "description": "Timings for HTTP requests"
+      },
+      {
+        "name": "@types/cacheable-request",
+        "versions": [
+          "6.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/cacheable-request",
+        "description": "TypeScript definitions for cacheable-request"
+      },
+      {
+        "name": "@types/debug",
+        "versions": [
+          "4.1.13"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/debug",
+        "description": "TypeScript definitions for debug"
+      },
+      {
+        "name": "@types/fs-extra",
+        "versions": [
+          "9.0.13"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/fs-extra",
+        "description": "TypeScript definitions for fs-extra"
+      },
+      {
+        "name": "@types/http-cache-semantics",
+        "versions": [
+          "4.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/http-cache-semantics",
+        "description": "TypeScript definitions for http-cache-semantics"
+      },
+      {
+        "name": "@types/keyv",
+        "versions": [
+          "3.1.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/keyv",
+        "description": "TypeScript definitions for keyv"
+      },
+      {
+        "name": "@types/ms",
+        "versions": [
+          "2.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ms",
+        "description": "TypeScript definitions for ms"
+      },
+      {
+        "name": "@types/node",
+        "versions": [
+          "22.20.5",
+          "24.19.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node",
+        "description": "TypeScript definitions for node"
+      },
+      {
+        "name": "@types/react",
+        "versions": [
+          "19.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react",
+        "description": "TypeScript definitions for react"
+      },
+      {
+        "name": "@types/react-dom",
+        "versions": [
+          "19.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom",
+        "description": "TypeScript definitions for react-dom"
+      },
+      {
+        "name": "@types/responselike",
+        "versions": [
+          "1.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/responselike",
+        "description": "TypeScript definitions for responselike"
+      },
+      {
+        "name": "@vitejs/plugin-react",
+        "versions": [
+          "6.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#readme",
+        "description": "The default Vite plugin for React projects"
+      },
+      {
+        "name": "@xmldom/xmldom",
+        "versions": [
+          "0.8.15"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/xmldom/xmldom",
+        "description": "A pure JavaScript W3C standard-based (XML DOM Level 2 Core) DOMParser and XMLSerializer module."
+      },
+      {
+        "name": "agent-base",
+        "versions": [
+          "7.1.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/proxy-agents#readme",
+        "description": "Turn a function into an `http.Agent` instance"
+      },
+      {
+        "name": "ajv",
+        "versions": [
+          "8.20.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://ajv.js.org",
+        "description": "Another JSON Schema Validator"
+      },
+      {
+        "name": "ansi-regex",
+        "versions": [
+          "5.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/ansi-regex#readme",
+        "description": "Regular expression for matching ANSI escape codes"
+      },
+      {
+        "name": "ansi-styles",
+        "versions": [
+          "4.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/ansi-styles#readme",
+        "description": "ANSI escape codes for styling strings in the terminal"
+      },
+      {
+        "name": "app-builder-lib",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": "electron-builder lib"
+      },
+      {
+        "name": "async",
+        "versions": [
+          "3.2.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://caolan.github.io/async/",
+        "description": "Higher-order functions and common patterns for asynchronous code"
+      },
+      {
+        "name": "async-exit-hook",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/tapppi/async-exit-hook#readme",
+        "description": "Run some code when the process exits (supports async hooks and pm2 clustering)"
+      },
+      {
+        "name": "asynckit",
+        "versions": [
+          "0.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/alexindigo/asynckit#readme",
+        "description": "Minimal async jobs utility library, with streams support"
+      },
+      {
+        "name": "aws4",
+        "versions": [
+          "1.13.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/mhart/aws4#readme",
+        "description": "Signs and prepares requests using AWS Signature Version 4"
+      },
+      {
+        "name": "balanced-match",
+        "versions": [
+          "1.0.2",
+          "4.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/juliangruber/balanced-match#readme",
+        "description": "Match balanced character pairs, like \"{\" and \"}\""
+      },
+      {
+        "name": "base64-js",
+        "versions": [
+          "1.5.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/beatgammit/base64-js",
+        "description": "Base64 encoding/decoding in pure JS"
+      },
+      {
+        "name": "bluebird",
+        "versions": [
+          "3.7.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/petkaantonov/bluebird",
+        "description": "Full featured Promises/A+ implementation with exceptionally good performance"
+      },
+      {
+        "name": "boolean",
+        "versions": [
+          "3.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/thenativeweb/boolean#readme",
+        "description": "boolean converts lots of things to boolean."
+      },
+      {
+        "name": "brace-expansion",
+        "versions": [
+          "1.1.21",
+          "2.1.7",
+          "5.0.12"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/juliangruber/brace-expansion#readme",
+        "description": "Brace expansion as known from sh/bash"
+      },
+      {
+        "name": "buffer-from",
+        "versions": [
+          "1.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/LinusU/buffer-from#readme",
+        "description": null
+      },
+      {
+        "name": "builder-util",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": null
+      },
+      {
+        "name": "builder-util-runtime",
+        "versions": [
+          "9.7.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": null
+      },
+      {
+        "name": "cacheable-lookup",
+        "versions": [
+          "5.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/szmarczak/cacheable-lookup#readme",
+        "description": "A cacheable dns.lookup(…) that respects the TTL"
+      },
+      {
+        "name": "cacheable-request",
+        "versions": [
+          "7.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/lukechilds/cacheable-request#readme",
+        "description": "Wrap native HTTP requests with RFC compliant cache support"
+      },
+      {
+        "name": "call-bind-apply-helpers",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/call-bind-apply-helpers#readme",
+        "description": "Helper functions around Function call/apply/bind, for use in `call-bind`"
+      },
+      {
+        "name": "chalk",
+        "versions": [
+          "4.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/chalk#readme",
+        "description": "Terminal string styling done right"
+      },
+      {
+        "name": "chromium-pickle-js",
+        "versions": [
+          "0.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/node-chromium-pickle-js#readme",
+        "description": "Binary value packing and unpacking"
+      },
+      {
+        "name": "ci-info",
+        "versions": [
+          "4.3.1",
+          "4.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/watson/ci-info",
+        "description": "Get details about the current Continuous Integration environment"
+      },
+      {
+        "name": "clone-response",
+        "versions": [
+          "1.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/clone-response#readme",
+        "description": "Clone a Node.js HTTP response stream"
+      },
+      {
+        "name": "color-convert",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/Qix-/color-convert#readme",
+        "description": "Plain color conversion functions"
+      },
+      {
+        "name": "color-name",
+        "versions": [
+          "1.1.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/colorjs/color-name",
+        "description": "A list of color names and its values"
+      },
+      {
+        "name": "combined-stream",
+        "versions": [
+          "1.0.8"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/felixge/node-combined-stream",
+        "description": "A stream that emits multiple other streams one after another."
+      },
+      {
+        "name": "commander",
+        "versions": [
+          "5.1.0",
+          "9.5.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/tj/commander.js#readme",
+        "description": "the complete solution for node.js command-line programs"
+      },
+      {
+        "name": "compare-version",
+        "versions": [
+          "0.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/kevva/compare-version#readme",
+        "description": "Compare semver version numbers"
+      },
+      {
+        "name": "concat-map",
+        "versions": [
+          "0.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/substack/node-concat-map#readme",
+        "description": "concatenative mapdashery"
+      },
+      {
+        "name": "core-util-is",
+        "versions": [
+          "1.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/isaacs/core-util-is#readme",
+        "description": "The `util.is*` functions introduced in Node v0.12."
+      },
+      {
+        "name": "cross-dirname",
+        "versions": [
+          "0.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/JumpLink/cross-dirname#readme",
+        "description": null
+      },
+      {
+        "name": "cross-spawn",
+        "versions": [
+          "7.0.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/moxystudio/node-cross-spawn",
+        "description": "Cross platform child_process#spawn and child_process#spawnSync"
+      },
+      {
+        "name": "csstype",
+        "versions": [
+          "3.2.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/frenic/csstype#readme",
+        "description": "Strict TypeScript and Flow types for style based on MDN data"
+      },
+      {
+        "name": "debug",
+        "versions": [
+          "4.4.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/debug-js/debug#readme",
+        "description": "Lightweight debugging utility for Node.js and the browser"
+      },
+      {
+        "name": "decompress-response",
+        "versions": [
+          "6.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/decompress-response#readme",
+        "description": "Decompress a HTTP response if needed"
+      },
+      {
+        "name": "defer-to-connect",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/szmarczak/defer-to-connect#readme",
+        "description": "The safe way to handle the `connect` socket event"
+      },
+      {
+        "name": "define-data-property",
+        "versions": [
+          "1.1.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/define-data-property#readme",
+        "description": "Define a data property on an object. Will fall back to assignment in an engine without descriptors."
+      },
+      {
+        "name": "define-properties",
+        "versions": [
+          "1.2.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/define-properties#readme",
+        "description": "Define multiple non-enumerable properties at once. Uses `Object.defineProperty` when available; falls back to standard assignment in older engines."
+      },
+      {
+        "name": "delayed-stream",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/felixge/node-delayed-stream",
+        "description": "Buffers events from a stream until you are ready to handle them."
+      },
+      {
+        "name": "detect-node",
+        "versions": [
+          "2.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/iliakan/detect-node",
+        "description": "Detect Node.JS (as opposite to browser environment) (reliable)"
+      },
+      {
+        "name": "dir-compare",
+        "versions": [
+          "4.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/gliviu/dir-compare#readme",
+        "description": "Node JS directory compare"
+      },
+      {
+        "name": "dmg-builder",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": null
+      },
+      {
+        "name": "dunder-proto",
+        "versions": [
+          "1.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/es-shims/dunder-proto#readme",
+        "description": "If available, the `Object.prototype.__proto__` accessor and mutator, call-bound"
+      },
+      {
+        "name": "electron",
+        "versions": [
+          "44.9.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/electron#readme",
+        "description": "Build cross platform desktop apps with JavaScript, HTML, and CSS"
+      },
+      {
+        "name": "electron-builder",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": "A complete solution to package and build a ready for distribution Electron app for MacOS, Windows and Linux with “auto update” support out of the box"
+      },
+      {
+        "name": "electron-builder-squirrel-windows",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": null
+      },
+      {
+        "name": "electron-publish",
+        "versions": [
+          "26.15.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron-userland/electron-builder",
+        "description": null
+      },
+      {
+        "name": "electron-winstaller",
+        "versions": [
+          "5.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/windows-installer#readme",
+        "description": "Module to generate Windows installers for Electron apps"
+      },
+      {
+        "name": "emoji-regex",
+        "versions": [
+          "8.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://mths.be/emoji-regex",
+        "description": "A regular expression to match all Emoji-only symbols as per the Unicode Standard."
+      },
+      {
+        "name": "end-of-stream",
+        "versions": [
+          "1.4.5"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/mafintosh/end-of-stream",
+        "description": "Call a callback when a readable/writable/duplex stream has completed or failed."
+      },
+      {
+        "name": "env-paths",
+        "versions": [
+          "2.2.1",
+          "3.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/env-paths#readme",
+        "description": "Get paths for storing things like data, config, cache, etc"
+      },
+      {
+        "name": "err-code",
+        "versions": [
+          "2.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/IndigoUnited/js-err-code#readme",
+        "description": "Create an error with a code"
+      },
+      {
+        "name": "es-define-property",
+        "versions": [
+          "1.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/es-define-property#readme",
+        "description": "`Object.defineProperty`, but not IE 8's broken one."
+      },
+      {
+        "name": "es-errors",
+        "versions": [
+          "1.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/es-errors#readme",
+        "description": "A simple cache for a few of the JS Error constructors."
+      },
+      {
+        "name": "es-object-atoms",
+        "versions": [
+          "1.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/es-object-atoms#readme",
+        "description": "ES Object-related atoms: Object, ToObject, RequireObjectCoercible"
+      },
+      {
+        "name": "es-set-tostringtag",
+        "versions": [
+          "2.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/es-shims/es-set-tostringtag#readme",
+        "description": "A helper to optimistically set Symbol.toStringTag, when possible."
+      },
+      {
+        "name": "es6-error",
+        "versions": [
+          "4.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/bjyoungblood/es6-error",
+        "description": "Easily-extendable error for use with ES6 classes"
+      },
+      {
+        "name": "esbuild",
+        "versions": [
+          "0.28.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/evanw/esbuild#readme",
+        "description": "An extremely fast JavaScript and CSS bundler and minifier."
+      },
+      {
+        "name": "escalade",
+        "versions": [
+          "3.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/lukeed/escalade#readme",
+        "description": "A tiny (183B to 210B) and fast utility to ascend parent directories"
+      },
+      {
+        "name": "escape-string-regexp",
+        "versions": [
+          "4.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/escape-string-regexp#readme",
+        "description": "Escape RegExp special characters"
+      },
+      {
+        "name": "fast-deep-equal",
+        "versions": [
+          "3.1.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/epoberezkin/fast-deep-equal#readme",
+        "description": "Fast deep equal"
+      },
+      {
+        "name": "fdir",
+        "versions": [
+          "6.5.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/thecodrr/fdir#readme",
+        "description": "The fastest directory crawler & globbing alternative to glob, fast-glob, & tiny-glob. Crawls 1m files in < 1s"
+      },
+      {
+        "name": "form-data",
+        "versions": [
+          "4.0.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/form-data/form-data#readme",
+        "description": "A library to create readable \"multipart/form-data\" streams. Can be used to submit forms and file uploads to other web applications."
+      },
+      {
+        "name": "fs-extra",
+        "versions": [
+          "10.1.0",
+          "11.3.1",
+          "11.4.1",
+          "7.0.1",
+          "8.1.0",
+          "9.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jprichardson/node-fs-extra",
+        "description": "fs-extra contains methods that aren't included in the vanilla Node.js fs package. Such as recursive mkdir, copy, and remove."
+      },
+      {
+        "name": "function-bind",
+        "versions": [
+          "1.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/Raynos/function-bind",
+        "description": "Implementation of Function.prototype.bind"
+      },
+      {
+        "name": "get-intrinsic",
+        "versions": [
+          "1.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/get-intrinsic#readme",
+        "description": "Get and robustly cache all JS language-level intrinsics at first require time"
+      },
+      {
+        "name": "get-proto",
+        "versions": [
+          "1.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/get-proto#readme",
+        "description": "Robustly get the [[Prototype]] of an object"
+      },
+      {
+        "name": "get-stream",
+        "versions": [
+          "5.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/get-stream#readme",
+        "description": "Get a stream as a string, buffer, or array"
+      },
+      {
+        "name": "globalthis",
+        "versions": [
+          "1.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/System.global#readme",
+        "description": "ECMAScript spec-compliant polyfill/shim for `globalThis`"
+      },
+      {
+        "name": "gopd",
+        "versions": [
+          "1.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/gopd#readme",
+        "description": "`Object.getOwnPropertyDescriptor`, but accounts for IE's broken implementation."
+      },
+      {
+        "name": "got",
+        "versions": [
+          "11.8.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/got#readme",
+        "description": "Human-friendly and powerful HTTP request library for Node.js"
+      },
+      {
+        "name": "has-flag",
+        "versions": [
+          "4.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/has-flag#readme",
+        "description": "Check if argv has a specific flag"
+      },
+      {
+        "name": "has-property-descriptors",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/inspect-js/has-property-descriptors#readme",
+        "description": "Does the environment have full property descriptor support? Handles IE 8's broken defineProperty/gOPD."
+      },
+      {
+        "name": "has-symbols",
+        "versions": [
+          "1.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/has-symbols#readme",
+        "description": "Determine if the JS environment has Symbol support. Supports spec, or shams."
+      },
+      {
+        "name": "has-tostringtag",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/inspect-js/has-tostringtag#readme",
+        "description": "Determine if the JS environment has `Symbol.toStringTag` support. Supports spec, or shams."
+      },
+      {
+        "name": "hasown",
+        "versions": [
+          "2.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/inspect-js/hasOwn#readme",
+        "description": "A robust, ES3 compatible, \"has own property\" predicate."
+      },
+      {
+        "name": "http-proxy-agent",
+        "versions": [
+          "7.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/proxy-agents#readme",
+        "description": "An HTTP(s) proxy `http.Agent` implementation for HTTP"
+      },
+      {
+        "name": "http2-wrapper",
+        "versions": [
+          "1.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/szmarczak/http2-wrapper#readme",
+        "description": "HTTP2 client, just with the familiar `https` API"
+      },
+      {
+        "name": "https-proxy-agent",
+        "versions": [
+          "7.0.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/proxy-agents#readme",
+        "description": "An HTTP(s) proxy `http.Agent` implementation for HTTPS"
+      },
+      {
+        "name": "is-fullwidth-code-point",
+        "versions": [
+          "3.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/is-fullwidth-code-point#readme",
+        "description": "Check if the character represented by a given Unicode code point is fullwidth"
+      },
+      {
+        "name": "isarray",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/juliangruber/isarray",
+        "description": "Array#isArray for older browsers"
+      },
+      {
+        "name": "isbinaryfile",
+        "versions": [
+          "4.0.10",
+          "5.0.7"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/gjtorikian/isBinaryFile#readme",
+        "description": "Detects if a file is binary in Node.js. Similar to Perl's -B."
+      },
+      {
+        "name": "jiti",
+        "versions": [
+          "2.7.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/unjs/jiti#readme",
+        "description": "Runtime typescript and ESM support for Node.js"
+      },
+      {
+        "name": "js-yaml",
+        "versions": [
+          "4.3.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/nodeca/js-yaml#readme",
+        "description": "YAML 1.2 parser and serializer"
+      },
+      {
+        "name": "json-buffer",
+        "versions": [
+          "3.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/dominictarr/json-buffer",
+        "description": "JSON parse & stringify that supports binary via bops & base64"
+      },
+      {
+        "name": "json-schema-traverse",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/epoberezkin/json-schema-traverse#readme",
+        "description": "Traverse JSON Schema passing each schema object to callback"
+      },
+      {
+        "name": "json5",
+        "versions": [
+          "2.2.3"
+        ],
+        "license": "MIT",
+        "homepage": "http://json5.org/",
+        "description": "JSON for Humans"
+      },
+      {
+        "name": "jsonfile",
+        "versions": [
+          "4.0.0",
+          "6.2.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jprichardson/node-jsonfile#readme",
+        "description": "Easily read/write JSON files."
+      },
+      {
+        "name": "keyv",
+        "versions": [
+          "4.5.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jaredwray/keyv",
+        "description": "Simple key-value storage with support for multiple backends"
+      },
+      {
+        "name": "lazy-val",
+        "versions": [
+          "1.0.5"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/develar/lazy-val",
+        "description": null
+      },
+      {
+        "name": "lodash",
+        "versions": [
+          "4.18.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://lodash.com/",
+        "description": "Lodash modular utilities."
+      },
+      {
+        "name": "lowercase-keys",
+        "versions": [
+          "2.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/lowercase-keys#readme",
+        "description": "Lowercase the keys of an object"
+      },
+      {
+        "name": "matcher",
+        "versions": [
+          "3.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/matcher#readme",
+        "description": "Simple wildcard matching"
+      },
+      {
+        "name": "math-intrinsics",
+        "versions": [
+          "1.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/es-shims/math-intrinsics#readme",
+        "description": "ES Math-related intrinsics and helpers, robustly cached."
+      },
+      {
+        "name": "mime",
+        "versions": [
+          "2.6.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/broofa/mime#readme",
+        "description": "A comprehensive library for mime-type mapping"
+      },
+      {
+        "name": "mime-db",
+        "versions": [
+          "1.52.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jshttp/mime-db#readme",
+        "description": "Media Type Database"
+      },
+      {
+        "name": "mime-types",
+        "versions": [
+          "2.1.35"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jshttp/mime-types#readme",
+        "description": "The ultimate javascript content-type utility."
+      },
+      {
+        "name": "mimic-response",
+        "versions": [
+          "1.0.1",
+          "3.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/mimic-response#readme",
+        "description": "Mimic a Node.js HTTP response stream"
+      },
+      {
+        "name": "minimist",
+        "versions": [
+          "1.2.8"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/minimistjs/minimist",
+        "description": "parse argument options"
+      },
+      {
+        "name": "minizlib",
+        "versions": [
+          "3.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/isaacs/minizlib#readme",
+        "description": "A small fast zlib stream built on [minipass](http://npm.im/minipass) and Node.js's zlib binding."
+      },
+      {
+        "name": "mkdirp",
+        "versions": [
+          "0.5.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/substack/node-mkdirp#readme",
+        "description": "Recursively mkdir, like `mkdir -p`"
+      },
+      {
+        "name": "ms",
+        "versions": [
+          "2.1.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/vercel/ms#readme",
+        "description": "Tiny millisecond conversion utility"
+      },
+      {
+        "name": "nanoid",
+        "versions": [
+          "3.3.20"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ai/nanoid#readme",
+        "description": "A tiny (116 bytes), secure URL-friendly unique string ID generator"
+      },
+      {
+        "name": "node-abi",
+        "versions": [
+          "4.38.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/electron/node-abi#readme",
+        "description": "Get the Node ABI for a given target and runtime, and vice versa."
+      },
+      {
+        "name": "node-api-version",
+        "versions": [
+          "0.2.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/timfish/node-api-version#readme",
+        "description": "Gets the supported Node-API version for a specific node or electron version"
+      },
+      {
+        "name": "node-gyp",
+        "versions": [
+          "12.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/nodejs/node-gyp#readme",
+        "description": "Node.js native addon build tool"
+      },
+      {
+        "name": "node-int64",
+        "versions": [
+          "0.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/broofa/node-int64#readme",
+        "description": "Support for representing 64-bit integers in JavaScript"
+      },
+      {
+        "name": "normalize-url",
+        "versions": [
+          "6.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/normalize-url#readme",
+        "description": "Normalize a URL"
+      },
+      {
+        "name": "object-keys",
+        "versions": [
+          "1.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ljharb/object-keys#readme",
+        "description": "An Object.keys replacement, in case Object.keys is not available. From https://github.com/es-shims/es5-shim"
+      },
+      {
+        "name": "p-cancelable",
+        "versions": [
+          "2.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/p-cancelable#readme",
+        "description": "Create a promise that can be canceled"
+      },
+      {
+        "name": "p-limit",
+        "versions": [
+          "3.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/p-limit#readme",
+        "description": "Run multiple promise-returning & async functions with limited concurrency"
+      },
+      {
+        "name": "path-is-absolute",
+        "versions": [
+          "1.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/path-is-absolute#readme",
+        "description": "Node.js 0.12 path.isAbsolute() ponyfill"
+      },
+      {
+        "name": "path-key",
+        "versions": [
+          "3.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/path-key#readme",
+        "description": "Get the PATH environment variable key cross-platform"
+      },
+      {
+        "name": "pe-library",
+        "versions": [
+          "0.4.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jet2jet/pe-library-js",
+        "description": "Node.js library for Portable Executable format"
+      },
+      {
+        "name": "picomatch",
+        "versions": [
+          "4.0.7"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/micromatch/picomatch",
+        "description": "Blazing fast and accurate glob matcher written in JavaScript, with no dependencies and full support for standard and extended Bash glob features, including braces, extglobs, POSIX brackets, and regular expressions."
+      },
+      {
+        "name": "plist",
+        "versions": [
+          "3.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/node-plist#readme",
+        "description": "Apple's property list parser/builder for Node.js and browsers"
+      },
+      {
+        "name": "postcss",
+        "versions": [
+          "8.5.31"
+        ],
+        "license": "MIT",
+        "homepage": "https://postcss.org/",
+        "description": "Tool for transforming styles with JS plugins"
+      },
+      {
+        "name": "postject",
+        "versions": [
+          "1.0.0-alpha.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/nodejs/postject#readme",
+        "description": "Easily inject arbitrary read-only resources into executable formats (Mach-O, PE, ELF) and use it at runtime."
+      },
+      {
+        "name": "process-nextick-args",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/calvinmetcalf/process-nextick-args",
+        "description": "process.nextTick but always with args"
+      },
+      {
+        "name": "progress",
+        "versions": [
+          "2.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/visionmedia/node-progress#readme",
+        "description": "Flexible ascii progress bar"
+      },
+      {
+        "name": "promise-retry",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/IndigoUnited/node-promise-retry#readme",
+        "description": "Retries a function that returns a promise, leveraging the power of the retry module."
+      },
+      {
+        "name": "proper-lockfile",
+        "versions": [
+          "4.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/moxystudio/node-proper-lockfile",
+        "description": "A inter-process and inter-machine lockfile utility that works on a local or network file system"
+      },
+      {
+        "name": "pump",
+        "versions": [
+          "3.0.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/mafintosh/pump#readme",
+        "description": "pipe streams together and close all of them if one of them closes"
+      },
+      {
+        "name": "pvtsutils",
+        "versions": [
+          "1.3.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/pvtsutils#readme",
+        "description": "pvtsutils is a set of common utility functions used in various Peculiar Ventures TypeScript based projects."
+      },
+      {
+        "name": "pvutils",
+        "versions": [
+          "1.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/pvutils#readme",
+        "description": "Common utilities for products from Peculiar Ventures"
+      },
+      {
+        "name": "quick-lru",
+        "versions": [
+          "5.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/quick-lru#readme",
+        "description": "Simple “Least Recently Used” (LRU) cache"
+      },
+      {
+        "name": "react",
+        "versions": [
+          "19.3.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://react.dev/",
+        "description": "React is a JavaScript library for building user interfaces."
+      },
+      {
+        "name": "react-dom",
+        "versions": [
+          "19.3.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://react.dev/",
+        "description": "React package for working with the DOM."
+      },
+      {
+        "name": "read-binary-file-arch",
+        "versions": [
+          "1.0.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/samuelmaddock/read-binary-file-arch#readme",
+        "description": "Reads a binary file to determine its CPU architecture."
+      },
+      {
+        "name": "readable-stream",
+        "versions": [
+          "2.3.8"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/nodejs/readable-stream#readme",
+        "description": "Streams3, a user-land copy of the stream library from Node.js"
+      },
+      {
+        "name": "require-directory",
+        "versions": [
+          "2.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/troygoode/node-require-directory/",
+        "description": "Recursively iterates over specified directory, require()'ing each file, and returning a nested hash structure containing those modules."
+      },
+      {
+        "name": "require-from-string",
+        "versions": [
+          "2.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/floatdrop/require-from-string#readme",
+        "description": "Require module from string"
+      },
+      {
+        "name": "resedit",
+        "versions": [
+          "1.7.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/jet2jet/resedit-js",
+        "description": "Node.js library editing Windows Resource data"
+      },
+      {
+        "name": "resolve-alpn",
+        "versions": [
+          "1.2.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/szmarczak/resolve-alpn#readme",
+        "description": "Detects the ALPN protocol"
+      },
+      {
+        "name": "responselike",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/responselike#readme",
+        "description": "A response-like object for mocking a Node.js HTTP response stream"
+      },
+      {
+        "name": "retry",
+        "versions": [
+          "0.12.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/tim-kos/node-retry",
+        "description": "Abstraction for exponential and custom retry strategies for failed operations."
+      },
+      {
+        "name": "rolldown",
+        "versions": [
+          "1.2.14"
+        ],
+        "license": "MIT",
+        "homepage": "https://rolldown.rs/",
+        "description": "Fast JavaScript/TypeScript bundler in Rust with Rollup-compatible API."
+      },
+      {
+        "name": "safe-buffer",
+        "versions": [
+          "5.1.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/feross/safe-buffer",
+        "description": "Safer Node.js Buffer API"
+      },
+      {
+        "name": "scheduler",
+        "versions": [
+          "0.28.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://react.dev/",
+        "description": "Cooperative scheduler for the browser environment."
+      },
+      {
+        "name": "semver-compare",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/substack/semver-compare",
+        "description": "compare two semver version strings, returning -1, 0, or 1"
+      },
+      {
+        "name": "serialize-error",
+        "versions": [
+          "7.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/serialize-error#readme",
+        "description": "Serialize/deserialize an error into a plain object"
+      },
+      {
+        "name": "shebang-command",
+        "versions": [
+          "2.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/kevva/shebang-command#readme",
+        "description": "Get the command from a shebang"
+      },
+      {
+        "name": "shebang-regex",
+        "versions": [
+          "3.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/shebang-regex#readme",
+        "description": "Regular expression for matching a shebang line"
+      },
+      {
+        "name": "simple-update-notifier",
+        "versions": [
+          "2.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/alexbrazier/simple-update-notifier.git",
+        "description": "Simple update notifier to check for npm updates for cli applications"
+      },
+      {
+        "name": "source-map-support",
+        "versions": [
+          "0.5.21"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/evanw/node-source-map-support#readme",
+        "description": "Fixes stack traces for files with source maps"
+      },
+      {
+        "name": "stat-mode",
+        "versions": [
+          "1.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/stat-mode",
+        "description": "Offers convenient getters and setters for the stat `mode`"
+      },
+      {
+        "name": "string_decoder",
+        "versions": [
+          "1.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/nodejs/string_decoder",
+        "description": "The string_decoder module from Node core"
+      },
+      {
+        "name": "string-width",
+        "versions": [
+          "4.2.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/string-width#readme",
+        "description": "Get the visual width of a string - the number of columns required to display it"
+      },
+      {
+        "name": "strip-ansi",
+        "versions": [
+          "6.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/strip-ansi#readme",
+        "description": "Strip ANSI escape codes from a string"
+      },
+      {
+        "name": "supports-color",
+        "versions": [
+          "7.2.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/supports-color#readme",
+        "description": "Detect whether a terminal supports color"
+      },
+      {
+        "name": "temp",
+        "versions": [
+          "0.9.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/bruce/node-temp#readme",
+        "description": "Temporary files and directories"
+      },
+      {
+        "name": "temp-file",
+        "versions": [
+          "3.4.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/develar/temp-file",
+        "description": null
+      },
+      {
+        "name": "tiny-async-pool",
+        "versions": [
+          "1.3.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/rxaviers/async-pool#readme",
+        "description": "Run multiple promise-returning & async functions with limited concurrency using native ES6/ES7"
+      },
+      {
+        "name": "tinyglobby",
+        "versions": [
+          "0.2.17"
+        ],
+        "license": "MIT",
+        "homepage": "https://superchupu.dev/tinyglobby",
+        "description": "A fast and minimal alternative to globby and fast-glob"
+      },
+      {
+        "name": "tmp",
+        "versions": [
+          "0.2.7"
+        ],
+        "license": "MIT",
+        "homepage": "http://github.com/raszi/node-tmp",
+        "description": "Temporary file and directory creator"
+      },
+      {
+        "name": "tmp-promise",
+        "versions": [
+          "3.0.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/benjamingr/tmp-promise#readme",
+        "description": "The tmp package with promises support and disposers."
+      },
+      {
+        "name": "undici",
+        "versions": [
+          "6.29.1",
+          "7.30.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://undici.nodejs.org",
+        "description": "An HTTP/1.1 client, written from scratch for Node.js"
+      },
+      {
+        "name": "undici-types",
+        "versions": [
+          "6.21.0",
+          "7.24.6"
+        ],
+        "license": "MIT",
+        "homepage": "https://undici.nodejs.org",
+        "description": "A stand-alone types package for Undici"
+      },
+      {
+        "name": "universalify",
+        "versions": [
+          "0.1.2",
+          "2.0.1"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/RyanZim/universalify#readme",
+        "description": "Make a callback- or promise-based function support both promises and callbacks."
+      },
+      {
+        "name": "unzipper",
+        "versions": [
+          "0.12.5"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/ZJONSSON/node-unzipper#readme",
+        "description": "Unzip cross-platform streaming API "
+      },
+      {
+        "name": "util-deprecate",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/TooTallNate/util-deprecate",
+        "description": "The Node.js `util.deprecate()` function with browser support"
+      },
+      {
+        "name": "vite",
+        "versions": [
+          "8.3.4"
+        ],
+        "license": "MIT",
+        "homepage": "https://vite.dev",
+        "description": "Native-ESM powered web dev build tool"
+      },
+      {
+        "name": "webcrypto-core",
+        "versions": [
+          "1.9.2"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/PeculiarVentures/webcrypto-core#readme",
+        "description": "Common layer to be used by crypto libraries based on WebCrypto API for input validation."
+      },
+      {
+        "name": "wrap-ansi",
+        "versions": [
+          "7.0.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/chalk/wrap-ansi#readme",
+        "description": "Wordwrap a string with ANSI escape codes"
+      },
+      {
+        "name": "xmlbuilder",
+        "versions": [
+          "15.1.1"
+        ],
+        "license": "MIT",
+        "homepage": "http://github.com/oozcitak/xmlbuilder-js",
+        "description": "An XML builder for node.js"
+      },
+      {
+        "name": "yargs",
+        "versions": [
+          "17.7.3"
+        ],
+        "license": "MIT",
+        "homepage": "https://yargs.js.org/",
+        "description": "yargs the modern, pirate-themed, successor to optimist."
+      },
+      {
+        "name": "yocto-queue",
+        "versions": [
+          "0.1.0"
+        ],
+        "license": "MIT",
+        "homepage": "https://github.com/sindresorhus/yocto-queue#readme",
+        "description": "Tiny queue data structure"
+      }
+    ],
+    "MPL-2.0": [
+      {
+        "name": "lightningcss",
+        "versions": [
+          "1.33.0"
+        ],
+        "license": "MPL-2.0",
+        "homepage": "https://github.com/parcel-bundler/lightningcss#readme",
+        "description": "A CSS parser, transformer, and minifier written in Rust"
+      },
+      {
+        "name": "lightningcss-win32-x64-msvc",
+        "versions": [
+          "1.33.0"
+        ],
+        "license": "MPL-2.0",
+        "homepage": "https://github.com/parcel-bundler/lightningcss#readme",
+        "description": "A CSS parser, transformer, and minifier written in Rust"
+      }
+    ],
+    "Python-2.0": [
+      {
+        "name": "argparse",
+        "versions": [
+          "2.0.1"
+        ],
+        "license": "Python-2.0",
+        "homepage": "https://github.com/nodeca/argparse#readme",
+        "description": "CLI arguments parser. Native port of python's argparse."
+      }
+    ],
+    "WTFPL": [
+      {
+        "name": "truncate-utf8-bytes",
+        "versions": [
+          "1.0.2"
+        ],
+        "license": "WTFPL",
+        "homepage": "https://github.com/parshap/truncate-utf8-bytes#readme",
+        "description": "Truncate string to given length in bytes"
+      }
+    ],
+    "WTFPL OR ISC": [
+      {
+        "name": "sanitize-filename",
+        "versions": [
+          "1.6.4"
+        ],
+        "license": "WTFPL OR ISC",
+        "homepage": "https://github.com/parshap/node-sanitize-filename#readme",
+        "description": "Sanitize a string for use as a filename"
+      }
+    ]
+  },
+  "in_repo_packages": [
+    {
+      "name": "@ravel/api-client",
+      "version": "0.1.0",
+      "note": "Project code generated by T13; private workspace package, not third-party."
+    }
+  ],
+  "shipped_runtime": [
+    {
+      "name": "electron",
+      "version": "44.9.1",
+      "license": "MIT",
+      "note": "The Windows package includes LICENSE.electron.txt and LICENSES.chromium.html at its root."
+    },
+    {
+      "name": "react",
+      "version": "19.3.1",
+      "license": "MIT"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.3.1",
+      "license": "MIT"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.28.0",
+      "license": "MIT"
+    }
+  ]
+}
