@@ -8,12 +8,14 @@ from tests.premium.T12.support import (
     a_prepared_node,
     a_real_execution,
     a_real_source,
+    a_review,
     an_artifact,
     an_evidence,
     assert_report_schema,
     explain,
     read_report,
     report,
+    utc,
 )
 
 from ravel.domain.enums import ClaimClass, ReviewCheckpoint, ReviewOutcome
@@ -91,9 +93,7 @@ def test_report_is_frozen_against_later_ledger_changes(database, project) -> Non
     assert regenerated.report.rendered["ledger_digest"] != original_digest
     assert _claim_ids(regenerated) != _claim_ids(original)
 
-    still_frozen = read_report(
-        database, project.project_id, original.report.report_id
-    )
+    still_frozen = read_report(database, project.project_id, original.report.report_id)
     assert still_frozen.report.rendered["executions"]["total"] == 1
     assert still_frozen.report_json() == original_json
 
@@ -153,8 +153,7 @@ def test_master_commentary_cannot_change_rendered_facts(database, project) -> No
             "A second explanation cannot be attached to the same snapshot.",
         )
     assert (
-        read_report(database, project.project_id, snapshot.report.report_id).report_json()
-        == before
+        read_report(database, project.project_id, snapshot.report.report_id).report_json() == before
     )
 
 
@@ -194,9 +193,7 @@ def test_only_master_may_explain_a_report(database, project, role: AgentRole) ->
     assert after.commentary is None
 
 
-def test_review_reads_frozen_criteria_and_raw_artifact_metadata(
-    database, project
-) -> None:
+def test_review_reads_frozen_criteria_and_raw_artifact_metadata(database, project) -> None:
     prepared = a_prepared_node(database, project.project_id)
     assert prepared.acceptance is not None
     store = MemoryStore()
@@ -231,9 +228,7 @@ def test_review_reads_frozen_criteria_and_raw_artifact_metadata(
         ),
     )
 
-    snapshot = report(
-        database, project.project_id, request, role=AgentRole.REVIEW
-    )
+    snapshot = report(database, project.project_id, request, role=AgentRole.REVIEW)
     assert snapshot.certified is True
 
     reviewed = read_report(database, project.project_id, snapshot.report.report_id)
@@ -259,15 +254,12 @@ def test_review_reads_frozen_criteria_and_raw_artifact_metadata(
     assert store.verify(version.storage_key, version.content_hash)
 
     evidence_index = {
-        item["evidence_id"]: item
-        for item in reviewed.report.rendered["evidence_index"]
+        item["evidence_id"]: item for item in reviewed.report.rendered["evidence_index"]
     }
     assert evidence_index[evidence.evidence_id]["locator"] == "pp. 9-10"
 
 
-def test_two_reports_over_one_ledger_render_the_same_facts(
-    database, project
-) -> None:
+def test_two_reports_over_one_ledger_render_the_same_facts(database, project) -> None:
     prepared = a_prepared_node(database, project.project_id)
     store = MemoryStore()
     source = a_real_source(database, project.project_id)
@@ -282,6 +274,12 @@ def test_two_reports_over_one_ledger_render_the_same_facts(
         node_id=prepared.node_id,
     )
     execution = a_real_execution(database, prepared, backend="slurm")
+    tied_at = utc()
+    tied_reviews = (
+        a_review(database, prepared, created_at=tied_at),
+        a_review(database, prepared, created_at=tied_at),
+    )
+    tied_ids = {review.review_id for review in tied_reviews}
     request = _request(evidence.evidence_id, artifact.artifact_id, execution.execution_id)
 
     first = report(database, project.project_id, request)
@@ -289,10 +287,14 @@ def test_two_reports_over_one_ledger_render_the_same_facts(
 
     assert first.report.report_id != second.report.report_id
     assert first.report.rendered == second.report.rendered
+    reviews = first.report.rendered["reviews"]
+    assert reviews["total"] == 3
+    tied_order = [
+        entry["review_id"] for entry in reviews["index"] if entry["review_id"] in tied_ids
+    ]
+    assert tied_order == sorted(tied_ids)
     assert first.report.data_mode is second.report.data_mode
-    assert [
-        (ref.evidence_id, ref.execution_type) for ref in first.evidence_refs
-    ] == [
+    assert [(ref.evidence_id, ref.execution_type) for ref in first.evidence_refs] == [
         (ref.evidence_id, ref.execution_type) for ref in second.evidence_refs
     ]
     assert [
@@ -304,9 +306,7 @@ def test_two_reports_over_one_ledger_render_the_same_facts(
     ]
 
 
-def test_reports_and_commentary_are_project_scoped(
-    database, project, other_project
-) -> None:
+def test_reports_and_commentary_are_project_scoped(database, project, other_project) -> None:
     snapshot = report(
         database,
         project.project_id,

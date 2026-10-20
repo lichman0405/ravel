@@ -22,6 +22,7 @@ from typing import Any, BinaryIO
 from tests.integration.conftest import READ_AT, Prepared, a_source, build_prepared
 
 from ravel.domain.artifacts import Artifact, ArtifactVersion
+from ravel.domain.decisions import ReviewRecord
 from ravel.domain.enums import (
     AccessStatus,
     ClaimClass,
@@ -30,6 +31,8 @@ from ravel.domain.enums import (
     EvidenceSourceTier,
     JobState,
     NodeType,
+    ReviewCheckpoint,
+    ReviewOutcome,
     TerminationStatus,
 )
 from ravel.domain.evidence import Evidence, EvidenceSource
@@ -37,7 +40,11 @@ from ravel.domain.execution import BackendJob, CompletenessCheck, ExecutionRecor
 from ravel.domain.roles import AgentRole
 from ravel.reports.models import ReportRequest, ReportSnapshot
 from ravel.state.database import Database
-from ravel.state.repositories.records import BackendJobRepository, ExecutionRepository
+from ravel.state.repositories.records import (
+    BackendJobRepository,
+    ExecutionRepository,
+    ReviewRepository,
+)
 from ravel.state.repositories.reports import ScientificReportRepository
 from ravel.state.repositories.research import (
     ArtifactRepository,
@@ -55,9 +62,7 @@ class MemoryStore:
     def __init__(self) -> None:
         self.objects: dict[str, tuple[bytes, str]] = {}
 
-    def put(
-        self, key: str, chunks: Iterable[bytes], *, media_type: str = ""
-    ) -> StoredObject:
+    def put(self, key: str, chunks: Iterable[bytes], *, media_type: str = "") -> StoredObject:
         if key in self.objects:
             raise ArtifactStoreError(f"{key} already exists; artifacts are immutable")
         data = b"".join(chunks)
@@ -105,9 +110,7 @@ def a_real_source(
     *,
     url: str = "https://example.org/niobium-stability",
 ) -> EvidenceSource:
-    return a_source(
-        database, project_id, url=url, tier=EvidenceSourceTier.A
-    )
+    return a_source(database, project_id, url=url, tier=EvidenceSourceTier.A)
 
 
 def a_fixture_source(database: Database, project_id: str) -> EvidenceSource:
@@ -140,9 +143,7 @@ def an_evidence(
         confidence=Confidence.HIGH,
     )
     with database.transaction() as session:
-        return EvidenceRepository(session, project_id).register(
-            evidence, actor_id="research-agent"
-        )
+        return EvidenceRepository(session, project_id).register(evidence, actor_id="research-agent")
 
 
 def a_real_execution(
@@ -168,9 +169,7 @@ def a_real_execution(
         started_at=READ_AT,
     )
     with database.transaction() as session:
-        return ExecutionRepository(session, prepared.project_id).record(
-            execution, actor_id=backend
-        )
+        return ExecutionRepository(session, prepared.project_id).record(execution, actor_id=backend)
 
 
 def a_backend_job(
@@ -197,6 +196,35 @@ def a_backend_job(
         if state is not JobState.RUNNING:
             stored = repository.record_state(stored.job_id, JobState.RUNNING)
         return repository.record_state(stored.job_id, state)
+
+
+def a_review(
+    database: Database,
+    prepared: Prepared,
+    *,
+    created_at: datetime,
+    checkpoint: ReviewCheckpoint = ReviewCheckpoint.PRE_RUN,
+    outcome: ReviewOutcome = ReviewOutcome.PASS,
+) -> ReviewRecord:
+    """Submit an additional Review with a caller-chosen timestamp.
+
+    Used to give two reviews the same `created_at`, which is the case an
+    ordering rule has to break deterministically.
+    """
+    frozen = prepared.acceptance or prepared.contract
+    review = ReviewRecord(
+        project_id=prepared.project_id,
+        node_id=prepared.node_id,
+        checkpoint=checkpoint,
+        frozen_criteria_ref=frozen.contract_id,
+        frozen_criteria_version=frozen.version,
+        outcome=outcome,
+        created_at=created_at,
+    )
+    with database.transaction() as session:
+        return ReviewRepository(session, prepared.project_id).submit(
+            review, role=AgentRole.REVIEW, actor_id=AgentRole.REVIEW.value
+        )
 
 
 def an_artifact(
@@ -239,9 +267,7 @@ def report(
         )
 
 
-def read_report(
-    database: Database, project_id: str, report_id: str
-) -> ReportSnapshot:
+def read_report(database: Database, project_id: str, report_id: str) -> ReportSnapshot:
     with database.read_only() as session:
         return ScientificReportRepository(session, project_id).read(report_id)
 
@@ -315,9 +341,7 @@ def conflict_codes(snapshot: ReportSnapshot) -> set[str]:
 
 
 def evidence_types(snapshot: ReportSnapshot) -> dict[str, str]:
-    return {
-        ref.evidence_id: ref.execution_type.value for ref in snapshot.evidence_refs
-    }
+    return {ref.evidence_id: ref.execution_type.value for ref in snapshot.evidence_refs}
 
 
 def utc(year: int = 2026, month: int = 10, day: int = 20) -> datetime:

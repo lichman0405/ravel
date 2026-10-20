@@ -123,12 +123,11 @@ class LedgerIndex:
         caller happened to know.
         """
 
-        def rows(table: Any) -> list[Any]:
-            return list(
-                session.execute(
-                    select(table).where(table.project_id == project_id)
-                ).scalars()
-            )
+        def rows(table: Any, *order_by: Any) -> list[Any]:
+            statement = select(table).where(table.project_id == project_id)
+            if order_by:
+                statement = statement.order_by(*order_by)
+            return list(session.execute(statement).scalars())
 
         versions: dict[str, list[ArtifactVersionRow]] = {}
         for version in rows(ArtifactVersionRow):
@@ -144,11 +143,13 @@ class LedgerIndex:
             executions={row.execution_id: row for row in rows(ExecutionRecordRow)},
             jobs={row.job_id: row for row in rows(BackendJobRow)},
             reviews=tuple(
-                sorted(rows(ReviewRecordRow), key=lambda row: row.created_at)
+                rows(
+                    ReviewRecordRow,
+                    ReviewRecordRow.created_at,
+                    ReviewRecordRow.review_id,
+                )
             ),
-            deviations=tuple(
-                sorted(rows(DeviationRecordRow), key=lambda row: row.raised_at)
-            ),
+            deviations=tuple(sorted(rows(DeviationRecordRow), key=lambda row: row.raised_at)),
             node_types={row.node_id: row.node_type for row in rows(DagNodeRow)},
         )
 
@@ -159,18 +160,23 @@ class LedgerIndex:
 
     def executions_for_node(self, node_id: str) -> tuple[ExecutionRecordRow, ...]:
         """Every execution record this project holds for one node."""
-        return tuple(
-            row for row in self.executions.values() if row.node_id == node_id
-        )
+        return tuple(row for row in self.executions.values() if row.node_id == node_id)
 
 
 @dataclass(frozen=True, slots=True)
 class Classification:
-    """A derived evidence type and the ledger facts it was derived from."""
+    """A derived evidence type and the ledger facts it was derived from.
+
+    ``missing_source_refs`` is not a classification: it is the evidence row
+    naming source identifiers this project does not hold. The report builder
+    turns it into a conflict, because an existing evidence row that cites a
+    nonexistent source is the nested form of a fabricated source citation.
+    """
 
     execution_type: EvidenceExecutionType
     original_record: dict[str, Any]
     content_hash: str | None
+    missing_source_refs: tuple[str, ...] = ()
 
 
 #: How strongly a marker constrains the claim resting on it. A claim inherits
@@ -233,6 +239,7 @@ def _classify_evidence(index: LedgerIndex, evidence: EvidenceRow) -> Classificat
             "sources": originals,
         },
         content_hash=evidence.content_hash or (hashes[0] if hashes else None),
+        missing_source_refs=tuple(missing),
     )
 
 
@@ -302,8 +309,7 @@ def _classify_execution(execution: ExecutionRecordRow) -> Classification:
 def _classify_artifact(index: LedgerIndex, artifact: ArtifactRow) -> Classification:
     latest = index.latest_version(artifact.artifact_id)
     return Classification(
-        execution_type=_artifact_kind(index, artifact)
-        or EvidenceExecutionType.RESEARCH_SOURCE,
+        execution_type=_artifact_kind(index, artifact) or EvidenceExecutionType.RESEARCH_SOURCE,
         original_record={
             "kind": "artifact",
             "artifact_id": artifact.artifact_id,
@@ -319,9 +325,7 @@ def _classify_artifact(index: LedgerIndex, artifact: ArtifactRow) -> Classificat
     )
 
 
-def _artifact_kind(
-    index: LedgerIndex, artifact: ArtifactRow
-) -> EvidenceExecutionType | None:
+def _artifact_kind(index: LedgerIndex, artifact: ArtifactRow) -> EvidenceExecutionType | None:
     """The provenance-derived kind of an artifact, or `None` if unmarked.
 
     `None` is not "unknown evidence": it means nothing in the artifact's own

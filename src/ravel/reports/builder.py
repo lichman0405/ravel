@@ -53,9 +53,7 @@ from ravel.reports.models import (
 
 #: The execution types that make a claim a computation claim, which must name
 #: the records that ran rather than only the artifact that came out.
-_COMPUTED = frozenset(
-    {EvidenceExecutionType.COMPUTATION, EvidenceExecutionType.HUMAN_LAB}
-)
+_COMPUTED = frozenset({EvidenceExecutionType.COMPUTATION, EvidenceExecutionType.HUMAN_LAB})
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,9 +65,7 @@ class BuiltReport:
     evidence_refs: tuple[ReportEvidenceRef, ...]
 
 
-def build_report(
-    index: LedgerIndex, project_id: str, request: ReportRequest
-) -> BuiltReport:
+def build_report(index: LedgerIndex, project_id: str, request: ReportRequest) -> BuiltReport:
     """Build one immutable report snapshot from a project's ledger index.
 
     The same request over the same ledger produces the same rendered facts and
@@ -96,9 +92,7 @@ def build_report(
                     asserted={"evidence_id": item.evidence_id},
                 )
             )
-            conflicted_evidence[item.evidence_id] = (
-                ReportConflictCode.FABRICATED_SOURCE.value,
-            )
+            conflicted_evidence[item.evidence_id] = (ReportConflictCode.FABRICATED_SOURCE.value,)
             continue
 
         codes: list[str] = []
@@ -128,6 +122,19 @@ def build_report(
                     "report names no page range or locator",
                     evidence_id=item.evidence_id,
                     asserted={"locator": item.locator},
+                    original_record=classified.original_record,
+                )
+            )
+        if classified.missing_source_refs:
+            codes.append(ReportConflictCode.FABRICATED_SOURCE.value)
+            conflicts.append(
+                _conflict(
+                    ReportConflictCode.FABRICATED_SOURCE,
+                    f"evidence {item.evidence_id!r} cites source(s) this project "
+                    f"does not hold: {sorted(classified.missing_source_refs)}",
+                    evidence_id=item.evidence_id,
+                    asserted={"source_refs": list(classified.missing_source_refs)},
+                    actual={"missing_source_refs": list(classified.missing_source_refs)},
                     original_record=classified.original_record,
                 )
             )
@@ -176,14 +183,10 @@ def build_report(
         )
 
     report_id = _new_report_id()
-    evidence_rows = tuple(
-        _with_report_id(ref, report_id) for ref in evidence_refs
-    )
+    evidence_rows = tuple(_with_report_id(ref, report_id) for ref in evidence_refs)
     claim_rows = tuple(_with_report_id(claim, report_id) for claim in claims)
     reason = (
-        f"{len(conflicts)} claim(s) or reference(s) disagreed with the ledger"
-        if conflicts
-        else ""
+        f"{len(conflicts)} claim(s) or reference(s) disagreed with the ledger" if conflicts else ""
     )
     report_status = ReportStatus.REPORT_CONFLICT if conflicts else ReportStatus.CERTIFIED
     report = ScientificReport(
@@ -221,28 +224,20 @@ def render_facts(
     from a ledger row, and every map is keyed in sorted order so two reports
     over one ledger compare equal rather than merely looking equal.
     """
-    execution_backends = Counter(
-        execution.backend for execution in index.executions.values()
-    )
+    execution_backends = Counter(execution.backend for execution in index.executions.values())
     execution_status = Counter(
         execution.termination_status for execution in index.executions.values()
     )
     simulated_executions = sum(
-        1
-        for execution in index.executions.values()
-        if is_simulated_backend(execution.backend)
+        1 for execution in index.executions.values() if is_simulated_backend(execution.backend)
     )
     job_states = Counter(job.state for job in index.jobs.values())
     job_backends = Counter(job.backend for job in index.jobs.values())
-    simulated_jobs = sum(
-        1 for job in index.jobs.values() if is_simulated_backend(job.backend)
-    )
+    simulated_jobs = sum(1 for job in index.jobs.values() if is_simulated_backend(job.backend))
     review_outcomes = Counter(review.outcome for review in index.reviews)
     review_checkpoints = Counter(review.checkpoint for review in index.reviews)
     artifacts = []
-    for artifact in sorted(
-        index.artifacts.values(), key=lambda row: row.artifact_id
-    ):
+    for artifact in sorted(index.artifacts.values(), key=lambda row: row.artifact_id):
         version = index.latest_version(artifact.artifact_id)
         artifacts.append(
             {
@@ -253,9 +248,7 @@ def render_facts(
                 "created_by": artifact.created_by,
                 "node_id": artifact.node_id,
                 "latest_version": version.version if version is not None else None,
-                "content_hash": (
-                    version.content_hash if version is not None else None
-                ),
+                "content_hash": (version.content_hash if version is not None else None),
                 "simulated": artifact_is_simulated(index, artifact),
             }
         )
@@ -304,9 +297,7 @@ def render_facts(
         "deviations": {
             "total": len(index.deviations),
             "open": sum(
-                1
-                for deviation in index.deviations
-                if deviation.resolved_by_decision_ref is None
+                1 for deviation in index.deviations if deviation.resolved_by_decision_ref is None
             ),
         },
         "evidence_index": [
@@ -319,9 +310,7 @@ def render_facts(
             }
             for ref in sorted(evidence_refs, key=lambda row: row.position)
         ],
-        "conflict_codes": sorted(
-            {str(conflict["code"]) for conflict in conflicts}
-        ),
+        "conflict_codes": sorted({str(conflict["code"]) for conflict in conflicts}),
         "ledger_digest": _ledger_digest(index),
     }
 
@@ -340,10 +329,33 @@ def _claim_conflicts(
     A claim is rejected when it raises any conflict, and also when it cites
     evidence whose own citation failed — in that second case the evidence-level
     conflict already names the failure, so no duplicate claim-level conflict is
-    invented, but the claim still may not be persisted.
+    invented, but the claim still may not be persisted. A claim that names no
+    ledger identifier at all is a `MISSING_CITATION` conflict for every claim
+    type, including a hypothesis: a report certifies claims a reader can check,
+    and an uncited statement is a proposal, not a report conclusion.
     """
     conflicts: list[dict[str, Any]] = []
     cited = tuple(dict.fromkeys(claim_request.evidence_ids))
+    execution_refs = tuple(dict.fromkeys(claim_request.execution_refs))
+    if (
+        not cited
+        and not execution_refs
+        and claim_request.execution_node_id is None
+        and claim_request.execution_count is None
+    ):
+        conflicts.append(
+            _conflict(
+                ReportConflictCode.MISSING_CITATION,
+                "a claim must cite at least one ledger identifier; a statement "
+                "with no evidence, execution, node or count reference cannot be "
+                "verified and cannot be certified",
+                claim_id=claim_id,
+                asserted={
+                    "statement": claim_request.statement,
+                    "claim_type": claim_request.claim_type.value,
+                },
+            )
+        )
     for evidence_id in cited:
         if evidence_id not in requested_ids:
             conflicts.append(
@@ -387,41 +399,35 @@ def _claim_conflicts(
             )
 
     types = {
-        resolved[evidence_id].execution_type
+        resolved[evidence_id].execution_type for evidence_id in cited if evidence_id in resolved
+    }
+    simulated_evidence = {
+        evidence_id: resolved[evidence_id].original_record
         for evidence_id in cited
         if evidence_id in resolved
+        and resolved[evidence_id].execution_type is EvidenceExecutionType.SIMULATED
     }
-    if (
-        claim_request.claim_type is ClaimClass.FACT
-        and EvidenceExecutionType.SIMULATED in types
-    ):
+    simulated_refs = _simulated_execution_refs(index, execution_refs)
+    if claim_request.claim_type is ClaimClass.FACT and (simulated_evidence or simulated_refs):
         conflicts.append(
             _conflict(
                 ReportConflictCode.SIMULATED_AS_FACT,
-                "a FACT claim rests on simulated evidence; simulated output is "
-                "never a fact, and the report does not relabel it",
+                "a FACT claim rests on simulated evidence or a simulated "
+                "execution; simulated output is never a fact, and the report "
+                "does not relabel it",
                 claim_id=claim_id,
                 asserted={
                     "claim_type": claim_request.claim_type.value,
                     "statement": claim_request.statement,
                     "evidence_ids": list(cited),
+                    "execution_refs": list(execution_refs),
                 },
-                original_record={
-                    evidence_id: resolved[evidence_id].original_record
-                    for evidence_id in cited
-                    if evidence_id in resolved
-                    and resolved[evidence_id].execution_type
-                    is EvidenceExecutionType.SIMULATED
-                },
+                original_record={**simulated_evidence, **simulated_refs},
             )
         )
 
-    conflicts.extend(
-        _execution_conflicts(index, claim_request, claim_id=claim_id, types=types)
-    )
-    cited_conflicted = any(
-        evidence_id in conflicted_evidence for evidence_id in cited
-    )
+    conflicts.extend(_execution_conflicts(index, claim_request, claim_id=claim_id, types=types))
+    cited_conflicted = any(evidence_id in conflicted_evidence for evidence_id in cited)
     return conflicts, bool(conflicts) or cited_conflicted
 
 
@@ -444,10 +450,7 @@ def _execution_conflicts(
     )
     missing_refs = (
         computed_claim
-        or (
-            claim_request.execution_count is not None
-            and claim_request.execution_node_id is None
-        )
+        or (claim_request.execution_count is not None and claim_request.execution_node_id is None)
     ) and not execution_refs
     if missing_refs:
         conflicts.append(
@@ -475,8 +478,7 @@ def _execution_conflicts(
             conflicts.append(
                 _conflict(
                     ReportConflictCode.FABRICATED_EXECUTION,
-                    f"claim cites execution {execution_id!r}, which does not "
-                    "exist in this project",
+                    f"claim cites execution {execution_id!r}, which does not exist in this project",
                     claim_id=claim_id,
                     asserted={"execution_id": execution_id},
                 )
@@ -493,7 +495,25 @@ def _execution_conflicts(
         )
 
     node_id = claim_request.execution_node_id
-    if node_id is not None and known:
+    node_known = (
+        node_id is None
+        or node_id in index.node_types
+        or any(execution.node_id == node_id for execution in index.executions.values())
+    )
+    if node_id is not None and not node_known:
+        # A node the ledger does not hold is not a node with zero executions.
+        # Treating it as one would turn a fabricated reference into a verified
+        # count of zero.
+        conflicts.append(
+            _conflict(
+                ReportConflictCode.FABRICATED_EXECUTION,
+                f"claim names execution node {node_id!r}, which exists neither "
+                "in the project's DAG nor in its execution ledger",
+                claim_id=claim_id,
+                asserted={"execution_node_id": node_id},
+            )
+        )
+    elif node_id is not None and known:
         wrong_node = [
             execution_id
             for execution_id in known
@@ -514,12 +534,11 @@ def _execution_conflicts(
                 )
             )
 
-    if claim_request.execution_count is not None:
+    if claim_request.execution_count is not None and node_known:
         if node_id is not None and not known:
             actual = len(index.executions_for_node(node_id))
             ledger_ids = [
-                execution.execution_id
-                for execution in index.executions_for_node(node_id)
+                execution.execution_id for execution in index.executions_for_node(node_id)
             ]
         else:
             actual = len(known)
@@ -548,9 +567,43 @@ def _execution_conflicts(
     return conflicts
 
 
-def _data_mode(
-    index: LedgerIndex, evidence_refs: tuple[ReportEvidenceRef, ...]
-) -> ReportDataMode:
+def _simulated_execution_refs(
+    index: LedgerIndex, execution_refs: tuple[str, ...]
+) -> dict[str, dict[str, Any]]:
+    """The cited executions, and their backend jobs, that are mocks.
+
+    Simulatedness is not only a property of the evidence a claim lists. A
+    claim can name an execution instead, and that execution can be a mock
+    backend or can point at a mock backend job. Both are checked; a FACT that
+    rests on either is a simulated result presented as a fact.
+    """
+    simulated: dict[str, dict[str, Any]] = {}
+    for execution_id in execution_refs:
+        execution = index.executions.get(execution_id)
+        if execution is None:
+            continue
+        job = index.jobs.get(execution.backend_job_ref or "")
+        reasons: list[str] = []
+        if is_simulated_backend(execution.backend):
+            reasons.append("execution-backend")
+        if job is not None and is_simulated_backend(job.backend):
+            reasons.append("backend-job")
+        if not reasons:
+            continue
+        simulated[execution_id] = {
+            "kind": "execution",
+            "execution_id": execution.execution_id,
+            "node_id": execution.node_id,
+            "backend": execution.backend,
+            "backend_job_ref": execution.backend_job_ref,
+            "backend_job_backend": job.backend if job is not None else None,
+            "termination_status": execution.termination_status,
+            "non_real": reasons,
+        }
+    return simulated
+
+
+def _data_mode(index: LedgerIndex, evidence_refs: tuple[ReportEvidenceRef, ...]) -> ReportDataMode:
     """REAL, SIMULATED, or MIXED, from provenance and never from a caller."""
     modes: set[ReportDataMode] = set()
     for execution in index.executions.values():
@@ -561,9 +614,7 @@ def _data_mode(
         )
     for job in index.jobs.values():
         modes.add(
-            ReportDataMode.SIMULATED
-            if is_simulated_backend(job.backend)
-            else ReportDataMode.REAL
+            ReportDataMode.SIMULATED if is_simulated_backend(job.backend) else ReportDataMode.REAL
         )
     for artifact in index.artifacts.values():
         modes.add(
@@ -591,6 +642,7 @@ def _ledger_digest(index: LedgerIndex) -> str:
     not an authorization token and no read path trusts it; it is a cheap way
     for a reader to notice that two snapshots differ in more than their ids.
     """
+
     def canonical(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return sorted(
             rows,
@@ -686,9 +738,7 @@ def _ledger_digest(index: LedgerIndex) -> str:
             ]
         ),
     }
-    encoded = json.dumps(
-        facts, sort_keys=True, separators=(",", ":"), default=str
-    ).encode("utf-8")
+    encoded = json.dumps(facts, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
@@ -712,17 +762,11 @@ def _check_request_shape(request: ReportRequest) -> None:
         if not claim.statement.strip():
             raise ValueError("every claim needs a non-empty statement")
         if len(set(claim.evidence_ids)) != len(claim.evidence_ids):
-            raise ValueError(
-                f"claim {claim.statement!r} cites the same evidence more than once"
-            )
+            raise ValueError(f"claim {claim.statement!r} cites the same evidence more than once")
         if len(set(claim.execution_refs)) != len(claim.execution_refs):
-            raise ValueError(
-                f"claim {claim.statement!r} cites the same execution more than once"
-            )
+            raise ValueError(f"claim {claim.statement!r} cites the same execution more than once")
         if claim.execution_count is not None and claim.execution_count < 0:
-            raise ValueError(
-                f"claim {claim.statement!r} asserts a negative execution count"
-            )
+            raise ValueError(f"claim {claim.statement!r} asserts a negative execution count")
     for limitation in request.limitations:
         if not limitation.strip():
             raise ValueError("a limitation cannot be an empty string")

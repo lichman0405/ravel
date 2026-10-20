@@ -349,3 +349,225 @@ def test_fabricated_execution_reference_is_a_conflict(database, project) -> None
     assert snapshot.claims == ()
     with pytest.raises(ReportNotCertified):
         snapshot.certified_json()
+
+
+@pytest.mark.parametrize(
+    "claim_type",
+    [
+        pytest.param(ClaimClass.FACT, id="fact"),
+        pytest.param(ClaimClass.INFERENCE, id="inference"),
+        pytest.param(ClaimClass.HYPOTHESIS, id="hypothesis"),
+    ],
+)
+def test_an_uncited_claim_is_a_conflict(database, project, claim_type: ClaimClass) -> None:
+    """No claim type may be certified without a ledger identifier.
+
+    The ledger here is empty, which is the shape that used to slip through: a
+    statement with no references produced no conflicts, so an empty project
+    could issue a CERTIFIED report whose only claim cited nothing at all.
+    """
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="Nothing behind it",
+            claims=(
+                ClaimRequest(
+                    statement="This statement names no ledger row.",
+                    claim_type=claim_type,
+                ),
+            ),
+        ),
+    )
+
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.report.data_mode is ReportDataMode.REAL
+    assert snapshot.evidence_refs == ()
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"MISSING_CITATION"}
+    conflict = snapshot.conflicts[0]
+    assert conflict["claim_id"] is not None
+    assert conflict["asserted"]["claim_type"] == claim_type.value
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()
+
+
+def test_a_fact_resting_on_a_mock_execution_is_a_conflict(database, project) -> None:
+    prepared = a_prepared_node(database, project.project_id)
+    mock_execution = a_real_execution(database, prepared, backend="mock-compute")
+
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="Mock run as fact",
+            claims=(
+                ClaimRequest(
+                    statement="The mock run proves the effect.",
+                    claim_type=ClaimClass.FACT,
+                    execution_refs=(mock_execution.execution_id,),
+                ),
+            ),
+        ),
+    )
+
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.report.data_mode is ReportDataMode.SIMULATED
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"SIMULATED_AS_FACT"}
+    conflict = next(item for item in snapshot.conflicts if item["code"] == "SIMULATED_AS_FACT")
+    assert conflict["asserted"]["execution_refs"] == [mock_execution.execution_id]
+    original = conflict["original_record"][mock_execution.execution_id]
+    assert original["backend"] == "mock-compute"
+    assert "execution-backend" in original["non_real"]
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()
+
+
+def test_a_mock_backend_job_makes_its_execution_ref_simulated(database, project) -> None:
+    prepared = a_prepared_node(database, project.project_id)
+    job = a_backend_job(database, prepared, backend="mock-compute", state=JobState.COMPLETED)
+    execution = a_real_execution(
+        database,
+        prepared,
+        backend="slurm",
+        backend_job_ref=job.job_id,
+    )
+
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="Mock job behind a Slurm-looking execution",
+            claims=(
+                ClaimRequest(
+                    statement="The run proves the effect.",
+                    claim_type=ClaimClass.FACT,
+                    execution_refs=(execution.execution_id,),
+                ),
+            ),
+        ),
+    )
+
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.report.data_mode is ReportDataMode.MIXED
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"SIMULATED_AS_FACT"}
+    original = snapshot.conflicts[0]["original_record"][execution.execution_id]
+    assert original["backend"] == "slurm"
+    assert original["backend_job_backend"] == "mock-compute"
+    assert "backend-job" in original["non_real"]
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()
+
+
+def test_a_real_evidence_fact_with_a_mock_ref_is_a_conflict(database, project) -> None:
+    prepared = a_prepared_node(database, project.project_id)
+    source = a_real_source(database, project.project_id)
+    evidence = an_evidence(database, project.project_id, source_ids=(source.source_id,))
+    mock_execution = a_real_execution(database, prepared, backend="mock-compute")
+
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="Real paper, mock run",
+            evidence=(EvidenceRequest(evidence.evidence_id, locator="pp. 1-2"),),
+            claims=(
+                ClaimRequest(
+                    statement="The paper and the mock run agree.",
+                    claim_type=ClaimClass.FACT,
+                    evidence_ids=(evidence.evidence_id,),
+                    execution_refs=(mock_execution.execution_id,),
+                    execution_node_id=prepared.node_id,
+                    execution_count=1,
+                ),
+            ),
+        ),
+    )
+
+    # The evidence really is a research source and the count is right; the
+    # claim is still rejected because one of its references is a mock run.
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.report.data_mode is ReportDataMode.MIXED
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"SIMULATED_AS_FACT"}
+    original = snapshot.conflicts[0]["original_record"]
+    assert set(original) == {mock_execution.execution_id}
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()
+
+
+@pytest.mark.parametrize(
+    "execution_count",
+    [pytest.param(None, id="none"), pytest.param(0, id="zero")],
+)
+def test_an_unknown_execution_node_is_a_conflict(
+    database, project, execution_count: int | None
+) -> None:
+    a_prepared_node(database, project.project_id)
+    unknown_node = "0" * 32
+
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="A node that does not exist",
+            claims=(
+                ClaimRequest(
+                    statement="The imaginary node produced nothing.",
+                    claim_type=ClaimClass.HYPOTHESIS,
+                    execution_node_id=unknown_node,
+                    execution_count=execution_count,
+                ),
+            ),
+        ),
+    )
+
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"FABRICATED_EXECUTION"}
+    conflict = snapshot.conflicts[0]
+    assert conflict["asserted"] == {"execution_node_id": unknown_node}
+    # An unknown node is not a node with zero executions: no count conflict is
+    # invented from the missing node.
+    assert "WRONG_EXECUTION_COUNT" not in conflict_codes(snapshot)
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()
+
+
+def test_evidence_naming_a_missing_source_is_a_conflict(database, project) -> None:
+    missing_source = "d" * 32
+    evidence = an_evidence(
+        database,
+        project.project_id,
+        source_ids=(missing_source,),
+        statement="A source this project does not hold says so.",
+    )
+
+    snapshot = report(
+        database,
+        project.project_id,
+        ReportRequest(
+            title="Nested fabricated source",
+            evidence=(EvidenceRequest(evidence.evidence_id, locator="pp. 3-4"),),
+            claims=(
+                ClaimRequest(
+                    statement="The missing source supports the claim.",
+                    claim_type=ClaimClass.HYPOTHESIS,
+                    evidence_ids=(evidence.evidence_id,),
+                ),
+            ),
+        ),
+    )
+
+    assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
+    assert snapshot.claims == ()
+    assert conflict_codes(snapshot) == {"FABRICATED_SOURCE"}
+    evidence_conflict = next(item for item in snapshot.conflicts if item["claim_id"] is None)
+    assert evidence_conflict["evidence_id"] == evidence.evidence_id
+    assert evidence_conflict["asserted"] == {"source_refs": [missing_source]}
+    assert evidence_conflict["actual"] == {"missing_source_refs": [missing_source]}
+    assert evidence_conflict["original_record"]["missing_source_refs"] == [missing_source]
+    with pytest.raises(ReportNotCertified):
+        snapshot.certified_json()

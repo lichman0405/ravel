@@ -157,16 +157,25 @@ def test_provenance_decides_every_execution_type(database, project) -> None:
 def test_mock_backend_job_status_marks_the_report_simulated(database, project) -> None:
     compute = a_prepared_node(database, project.project_id)
     a_backend_job(database, compute, backend="mock-compute", state=JobState.COMPLETED)
+    fixture = a_fixture_source(database, project.project_id)
+    evidence = an_evidence(
+        database,
+        project.project_id,
+        source_ids=(fixture.source_id,),
+        statement="The fixture records a completed mock job.",
+    )
 
     snapshot = report(
         database,
         project.project_id,
         ReportRequest(
             title="Mock backend status",
+            evidence=(EvidenceRequest(evidence.evidence_id, locator="fixture p. 1"),),
             claims=(
                 ClaimRequest(
                     statement="The mock job completed.",
                     claim_type=ClaimClass.HYPOTHESIS,
+                    evidence_ids=(evidence.evidence_id,),
                 ),
             ),
             limitations=("No computation took place; this is simulated data.",),
@@ -233,9 +242,7 @@ def test_fixture_source_is_not_real_research_evidence(database, project) -> None
     }
     assert snapshot.report.data_mode is ReportDataMode.SIMULATED
     assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
-    assert {"SIMULATED_AS_FACT"} <= {
-        conflict["code"] for conflict in snapshot.conflicts
-    }
+    assert {"SIMULATED_AS_FACT"} <= {conflict["code"] for conflict in snapshot.conflicts}
     assert snapshot.certified is False
     with pytest.raises(ReportNotCertified):
         snapshot.certified_json()
@@ -275,9 +282,7 @@ def test_a_relabelled_simulated_artifact_never_becomes_a_fact(database, project)
     assert snapshot.report.data_mode is ReportDataMode.SIMULATED
     assert snapshot.report.status is ReportStatus.REPORT_CONFLICT
     assert snapshot.claims == ()
-    conflict = next(
-        item for item in snapshot.conflicts if item["code"] == "SIMULATED_AS_FACT"
-    )
+    conflict = next(item for item in snapshot.conflicts if item["code"] == "SIMULATED_AS_FACT")
     assert conflict["asserted"]["claim_type"] == "FACT"
     assert conflict["original_record"][relabelled.artifact_id]["artifact_kind"] == "measurement"
     assert conflict["original_record"][relabelled.artifact_id]["provenance"] == (
