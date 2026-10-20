@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-17 21:00 Asia/Shanghai",
+  "updated_at": "2026-10-20 Asia/Shanghai",
   "engineering_status": "IN_PROGRESS",
   "implementation_started": true,
   "writer": "SUPERVISOR_ONLY",
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "be98bd8749a902535efa33cf8237959c5173543c",
+  "integration_head_sha": "5de11b0833403a0cd9d3b717b6d37687fd4b8b27",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -127,20 +127,21 @@
       "note": "T06 DONE：Action/审批版本绑定/预算预留/CNY定点/UNKNOWN/幂等/start_execution入口/gateway resolve sync/迁移；46 tests + migration + lint PASS；fresh DB run-204258、candidate run-205746 PASS；独立AC1-AC4复审APPROVE（P2 outcome回调/attempt=1接线明确留给T09/T11/T17/T19；P3覆盖项记录）；ff-only合入be98bd8。"
     },
     "T07": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T07",
       "base_sha": "be3866f",
-      "head_sha": "95f704d",
-      "source_digest": null,
-      "review_ref": null,
+      "head_sha": "b1ff5ab8cdc3f63c56924e8b3810eccddf8f2799",
+      "source_digest": "7cb2339e3dae5ac79e1c26bea692112c7e20ddf64bd386b8d4b7c4ecbf401c75",
+      "review_ref": "reviews/T07/1.json",
       "gate_refs": [
-        "evidence/T07/run-20261019-181839/manifest.json"
+        "evidence/T07/run-20261019-181839/manifest.json",
+        "evidence/T07/run-20261020-103132/manifest.json"
       ],
-      "integration_merge_sha": null,
+      "integration_merge_sha": "5de11b0833403a0cd9d3b717b6d37687fd4b8b27",
       "blocker_refs": [],
-      "last_updated": "2026-10-19 Asia/Shanghai",
-      "note": "T07 RUNNING：Gateway 凭据/跨项目/撤权/SSRF/上传边界；门禁run-174800 PASS；等待独立Review；浏览器出口按设计fail-closed至T19。"
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T07 DONE：独立Reviewer APPROVE（reviews/T07/1.json，AC1–AC4 PASS）；集成候选 b1ff5ab 门禁 run-20261020-103132 PASS（147 tests、lint、alembic），lab handover 17 passed；ff-only 合入 cc/ravel-premium-v1。P2 lab-door 65MiB 回归与 P3 advisory 保留。"
     },
     "T08": {
       "status": "TODO",
