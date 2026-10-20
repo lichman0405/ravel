@@ -1,0 +1,190 @@
+{
+  "run_id": "run-20261020-111136",
+  "task_id": "T12",
+  "acceptance_map": {
+    "T12-AC1": {
+      "test_nodeids": [
+        "tests/premium/T12/test_evidence_typing.py::test_provenance_decides_every_execution_type",
+        "tests/premium/T12/test_evidence_typing.py::test_mock_backend_job_status_marks_the_report_simulated",
+        "tests/premium/T12/test_evidence_typing.py::test_fixture_source_is_not_real_research_evidence",
+        "tests/premium/T12/test_evidence_typing.py::test_a_relabelled_simulated_artifact_never_becomes_a_fact",
+        "tests/premium/T12/test_evidence_typing.py::test_report_requests_cannot_carry_a_type_or_mode",
+        "tests/premium/T12/test_evidence_typing.py::test_report_assembled_by_research_is_refused",
+        "tests/premium/T12/test_persistence_guards.py::test_report_tables_are_outside_the_updatable_set",
+        "tests/premium/T12/test_persistence_guards.py::test_raw_update_and_delete_are_refused_for_every_report_table",
+        "tests/premium/T12/test_report_verification.py::test_certified_report_indexes_ledger_rows_and_renders_counts",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_source_is_a_conflict_not_an_invented_row",
+        "tests/premium/T12/test_report_verification.py::test_hash_mismatch_keeps_the_ledger_hash_and_refuses_export",
+        "tests/premium/T12/test_report_verification.py::test_source_claim_without_a_locator_is_refused",
+        "tests/premium/T12/test_report_verification.py::test_wrong_execution_count_keeps_the_ledger_count",
+        "tests/premium/T12/test_report_verification.py::test_computation_claim_must_name_its_executions",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_execution_reference_is_a_conflict",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_report_is_frozen_against_later_ledger_changes",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_master_commentary_cannot_change_rendered_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[research]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[review]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[compute-worker]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_review_reads_frozen_criteria_and_raw_artifact_metadata",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_two_reports_over_one_ledger_render_the_same_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_reports_and_commentary_are_project_scoped"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T12-AC2": {
+      "test_nodeids": [
+        "tests/premium/T12/test_evidence_typing.py::test_provenance_decides_every_execution_type",
+        "tests/premium/T12/test_evidence_typing.py::test_mock_backend_job_status_marks_the_report_simulated",
+        "tests/premium/T12/test_evidence_typing.py::test_fixture_source_is_not_real_research_evidence",
+        "tests/premium/T12/test_evidence_typing.py::test_a_relabelled_simulated_artifact_never_becomes_a_fact",
+        "tests/premium/T12/test_evidence_typing.py::test_report_requests_cannot_carry_a_type_or_mode",
+        "tests/premium/T12/test_evidence_typing.py::test_report_assembled_by_research_is_refused",
+        "tests/premium/T12/test_persistence_guards.py::test_report_tables_are_outside_the_updatable_set",
+        "tests/premium/T12/test_persistence_guards.py::test_raw_update_and_delete_are_refused_for_every_report_table",
+        "tests/premium/T12/test_report_verification.py::test_certified_report_indexes_ledger_rows_and_renders_counts",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_source_is_a_conflict_not_an_invented_row",
+        "tests/premium/T12/test_report_verification.py::test_hash_mismatch_keeps_the_ledger_hash_and_refuses_export",
+        "tests/premium/T12/test_report_verification.py::test_source_claim_without_a_locator_is_refused",
+        "tests/premium/T12/test_report_verification.py::test_wrong_execution_count_keeps_the_ledger_count",
+        "tests/premium/T12/test_report_verification.py::test_computation_claim_must_name_its_executions",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_execution_reference_is_a_conflict",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_report_is_frozen_against_later_ledger_changes",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_master_commentary_cannot_change_rendered_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[research]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[review]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[compute-worker]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_review_reads_frozen_criteria_and_raw_artifact_metadata",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_two_reports_over_one_ledger_render_the_same_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_reports_and_commentary_are_project_scoped"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T12-AC3": {
+      "test_nodeids": [
+        "tests/premium/T12/test_evidence_typing.py::test_provenance_decides_every_execution_type",
+        "tests/premium/T12/test_evidence_typing.py::test_mock_backend_job_status_marks_the_report_simulated",
+        "tests/premium/T12/test_evidence_typing.py::test_fixture_source_is_not_real_research_evidence",
+        "tests/premium/T12/test_evidence_typing.py::test_a_relabelled_simulated_artifact_never_becomes_a_fact",
+        "tests/premium/T12/test_evidence_typing.py::test_report_requests_cannot_carry_a_type_or_mode",
+        "tests/premium/T12/test_evidence_typing.py::test_report_assembled_by_research_is_refused",
+        "tests/premium/T12/test_persistence_guards.py::test_report_tables_are_outside_the_updatable_set",
+        "tests/premium/T12/test_persistence_guards.py::test_raw_update_and_delete_are_refused_for_every_report_table",
+        "tests/premium/T12/test_report_verification.py::test_certified_report_indexes_ledger_rows_and_renders_counts",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_source_is_a_conflict_not_an_invented_row",
+        "tests/premium/T12/test_report_verification.py::test_hash_mismatch_keeps_the_ledger_hash_and_refuses_export",
+        "tests/premium/T12/test_report_verification.py::test_source_claim_without_a_locator_is_refused",
+        "tests/premium/T12/test_report_verification.py::test_wrong_execution_count_keeps_the_ledger_count",
+        "tests/premium/T12/test_report_verification.py::test_computation_claim_must_name_its_executions",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_execution_reference_is_a_conflict",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_report_is_frozen_against_later_ledger_changes",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_master_commentary_cannot_change_rendered_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[research]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[review]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[compute-worker]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_review_reads_frozen_criteria_and_raw_artifact_metadata",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_two_reports_over_one_ledger_render_the_same_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_reports_and_commentary_are_project_scoped"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T12-AC4": {
+      "test_nodeids": [
+        "tests/premium/T12/test_evidence_typing.py::test_provenance_decides_every_execution_type",
+        "tests/premium/T12/test_evidence_typing.py::test_mock_backend_job_status_marks_the_report_simulated",
+        "tests/premium/T12/test_evidence_typing.py::test_fixture_source_is_not_real_research_evidence",
+        "tests/premium/T12/test_evidence_typing.py::test_a_relabelled_simulated_artifact_never_becomes_a_fact",
+        "tests/premium/T12/test_evidence_typing.py::test_report_requests_cannot_carry_a_type_or_mode",
+        "tests/premium/T12/test_evidence_typing.py::test_report_assembled_by_research_is_refused",
+        "tests/premium/T12/test_persistence_guards.py::test_report_tables_are_outside_the_updatable_set",
+        "tests/premium/T12/test_persistence_guards.py::test_raw_update_and_delete_are_refused_for_every_report_table",
+        "tests/premium/T12/test_report_verification.py::test_certified_report_indexes_ledger_rows_and_renders_counts",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_source_is_a_conflict_not_an_invented_row",
+        "tests/premium/T12/test_report_verification.py::test_hash_mismatch_keeps_the_ledger_hash_and_refuses_export",
+        "tests/premium/T12/test_report_verification.py::test_source_claim_without_a_locator_is_refused",
+        "tests/premium/T12/test_report_verification.py::test_wrong_execution_count_keeps_the_ledger_count",
+        "tests/premium/T12/test_report_verification.py::test_computation_claim_must_name_its_executions",
+        "tests/premium/T12/test_report_verification.py::test_fabricated_execution_reference_is_a_conflict",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_report_is_frozen_against_later_ledger_changes",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_master_commentary_cannot_change_rendered_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[research]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[review]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_only_master_may_explain_a_report[compute-worker]",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_review_reads_frozen_criteria_and_raw_artifact_metadata",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_two_reports_over_one_ledger_render_the_same_facts",
+        "tests/premium/T12/test_snapshot_and_commentary.py::test_reports_and_commentary_are_project_scoped"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-20 11:11:32 +0800",
+  "completed_at": "2026-10-20 11:12:45 +0800",
+  "source_commit": "cd5345ee04be7c379f9438c1c682deac151863a7",
+  "source_digest": "46e1da0d275c09e626e0142a26e4770d8d0e294405fc98acef4093043192e89e",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T12 -q -rxXs --junitxml=/workspace/ravel-worktrees/T12/docs/premium/evidence/T12/run-20261020-111136/cmd-02-junit.xml",
+      "exit_code": 1,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": "exit code 1"
+    },
+    {
+      "command": "make lint",
+      "exit_code": 2,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": "exit code 2"
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/T12",
+  "exit_code": 1,
+  "junit_path": "docs/premium/evidence/T12/run-20261020-111136/cmd-02-junit.xml",
+  "log_path": "docs/premium/evidence/T12/run-20261020-111136/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T12/run-20261020-111136/cmd-01.txt",
+      "sha256": "1838b237b13194e03c7d99d14d7691d1787949683c4016dda06ffd392f63d0f7",
+      "size": 321
+    },
+    {
+      "ref": "docs/premium/evidence/T12/run-20261020-111136/cmd-02-junit.xml",
+      "sha256": "953012fee3c380bbb6c37fdb75bb96565242a4a9156e26414cc786741fb3c5ec",
+      "size": 316059
+    },
+    {
+      "ref": "docs/premium/evidence/T12/run-20261020-111136/cmd-02.txt",
+      "sha256": "75da267683c064bc5eb04a39b353c85732feece45b5b3729d6554e4ced749c7d",
+      "size": 286531
+    },
+    {
+      "ref": "docs/premium/evidence/T12/run-20261020-111136/cmd-03.txt",
+      "sha256": "b827ca53b71d21fddc95e11cf9989b20d8907b2029d6a9dc9aa984d08f1d4cf4",
+      "size": 650
+    },
+    {
+      "ref": "docs/premium/evidence/T12/run-20261020-111136/commands.txt",
+      "sha256": "e741f36292ce8a00e321cbbff3f299049abde07a87169761d2670091d82f4ea9",
+      "size": 287896
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "FAIL",
+  "blocked_reason": "cmd 2: exit code 1; cmd 3: exit code 2",
+  "preflight_exit": 0,
+  "database_lock": true
+}

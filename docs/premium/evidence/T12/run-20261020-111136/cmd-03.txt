@@ -1,0 +1,12 @@
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/T12'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+/workspace/ravel-worktrees/T12/src/ravel/reports/builder.py
+  /workspace/ravel-worktrees/T12/src/ravel/reports/builder.py:258:60 - error: "version" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /workspace/ravel-worktrees/T12/src/ravel/reports/builder.py:263:60 - error: "content_hash" is not a known attribute of "None" (reportOptionalMemberAccess)
+2 errors, 0 warnings, 0 informations
+make[1]: *** [Makefile:127: lint] Error 1
+make[1]: Leaving directory '/workspace/ravel-worktrees/T12'
