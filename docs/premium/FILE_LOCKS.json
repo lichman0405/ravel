@@ -1,156 +1,156 @@
-{
-  "schema_version": 1,
-  "writer": "SUPERVISOR_ONLY",
-  "active_locks": [
-    {
-<<<<<<< HEAD
-      "path": "src/ravel/reports/",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/mcp/tools/reports.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/state/repositories/reports.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/domain/enums.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/state/tables.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/state/mapping.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/state/guards.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/state/migrations/versions/",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/mcp/registry.py",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "tests/premium/T12/",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "docs/premium/acceptance-map.json",
-      "task_id": "T12",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T12-evidence-report",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T12 integrated"
-    },
-    {
-      "path": "src/ravel/mcp/tools/execution.py",
-      "task_id": "T09",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T09-hpc-targets",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-=======
-      "path": "src/ravel/execution/temporal/activities.py",
-      "task_id": "T09",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T09-hpc-targets",
-      "granted_at": "2026-10-19 Asia/Shanghai",
-      "release_condition": "T09 integrated"
-    },
-    {
-      "path": "src/ravel/execution/loop.py",
-      "task_id": "T09",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T09-hpc-targets",
-      "granted_at": "2026-10-19 Asia/Shanghai",
-      "release_condition": "T09 integrated"
-    },
-    {
-      "path": "src/ravel/execution/supervisor.py",
-      "task_id": "T09",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T09-hpc-targets",
-      "granted_at": "2026-10-19 Asia/Shanghai",
->>>>>>> cc/T09-hpc-targets
-      "release_condition": "T09 integrated"
-    }
-  ],
-  "shared_paths": [
-    "src/ravel/config.py",
-    "src/ravel/domain/enums.py",
-    "src/ravel/state/tables.py",
-    "src/ravel/state/mapping.py",
-    "src/ravel/state/guards.py",
-    "src/ravel/state/migrations/**",
-    "src/ravel/gateway/app.py",
-    "src/ravel/mcp/registry.py",
-    "pyproject.toml",
-    "Makefile",
-    "package.json",
-    "pnpm-workspace.yaml",
-    "pnpm-lock.yaml",
-    "docs/premium/CONTRACTS.md",
-    "schemas/**"
-  ],
-  "database_tests": {
-    "mode": "SYSTEM_WIDE_EXCLUSIVE",
-    "lock_path": "<git-common-dir>/../.ravel-test-locks/database-<sha256-prefix>.lock (override RAVEL_PREMIUM_LOCK_DIR)",
-    "holder": "the pytest process that owns the database fixture"
-  },
-  "lock_shape": {
-    "path": null,
-    "task_id": null,
-    "owner": null,
-    "branch": null,
-    "granted_at": null,
-    "release_condition": null
-  }
-}
+{
+  "schema_version": 1,
+  "writer": "SUPERVISOR_ONLY",
+  "active_locks": [
+    {
+      "path": "src/ravel/reports/",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/mcp/tools/reports.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/state/repositories/reports.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/domain/enums.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/state/tables.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/state/mapping.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/state/guards.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/state/migrations/versions/",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/mcp/registry.py",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "tests/premium/T12/",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T12",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T12-evidence-report",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/mcp/tools/execution.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/temporal/activities.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/loop.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    },
+    {
+      "path": "src/ravel/execution/supervisor.py",
+      "task_id": "T09",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T09-hpc-targets",
+      "granted_at": "2026-10-19 Asia/Shanghai",
+      "release_condition": "T09 integrated"
+    }
+  ],
+  "shared_paths": [
+    "src/ravel/config.py",
+    "src/ravel/domain/enums.py",
+    "src/ravel/state/tables.py",
+    "src/ravel/state/mapping.py",
+    "src/ravel/state/guards.py",
+    "src/ravel/state/migrations/**",
+    "src/ravel/gateway/app.py",
+    "src/ravel/mcp/registry.py",
+    "pyproject.toml",
+    "Makefile",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "docs/premium/CONTRACTS.md",
+    "schemas/**"
+  ],
+  "database_tests": {
+    "mode": "SYSTEM_WIDE_EXCLUSIVE",
+    "lock_path": "<git-common-dir>/../.ravel-test-locks/database-<sha256-prefix>.lock (override RAVEL_PREMIUM_LOCK_DIR)",
+    "holder": "the pytest process that owns the database fixture"
+  },
+  "lock_shape": {
+    "path": null,
+    "task_id": null,
+    "owner": null,
+    "branch": null,
+    "granted_at": null,
+    "release_condition": null
+  }
+}
