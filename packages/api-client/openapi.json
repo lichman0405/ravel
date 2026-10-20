@@ -161,11 +161,59 @@
             "title": "Description",
             "type": "string"
           },
+          "protocol_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol Version"
+          },
+          "raw_output_ref": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Output Ref"
+          },
+          "raw_output_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Output Sha256"
+          },
           "requested_action": {
             "maxLength": 200,
             "minLength": 1,
             "title": "Requested Action",
             "type": "string"
+          },
+          "sample_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Id"
           }
         },
         "required": [
