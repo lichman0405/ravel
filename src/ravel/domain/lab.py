@@ -305,6 +305,29 @@ class LabEvent(Record):
     deviation_note: str | None = Field(default=None, max_length=4000)
 
 
+class LabDeviationLink(Record):
+    """The written join between a deviation and the person-reported event.
+
+    A deviation record is Master's question; a `DEVIATION_REPORTED` lab event
+    is the bench's answer. They are separate records because they have
+    different authors and different lifetimes, and matching them by node and
+    timestamp would be an inference. This link makes the join an identifier:
+    given either record, the other is a lookup, not a guess.
+
+    There is one link per deviation and one per event. A report either happened
+    at a handover or it did not, and a second link for the same pair would say
+    two things about one occurrence.
+    """
+
+    link_id: str = Field(default_factory=new_id)
+    project_id: str
+    node_id: str
+    handover_id: str = Field(min_length=1, max_length=64)
+    deviation_id: str = Field(min_length=1, max_length=64)
+    event_id: str = Field(min_length=1, max_length=64)
+    linked_at: datetime = Field(default_factory=utcnow)
+
+
 class LabPackageBinding(Record):
     """What one prepared package is bound to, written once when it is used.
 
@@ -398,7 +421,18 @@ class LabUploadReceipt(Record):
     detail: str = ""
     artifact_id: str | None = None
     artifact_version: int | None = None
+    #: The contract version the handover was opened under. This is the version
+    #: the file has to answer, whichever version the uploader declared.
     protocol_version: int = Field(ge=1)
+    #: The sample label the uploader declared, when they declared one. Kept
+    #: structured rather than only inside `detail`, so a rejected upload's
+    #: sample can be queried without parsing prose.
+    sample_id: str | None = Field(default=None, max_length=128)
+    #: The contract version the uploader declared, when they declared one.
+    #: Null means they named the live handover by omission. A declaration that
+    #: disagrees with `protocol_version` is itself the reason for a
+    #: `REJECTED_WRONG_CONTRACT_VERSION` receipt, so both values are kept.
+    declared_protocol_version: int | None = Field(default=None, ge=1)
 
 
 def _unique(names: Iterable[str]) -> tuple[str, ...]:
@@ -412,6 +446,7 @@ def _unique(names: Iterable[str]) -> tuple[str, ...]:
 __all__ = [
     "HANDOVER_STATES",
     "UPLOAD_PROVENANCE",
+    "LabDeviationLink",
     "LabEvent",
     "LabHandover",
     "LabLeadConfirmation",

@@ -14,12 +14,15 @@ exist, and that an automated suite cannot manufacture either one's meaning.
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from tests.support.lab import OUTPUTS, SAMPLES, Handed
 
+from ravel.backends.lab import LabConfigurationError
 from ravel.config import Settings
 from ravel.domain.project import Project
 from ravel.state.database import Database
+from ravel.state.repositories.lab import LabHandoverRepository
 from ravel.state.store import S3ArtifactStore
 
 from .support import (
@@ -89,28 +92,30 @@ async def test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real
     gateway_settings: Settings,
     artifact_store: S3ArtifactStore,
 ) -> None:
-    """Deployment permission alone must not open a real handover.
+    """Deployment permission alone must not open a handover at all.
 
-    `live_lab=True` is necessary and not sufficient: without a lead's covering
-    confirmation the backend freezes the handover as SIMULATED, which is the
-    only honest mode when nobody has confirmed the laboratory.
+    `live_lab=True` is necessary and not sufficient. A live deployment with no
+    covering confirmation refuses to hand over: falling back to SIMULATED
+    would put software proof under the real backend's name, and a simulated
+    handover belongs to a deployment that is explicit about not being a bench.
     """
     prepared = prepare(**terms_with_sop())
-    run = await hand_over_live(
-        database=database,
-        settings=gateway_settings,
-        store=artifact_store,
-        prepared=prepared,
-        confirm=False,
-    )
+    with pytest.raises(LabConfigurationError, match="no lab-lead confirmation"):
+        await hand_over_live(
+            database=database,
+            settings=gateway_settings,
+            store=artifact_store,
+            prepared=prepared,
+            confirm=False,
+        )
 
-    assert run.handover.execution_mode.value == "SIMULATED"
-    assert run.handover.evidence_execution_type.value == "SIMULATED"
-    assert run.handover.lead_confirmation_ref == ""
-
-    task = client.get(task_url(project, run), headers=lab_headers).json()
-    assert task["package_readiness"]["ready_for_real_execution"] is False
-    assert task["handover"]["execution_mode"] == "SIMULATED"
+    with database.read_only() as session:
+        assert (
+            LabHandoverRepository(session, project.project_id).for_node(
+                prepared.node_id
+            )
+            == []
+        ), "a refused live handover left a row claiming somebody was asked to run it"
 
 
 async def test_the_lead_confirmation_is_recorded_and_readiness_is_derived(

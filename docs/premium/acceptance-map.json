@@ -1079,6 +1079,10 @@
         "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
         "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
         "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_records.py::test_the_deviation_link_is_append_only",
+        "tests/premium/T11/test_execution_typing.py::test_the_backend_name_is_derived_from_the_mode",
+        "tests/premium/T11/test_execution_typing.py::test_a_simulated_handover_cannot_be_reported_as_human_lab_evidence",
+        "tests/premium/T11/test_execution_typing.py::test_a_real_handover_is_reported_as_human_lab_evidence",
         "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
         "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
         "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
@@ -1087,7 +1091,8 @@
         "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
         "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
         "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
-        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_with_provenance_is_refused_when_nobody_is_holding_it",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_bare_deviation_against_a_task_nobody_is_holding_is_recorded"
       ],
       "manual_evidence_refs": [],
       "execution_commands": [
@@ -1101,7 +1106,10 @@
           ],
           "allow_skips": false,
           "needs_database": true,
-          "external": false
+          "external": false,
+          "env": {
+            "RAVEL_POSTGRES_DB": "ravel_t11_test"
+          }
         },
         {
           "argv": [

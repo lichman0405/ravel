@@ -40,7 +40,7 @@ adjudication is the Worker's, against the frozen contract, in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ravel.domain.artifacts import Artifact
 from ravel.domain.enums import JobState, LabEventType, LabExecutionMode, NodeType
@@ -68,11 +68,21 @@ from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.tables import LabHandoverRow
 
-#: How this backend is named in `ExecutionRecord.backend` and in every
-#: `BACKEND_STATUS_CHANGED` event. The word "human" is in it because a record
-#: that came from a person has to be tellable apart from one a machine
-#: reported — the same reason a mock says so in its name.
-BACKEND_NAME = "human-lab"
+#: The name a REAL handover is recorded under: a person at a bench, with a
+#: covering lab-lead confirmation for the package. This is the only name the
+#: report classifier treats as `HUMAN_LAB`.
+REAL_BACKEND_NAME = "human-lab"
+
+#: The name a SIMULATED handover is recorded under. It starts with `mock` for
+#: the reason every mock's name does: a record that came from a simulation has
+#: to be tellable apart from one a person reported, and the report classifier
+#: already derives `SIMULATED` from this prefix. A simulated lab handover is
+#: software proof of the handover, never evidence from a bench.
+SIMULATED_BACKEND_NAME = "mock-human-lab"
+
+#: The name this backend has unless it is authorized for a live bench. Kept as
+#: the historical export, and it names the default (simulated) deployment.
+BACKEND_NAME = SIMULATED_BACKEND_NAME
 
 #: What this backend says when it has nothing else to report. A bench's own
 #: word for its state, kept beside RAVEL's in `JobStatus.backend_state`: RAVEL
@@ -102,7 +112,12 @@ class HumanLabBackend:
     """
 
     database: Database
-    name: str = BACKEND_NAME
+    #: The name executions and handovers are recorded under. Not an input: it
+    #: is derived in `__post_init__` from `live_lab`, because a simulated
+    #: deployment called `human-lab` would have its software proof classified
+    #: as bench evidence. Declared here rather than as a property because the
+    #: `WorkBackend` protocol reads it as an attribute.
+    name: str = field(init=False)
     #: Which kind of node this backend runs. A property of the backend rather
     #: than of a deployment's mood, and set here rather than passed in so that
     #: a laboratory backend cannot be pointed at a computation node.
@@ -114,6 +129,17 @@ class HumanLabBackend:
     #: package's protocol, device and one of its SOP references; this flag can
     #: withhold permission but cannot supply the confirmation.
     live_lab: bool = False
+
+    def __post_init__(self) -> None:
+        """Derive the name from the mode, so the two cannot disagree.
+
+        The name is what `ExecutionRecord.backend` and the report classifier
+        read, so a simulated deployment called `human-lab` would have its
+        software proof classified as bench evidence. There is no constructor
+        parameter for it: every simulated handover is `mock-human-lab`, every
+        live one is `human-lab`, and no caller chooses the string.
+        """
+        self.name = REAL_BACKEND_NAME if self.live_lab else SIMULATED_BACKEND_NAME
 
     # ── The port ────────────────────────────────────────────────────────────
 
@@ -135,7 +161,10 @@ class HumanLabBackend:
                 names one the project does not have. A laboratory run is
                 executed by a person reading files, so a run with no files is
                 not a run that fails later; it is one that was never handed
-                over.
+                over. Also raised when this is a live deployment and no
+                covering lab-lead confirmation exists: that is a refusal to
+                open a real bench, not permission to record a simulation under
+                the real backend's name.
         """
         if not request.workspace_path.strip():
             raise LabConfigurationError(
@@ -161,6 +190,16 @@ class HumanLabBackend:
                 and recorded.covers(binding)
                 else None
             )
+            if self.live_lab and confirmation is None:
+                raise LabConfigurationError(
+                    "this deployment is authorized for a real bench, but no "
+                    "lab-lead confirmation covers the package's protocol "
+                    "version, device and SOP. A live deployment will not fall "
+                    "back to a simulated handover under the human-lab name: "
+                    "that would record software proof as bench evidence. "
+                    "Record the covering confirmation, or run a deployment "
+                    "without live_lab for a clearly simulated handover."
+                )
             mode = (
                 LabExecutionMode.REAL
                 if confirmation is not None
@@ -181,9 +220,7 @@ class HumanLabBackend:
                 lead_confirmation_ref=(
                     confirmation.confirmation_id if confirmation is not None else ""
                 ),
-                detail=self._handover_note(
-                    prepared, binding, mode, recorded, confirmation
-                ),
+                detail=self._handover_note(prepared, binding, mode, confirmation),
             )
             stored = LabHandoverRepository(session, request.project_id).hand_over(
                 handover
@@ -392,14 +429,20 @@ class HumanLabBackend:
         twice — by a retried activity, by a restarted worker — has to be
         recognisably the same work to a backend that never saw the first call.
 
+        The prefix is the mode the handover was opened in — `human-lab` for a
+        REAL handover, `mock-human-lab` for a SIMULATED one — so the reference
+        itself says which kind of evidence a reader is about to look up. It is
+        taken from the handover, not from this instance, because a deployment
+        that changes its `live_lab` permission must still be able to read the
+        references it issued before the change.
+
         Spelled with the identifier rather than hashed from the key, because
         this backend has a database to look it up in and no sixty-four
-        character limit to fit inside: `handover_id` is thirty-two characters
-        and the prefix brings it to forty-two, which is a `REF` column with
-        room to spare. A reference a person can read is a reference a person
-        can search for.
+        character limit to fit inside: even the longer prefix leaves the
+        reference within a `REF` column. A reference a person can read is a
+        reference a person can search for.
         """
-        return f"{BACKEND_NAME}:{handover.handover_id}"
+        return f"{handover.backend}:{handover.handover_id}"
 
     def parse_ref(self, backend_job_ref: str) -> str:
         """The handover a reference names.
@@ -410,13 +453,15 @@ class HumanLabBackend:
                 row, because "no such handover" and "that is a Slurm job
                 reference" are different mistakes with different fixes.
         """
-        prefix = f"{BACKEND_NAME}:"
-        if not backend_job_ref.startswith(prefix):
-            raise LabConfigurationError(
-                f"{backend_job_ref!r} is not a {BACKEND_NAME} reference; this "
-                f"backend's references begin {prefix!r}"
-            )
-        return backend_job_ref[len(prefix) :]
+        for name in (REAL_BACKEND_NAME, SIMULATED_BACKEND_NAME):
+            prefix = f"{name}:"
+            if backend_job_ref.startswith(prefix):
+                return backend_job_ref[len(prefix) :]
+        raise LabConfigurationError(
+            f"{backend_job_ref!r} is not a laboratory reference; this backend's "
+            f"references begin {REAL_BACKEND_NAME + ':'!r} for a real handover "
+            f"or {SIMULATED_BACKEND_NAME + ':'!r} for a simulated one"
+        )
 
     # ── Reading the work ────────────────────────────────────────────────────
 
@@ -611,15 +656,15 @@ class HumanLabBackend:
         prepared: PreparationRecord,
         binding: LabPackageBinding,
         mode: LabExecutionMode,
-        recorded: LabLeadConfirmation | None,
         confirmation: LabLeadConfirmation | None,
     ) -> str:
         """Say how the handover was opened, and what that does not prove.
 
-        A simulated handover says so in its own record. The two reasons it can
-        be simulated are different facts — this deployment is not authorized
-        for a live bench, or no lead confirmation covers the package — and a
-        reader needs the one that applies rather than a generic "mock".
+        A simulated handover says so in its own record. Under the current
+        rules the only simulated handover a live deployment can reach is one
+        opened by a deployment that is not authorized for a real bench; a
+        live deployment refuses rather than falling back, so this note does
+        not have to describe a half-authorized state.
         """
         base = (
             f"handed to a bench as {prepared.materializer} "
@@ -633,24 +678,10 @@ class HumanLabBackend:
                 f"{base}; REAL execution under lab lead confirmation "
                 f"{confirmation.confirmation_id}"
             )
-        if not self.live_lab:
-            reason = (
-                "real-bench execution is not enabled for this deployment, so "
-                "this handover proves software handover only"
-            )
-        elif recorded is None:
-            reason = (
-                "no lab lead confirmation records that the SOP, site and device "
-                "suit this package, so it is not ready for real execution"
-            )
-        elif confirmation is None:
-            reason = (
-                "the recorded lab lead confirmation does not cover this "
-                "package's protocol version, device or SOP reference, so it is "
-                "not ready for real execution"
-            )
-        else:  # pragma: no cover - REAL was decided above when one covers
-            reason = "real execution was not authorized"
+        reason = (
+            "real-bench execution is not enabled for this deployment, so this "
+            "handover proves software handover only"
+        )
         return f"{base}; SIMULATED: {reason}"
 
     def _uploaded_digest(self, events: list[LabEvent], artifact_id: str) -> str:

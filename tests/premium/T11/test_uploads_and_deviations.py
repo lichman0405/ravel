@@ -22,6 +22,10 @@ from ravel.domain.enums import JobState
 from ravel.domain.project import Project
 from ravel.execution.backends import ExternalDelivery
 from ravel.state.database import Database
+from ravel.state.repositories.lab import (
+    LabDeviationLinkRepository,
+    LabEventRepository,
+)
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.repositories.research import ArtifactRepository
 
@@ -60,6 +64,11 @@ async def test_an_accepted_upload_records_a_receipt_and_a_person_reported_event(
     assert receipt["content_sha256"] == digest
     assert receipt["size_bytes"] == len(LOG_BYTES)
     assert receipt["artifact_id"] == body["artifact"]["artifact_id"]
+    assert receipt["sample_id"] == SAMPLE_IDS[0], (
+        "the receipt kept the sample only in free text"
+    )
+    assert receipt["declared_protocol_version"] is None
+    assert receipt["protocol_version"] == run.handover.execution_contract_version
 
     event = body["person_reported_event"]
     assert event["event_type"] == "OUTPUT_UPLOADED"
@@ -165,6 +174,10 @@ async def test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_t
     assert receipts[1].content_sha256 == hashlib.sha256(RAW_BYTES).hexdigest(), (
         "the refused file's provenance was not kept in its receipt"
     )
+    assert receipts[1].declared_protocol_version == 2
+    assert receipts[1].protocol_version == run.handover.execution_contract_version, (
+        "the wrong declaration overwrote the version the file had to answer"
+    )
 
     backend = HumanLabBackend(database=database)
     status = backend.deliver(
@@ -206,6 +219,7 @@ async def test_an_upload_for_a_sample_the_package_never_bound_is_refused(
     assert [receipt.outcome.value for receipt in receipts] == [
         "REJECTED_WRONG_SAMPLE"
     ]
+    assert receipts[0].sample_id == "a sample the package never named"
     with database.read_only() as session:
         assert (
             ArtifactRepository(session, run.prepared.project_id).all(
@@ -304,6 +318,15 @@ async def test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample(
     assert event["raw_output_ref"] == "artifact-run-17-log"
     assert event["raw_output_sha256"] == file_hash
 
+    link = body["deviation_event_link"]
+    assert link is not None, (
+        "the deviation and its event were left to be matched by node and time"
+    )
+    assert link["deviation_id"] == body["deviation_id"]
+    assert link["event_id"] == event["event_id"]
+    assert link["handover_id"] == run.handover.handover_id
+    assert link["node_id"] == run.node_id
+
     with database.read_only() as session:
         stored = DeviationRepository(session, project.project_id).all(
             node_id=run.node_id
@@ -318,6 +341,14 @@ async def test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample(
     ]
     assert stored_events[0].deviation_note == description
     assert stored_events[0].raw_output_sha256 == file_hash
+
+    with database.read_only() as session:
+        stored_link = LabDeviationLinkRepository(
+            session, project.project_id
+        ).for_deviation(body["deviation_id"])
+    assert stored_link is not None
+    assert stored_link.event_id == stored_events[0].event_id
+    assert stored_link.handover_id == run.handover.handover_id
 
     assert body["delivered_to_run"] is True
     assert len(deliveries.deliveries) == 1
@@ -379,7 +410,53 @@ async def test_a_deviation_for_another_contract_version_is_refused(
         ) == []
 
 
-async def test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded(
+async def test_a_deviation_with_provenance_is_refused_when_nobody_is_holding_it(
+    client: TestClient,
+    database: Database,
+    project: Project,
+    lab_headers: dict[str, str],
+    prepare,
+) -> None:
+    """Provenance is refused rather than silently dropped.
+
+    A sample label, raw-file reference, hash and declared version live on the
+    `DEVIATION_REPORTED` lab event, and no event exists without a handover.
+    Accepting these fields and returning a null event would lose exactly the
+    chain T11-AC2 asks for, so the route says so and writes neither record.
+    """
+    prepared = prepare(**terms_with_sop())
+    response = client.post(
+        f"/projects/{project.project_id}/lab/tasks/{prepared.node_id}/deviations",
+        headers=lab_headers,
+        json={
+            "requested_action": "run_at_pressure",
+            "description": "It would not hold.",
+            "sample_id": SAMPLE_IDS[0],
+            "raw_output_ref": "artifact-run-17-log",
+            "raw_output_sha256": "b" * 64,
+            "protocol_version": prepared.contract.version,
+        },
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "no handover" in detail
+    assert "silently dropped" in detail
+    for field in (
+        "sample_id",
+        "raw_output_ref",
+        "raw_output_sha256",
+        "protocol_version",
+    ):
+        assert field in detail
+    with database.read_only() as session:
+        assert DeviationRepository(session, project.project_id).all(
+            node_id=prepared.node_id
+        ) == []
+        assert LabEventRepository(session, project.project_id).all() == []
+
+
+async def test_a_bare_deviation_against_a_task_nobody_is_holding_is_recorded(
     client: TestClient,
     database: Database,
     project: Project,
@@ -389,8 +466,9 @@ async def test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded(
     """A report is an observation, not a handover event.
 
     Master reads open deviations on the next turn whether or not a bench holds
-    the work. With no handover there is no person-reported lab event to attach
-    it to, and the response says that rather than inventing one.
+    the work. A report that carries no handover-only provenance can still be
+    written; it has no person-reported lab event and no link, and the response
+    says that rather than inventing one.
     """
     prepared = prepare(**terms_with_sop())
     response = client.post(
@@ -402,6 +480,7 @@ async def test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded(
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["person_reported_event"] is None
+    assert body["deviation_event_link"] is None
     assert body["handover_id"] is None
     assert body["delivered_to_run"] is False
     assert "nothing to tell" in body["delivery_note"]

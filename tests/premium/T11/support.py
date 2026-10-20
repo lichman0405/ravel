@@ -163,7 +163,8 @@ async def hand_over_live(
     """Prepare, confirm and hand over a package to a deployment allowed a real bench.
 
     `confirm=False` is the refusal case: `live_lab` is true but nobody has
-    confirmed the SOP, site and device, so the backend must open SIMULATED.
+    confirmed the SOP, site and device, so the backend refuses to hand over
+    rather than falling back to a simulation under the real backend's name.
     """
     bench = HumanLabBackend(database=database, live_lab=True)
     activities = NodeRunActivities(

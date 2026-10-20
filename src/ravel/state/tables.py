@@ -1596,6 +1596,55 @@ class LabEventRow(Base):
     deviation_note: Mapped[str | None] = mapped_column(Text)
 
 
+class LabDeviationLinkRow(Base):
+    """The explicit join from a deviation record to its lab event.
+
+    Append-only. Matching the two records by node, sample and timestamp would
+    be an inference that can silently select the wrong occurrence; this table
+    makes the join an identifier. One link per deviation and one per event,
+    enforced by the unique keys rather than by a caller's discipline.
+    """
+
+    __tablename__ = "lab_deviation_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "deviation_id", name="uq_lab_deviation_links_deviation"
+        ),
+        UniqueConstraint(
+            "project_id", "event_id", name="uq_lab_deviation_links_event"
+        ),
+        Index(
+            "ix_lab_deviation_links_project_handover",
+            "project_id",
+            "handover_id",
+        ),
+    )
+
+    link_id: Mapped[str] = mapped_column(ID, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False
+    )
+    node_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("dag_nodes.node_id", ondelete="CASCADE"), nullable=False
+    )
+    handover_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("lab_handovers.handover_id", ondelete="CASCADE"), nullable=False
+    )
+    deviation_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("deviation_records.deviation_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    event_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("lab_events.event_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    linked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
 class LabPackageBindingRow(Base):
     """What one prepared laboratory package is bound to.
 
@@ -1717,6 +1766,10 @@ class LabUploadReceiptRow(Base):
             "artifact_version IS NULL OR artifact_version >= 1",
             name="artifact_version_is_positive",
         ),
+        CheckConstraint(
+            "declared_protocol_version IS NULL OR declared_protocol_version >= 1",
+            name="declared_protocol_version_is_positive",
+        ),
         Index(
             "ix_lab_upload_receipts_project_handover",
             "project_id",
@@ -1748,6 +1801,8 @@ class LabUploadReceiptRow(Base):
     artifact_id: Mapped[str | None] = mapped_column(ID)
     artifact_version: Mapped[int | None] = mapped_column(Integer)
     protocol_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    sample_id: Mapped[str | None] = mapped_column(String(128))
+    declared_protocol_version: Mapped[int | None] = mapped_column(Integer)
 
 
 # ── The event stream ────────────────────────────────────────────────────────

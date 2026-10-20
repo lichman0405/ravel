@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 from ravel.domain.artifacts import SIMULATED_KIND, Artifact, ArtifactVersion, is_simulated
 from ravel.domain.enums import JobState, LabEventType, LabExecutionMode
 from ravel.domain.lab import (
+    LabDeviationLink,
     LabEvent,
     LabHandover,
     LabLeadConfirmation,
@@ -49,6 +50,7 @@ from ravel.state.repositories.base import NotFound, ProjectScopedRepository
 from ravel.state.repositories.research import ArtifactRepository
 from ravel.state.store import ArtifactStore, hash_chunks
 from ravel.state.tables import (
+    LabDeviationLinkRow,
     LabEventRow,
     LabHandoverRow,
     LabLeadConfirmationRow,
@@ -260,6 +262,11 @@ class LabEventRepository(ProjectScopedRepository[LabEvent]):
 
     def record_milestone(self, event: LabEvent) -> LabEvent:
         """Write a one-per-handover event, or return the one already written."""
+        # The insert below is its own statement rather than `add`, so the
+        # project-scope guard `add` performs is not on this path unless it is
+        # asked for here. A milestone built from a caller-supplied record is
+        # exactly where a foreign `project_id` must not be taken at its word.
+        self._authorize(event)
         existing = self.of_type(event.handover_id, event.event_type)
         if existing is not None:
             return existing
@@ -304,6 +311,32 @@ class LabEventRepository(ProjectScopedRepository[LabEvent]):
             ):
                 return event
         return None
+
+
+class LabDeviationLinkRepository(ProjectScopedRepository[LabDeviationLink]):
+    """The explicit join from a deviation to the person-reported lab event.
+
+    The unique keys in `lab_deviation_links` make the join one-to-one. Writes
+    go through `add`, so the project scope is checked here as it is for every
+    other record the Gateway produces.
+    """
+
+    row_type = LabDeviationLinkRow
+    record_type = LabDeviationLink
+
+    def _order_by(self) -> Any:
+        return self.row_type.linked_at
+
+    def record(self, link: LabDeviationLink) -> LabDeviationLink:
+        return self.add(link)
+
+    def for_deviation(self, deviation_id: str) -> LabDeviationLink | None:
+        found = self.all(deviation_id=deviation_id)
+        return found[-1] if found else None
+
+    def for_event(self, event_id: str) -> LabDeviationLink | None:
+        found = self.all(event_id=event_id)
+        return found[-1] if found else None
 
 
 class LabPackageRepository(ProjectScopedRepository[LabPackageBinding]):

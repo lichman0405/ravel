@@ -80,6 +80,7 @@ from ravel.domain.dag import DagNode
 from ravel.domain.enums import JobState, LabEventType, LabUploadOutcome, UserRole
 from ravel.domain.execution import DeviationRecord
 from ravel.domain.lab import (
+    LabDeviationLink,
     LabEvent,
     LabHandover,
     LabLeadConfirmation,
@@ -103,6 +104,7 @@ from ravel.state.repositories.base import NotFound
 from ravel.state.repositories.contracts import ExecutionContractRepository
 from ravel.state.repositories.dag import DagRepository
 from ravel.state.repositories.lab import (
+    LabDeviationLinkRepository,
     LabEventRepository,
     LabHandoverRepository,
     LabLeadConfirmationRepository,
@@ -841,6 +843,8 @@ async def upload_output(
                         media_type=media_type or _media_type(filename),
                         digest=digest.hexdigest(),
                         size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
                         outcome=LabUploadOutcome.REJECTED_WRONG_CONTRACT_VERSION,
                         detail=rejection,
                     )
@@ -860,6 +864,8 @@ async def upload_output(
                         media_type=media_type or _media_type(filename),
                         digest=digest.hexdigest(),
                         size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
                         outcome=LabUploadOutcome.REJECTED_LATE,
                         detail=rejection,
                     )
@@ -879,6 +885,8 @@ async def upload_output(
                         media_type=media_type or _media_type(filename),
                         digest=digest.hexdigest(),
                         size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
                         outcome=LabUploadOutcome.REJECTED_UNKNOWN_OUTPUT,
                         detail=rejection,
                     )
@@ -901,6 +909,8 @@ async def upload_output(
                         media_type=media_type or _media_type(filename),
                         digest=digest.hexdigest(),
                         size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
                         outcome=LabUploadOutcome.REJECTED_WRONG_SAMPLE,
                         detail=rejection,
                     )
@@ -925,6 +935,8 @@ async def upload_output(
                         media_type=media_type or _media_type(filename),
                         digest=digest.hexdigest(),
                         size=size,
+                        sample_id=sample_id,
+                        declared_protocol_version=protocol_version,
                         outcome=LabUploadOutcome.ACCEPTED,
                         detail="",
                         artifact_id=artifact.artifact_id,
@@ -1407,11 +1419,20 @@ async def report_deviation(
     the question exist, and Master reads open deviations on the next turn
     whatever the scheduler is doing.
 
+    **Provenance needs somewhere to live.** A sample label, raw-file reference,
+    raw-file hash and declared protocol version are recorded on the
+    `DEVIATION_REPORTED` lab event, which only exists when a handover does.
+    A report against a task nobody is holding therefore cannot carry them: the
+    route refuses the request rather than accepting fields and silently
+    dropping them. The bare report — the observation itself — is still
+    recorded, and Master reads it on the next turn.
+
     Raises:
         HTTPException: 404 if this project has no such task. 409 if the node has
             no contract, because there is then nothing to have deviated from —
             a report against no contract would record a refusal that no
-            document ever made.
+            document ever made. Also 409 when a report that names a sample,
+            raw file or protocol version has no handover to record them on.
     """
     _human_operator(standing)
     with state.database.transaction() as session:
@@ -1433,6 +1454,25 @@ async def report_deviation(
             node,
             request.protocol_version,
         )
+        provenance = {
+            "sample_id": request.sample_id,
+            "raw_output_ref": request.raw_output_ref,
+            "raw_output_sha256": request.raw_output_sha256,
+            "protocol_version": request.protocol_version,
+        }
+        supplied = sorted(name for name, value in provenance.items() if value is not None)
+        if target is None and supplied:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"this report names {supplied}, but task {node.display_id} has "
+                    "no handover, so there is no person-reported lab event to "
+                    "record them on and they would be silently dropped. Submit "
+                    "the observation without those fields to record a general "
+                    "deviation, or report again once the task has been handed "
+                    "to a bench."
+                ),
+            )
         if target is not None:
             _refuse_a_version_mismatch(target, request.protocol_version)
         binding = (
@@ -1478,6 +1518,7 @@ async def report_deviation(
             )
         )
         event: LabEvent | None = None
+        link: LabDeviationLink | None = None
         if target is not None:
             event = LabEventRepository(session, standing.project_id).record(
                 LabEvent(
@@ -1491,6 +1532,22 @@ async def report_deviation(
                     raw_output_ref=request.raw_output_ref,
                     raw_output_sha256=request.raw_output_sha256,
                     deviation_note=request.description,
+                )
+            )
+            # The link has foreign keys to both rows, and neither is in
+            # PostgreSQL until the transaction flushes. The join is explicit
+            # rather than inferred from node and time: two deviations on one
+            # shift can carry identical prose and still be different events.
+            session.flush()
+            link = LabDeviationLinkRepository(
+                session, standing.project_id
+            ).record(
+                LabDeviationLink(
+                    project_id=standing.project_id,
+                    node_id=target.node_id,
+                    handover_id=target.handover_id,
+                    deviation_id=deviation.deviation_id,
+                    event_id=event.event_id,
                 )
             )
         waiting = target if target is not None and target.is_waiting else None
@@ -1518,6 +1575,9 @@ async def report_deviation(
         **deviation.model_dump(mode="json"),
         "person_reported_event": (
             None if event is None else event.model_dump(mode="json")
+        ),
+        "deviation_event_link": (
+            None if link is None else link.model_dump(mode="json")
         ),
         "handover_id": None if target is None else target.handover_id,
         "execution_mode": (
@@ -1594,6 +1654,8 @@ def _record_receipt(
     media_type: str,
     digest: str,
     size: int,
+    sample_id: str | None,
+    declared_protocol_version: int | None,
     outcome: LabUploadOutcome,
     detail: str,
     artifact_id: str | None = None,
@@ -1602,6 +1664,12 @@ def _record_receipt(
     """Record one upload attempt against the handover it reached.
 
     Written for every outcome, so a refusal is a record rather than silence.
+    The sample and declared contract version are their own columns rather than
+    prose in `detail`, so a refusal can be queried by what the uploader said
+    it was for. `protocol_version` remains the handover's version: a wrong
+    declaration is evidence for the rejection, not a replacement for the
+    version the file had to answer.
+
     The artifact identifiers are present only for `ACCEPTED`, because the
     bytes of a refused upload are not in the artifact store at all.
     """
@@ -1621,6 +1689,8 @@ def _record_receipt(
             artifact_id=artifact_id,
             artifact_version=artifact_version,
             protocol_version=handover.execution_contract_version,
+            sample_id=sample_id,
+            declared_protocol_version=declared_protocol_version,
         )
     )
 

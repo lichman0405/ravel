@@ -327,3 +327,52 @@ async def test_a_refused_upload_stored_no_artifact(
         )
     assert [artifact.name for artifact in artifacts] == [OUTPUTS[0]]
     assert len(receipts_for(database, run.prepared, run.handover)) == 2
+
+
+async def test_the_deviation_link_is_append_only(
+    client,
+    database: Database,
+    project,
+    lab_headers: dict[str, str],
+    deliveries,
+    handed,
+) -> None:
+    """The join between a deviation and its event cannot be rewritten.
+
+    Inferred provenance could be re-derived differently tomorrow. An explicit
+    link is useful only if it is immutable: changing which event answered a
+    deviation would let the account of what the bench reported be reassigned.
+    """
+    run = await handed()
+    reported = client.post(
+        f"/projects/{project.project_id}/lab/tasks/{run.node_id}/deviations",
+        headers=lab_headers,
+        json={
+            "requested_action": "run_at_pressure",
+            "description": "It would not hold.",
+            "sample_id": "S-1",
+            "raw_output_sha256": "c" * 64,
+        },
+    )
+    assert reported.status_code == 201, reported.text
+    link_id = reported.json()["deviation_event_link"]["link_id"]
+
+    with (
+        pytest.raises(IntegrityError, match="is append-only"),
+        database.engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                "UPDATE lab_deviation_links SET event_id = 'another' "
+                "WHERE link_id = :link_id"
+            ),
+            {"link_id": link_id},
+        )
+    with (
+        pytest.raises(IntegrityError, match="is append-only"),
+        database.engine.begin() as connection,
+    ):
+        connection.execute(
+            text("DELETE FROM lab_deviation_links WHERE link_id = :link_id"),
+            {"link_id": link_id},
+        )
