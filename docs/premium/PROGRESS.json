@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "679cc79",
+  "integration_head_sha": "65e55c0",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -178,20 +178,23 @@
       "note": "T09 DONE：105 tests PASS，alembic+lint 0；independent review 3 APPROVE；target registry/known_hosts/atomic claim/UNKNOWN；Action slot settlement；真实 HPC（T25）为 BLOCKED_EXTERNAL(B05)；P2/P3 advisory 已记录。"
     },
     "T10": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T10",
       "base_sha": "9c58f3d",
-      "head_sha": "9c58f3d",
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
+      "head_sha": "b22314a",
+      "source_digest": "0f2c5dadcd3d3ef12b84df7ae7857d419b9236286ab0e006a27cebb7c6253748",
+      "review_ref": "reviews/T10/1.json",
+      "gate_refs": [
+        "evidence/T10/run-20261020-124002/manifest.json",
+        "evidence/T10/run-20261020-130340/manifest.json"
+      ],
+      "integration_merge_sha": "dca222f",
       "blocker_refs": [
         "B05"
       ],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T10 已派发；base 9c58f3d；边界：preparation/raspa.py、compute/raspa/**、schemas/premium/compute/**、tests/premium/T10/**；真实 RASPA run 属 T25（BLOCKED_EXTERNAL B05），等待实现、门禁与独立 Review。"
+      "note": "T10 DONE：独立 review 1 APPROVE（reviews/T10/1.json，AC1–AC4 PASS）；任务门禁 run-20261020-124002 PASS（140 tests、alembic+lint 0）；集成候选 dca222f 门禁 run-20261020-130340 PASS（source digest 与 review 一致）；ff-only 合入 integration。真实 RASPA 运行仍为 BLOCKED_EXTERNAL(B05/T25)。P2：parser 的 state_ok 未把输出 cycles 与 contract cycles 比较，已列为 T25 实现前置条件（T25 必须补齐并加回归）；P3：ledger 冻结时间、收敛策略归属、trace identity 检查为 advisory。"
     },
     "T11": {
       "status": "RUNNING",

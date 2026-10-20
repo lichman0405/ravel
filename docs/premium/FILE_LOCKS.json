@@ -51,46 +51,6 @@
       "release_condition": "T13 integrated"
     },
     {
-      "path": "src/ravel/preparation/raspa.py",
-      "task_id": "T10",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T10-raspa-package",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T10 integrated"
-    },
-    {
-      "path": "src/ravel/compute/raspa/",
-      "task_id": "T10",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T10-raspa-package",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T10 integrated"
-    },
-    {
-      "path": "schemas/premium/compute/",
-      "task_id": "T10",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T10-raspa-package",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T10 integrated"
-    },
-    {
-      "path": "tests/premium/T10/",
-      "task_id": "T10",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T10-raspa-package",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T10 integrated"
-    },
-    {
-      "path": "docs/premium/acceptance-map.json",
-      "task_id": "T10",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T10-raspa-package",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T10 integrated"
-    },
-    {
       "path": "src/ravel/backends/lab/",
       "task_id": "T11",
       "owner": "SUPERVISOR",
