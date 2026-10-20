@@ -1,0 +1,122 @@
+$ .venv/bin/python -m alembic upgrade head
+
+Traceback (most recent call last):
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 149, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3294, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 445, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1317, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 709, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 301, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 386, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 671, in __init__
+    self.__connect()
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 916, in __connect
+    with util.safe_reraise():
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 166, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 912, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 645, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 869, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/psycopg/connection.py", line 126, in connect
+    raise last_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/__main__.py", line 4, in <module>
+    main(prog="alembic")
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/config.py", line 1039, in main
+    CommandLine(prog=prog).main(argv=argv)
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/config.py", line 1029, in main
+    self.run_cmd(cfg, options)
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/config.py", line 963, in run_cmd
+    fn(
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/command.py", line 487, in upgrade
+    script.run_env()
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/script/base.py", line 550, in run_env
+    util.load_python_file(self.dir, "env.py")
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/util/pyfiles.py", line 114, in load_python_file
+    module = load_module_py(module_id, path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/alembic/util/pyfiles.py", line 132, in load_module_py
+    spec.loader.exec_module(module)  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/workspace/ravel-worktrees/candidate-T07/src/ravel/state/migrations/env.py", line 83, in <module>
+    run_migrations_online()
+  File "/workspace/ravel-worktrees/candidate-T07/src/ravel/state/migrations/env.py", line 69, in run_migrations_online
+    with connectable.connect() as connection:
+         ^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3270, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 151, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2427, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 149, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3294, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 445, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1317, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 709, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 301, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 386, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 671, in __init__
+    self.__connect()
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 916, in __connect
+    with util.safe_reraise():
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 166, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 912, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 645, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 869, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/ravel-worktrees/candidate-T07/.venv/lib/python3.12/site-packages/psycopg/connection.py", line 126, in connect
+    raise last_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8)

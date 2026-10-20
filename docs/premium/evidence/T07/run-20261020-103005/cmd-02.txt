@@ -1,0 +1,201 @@
+$ .venv/bin/python -m pytest tests/premium/T07 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T07/docs/premium/evidence/T07/run-20261020-103005/cmd-02-junit.xml
+
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 48%]
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 97%]
+sss                                                                      [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/premium/T07/test_authority.py:63: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:107: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:146: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:225: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:258: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:293: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_authority.py:339: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [16] tests/premium/T07/test_egress.py:90: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [6] tests/premium/T07/test_egress.py:141: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [17] tests/premium/T07/test_egress.py:174: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:203: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:231: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:251: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:296: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:323: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:354: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:406: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:424: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:438: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:483: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [6] tests/premium/T07/test_egress.py:489: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_egress.py:515: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:53: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:87: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:125: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:146: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:170: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:182: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:248: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_login_limit.py:274: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_research.py:113: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_research.py:139: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_research.py:158: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [7] tests/premium/T07/test_research.py:176: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_research.py:202: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_research.py:219: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:61: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:68: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [4] tests/premium/T07/test_startup.py:78: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [4] tests/premium/T07/test_startup.py:86: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [16] tests/premium/T07/test_startup.py:166: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:269: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [4] tests/premium/T07/test_startup.py:288: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [3] tests/premium/T07/test_startup.py:298: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [2] tests/premium/T07/test_startup.py:306: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:318: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:325: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:340: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:349: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:355: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:362: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:381: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_startup.py:392: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:97: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:149: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:177: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:216: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:250: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:297: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [6] tests/premium/T07/test_upload.py:336: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:384: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:480: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:510: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [1] tests/premium/T07/test_upload.py:526: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
+SKIPPED [4] tests/premium/T07/test_upload.py:559: PostgreSQL is not reachable; run scripts/dev_up.sh ((psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 55432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+(Background on this error at: https://sqlalche.me/e/21/e3q8))
