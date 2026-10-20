@@ -1,0 +1,48 @@
+# The sandbox supervisor image.
+#
+# This is the only RAVEL image that should be given /var/run/docker.sock. It
+# contains the Docker CLI, not a daemon, and it starts no container as
+# privileged. The API, DSH, and agent images are built from the repository's
+# normal environment and are never given the socket.
+#
+# The supervisor's Python side is stdlib-only. FastAPI and uvicorn are pinned
+# to the versions this repository's dependency range resolves for the gate
+# container; bumping the sandbox supervisor is a deployment change that should
+# be made with the rest of RAVEL's dependencies.
+#
+# Build from the repository root:
+#
+#   docker build -f infra/sandbox/Dockerfile.supervisor -t ravel-sandbox-supervisor:latest .
+
+FROM docker:27.3.1-cli AS docker-cli
+
+FROM python:3.12-slim-bookworm
+
+LABEL org.opencontainers.image.title="RAVEL sandbox supervisor"
+LABEL org.opencontainers.image.description="The RAVEL service that owns the Docker socket and starts project sandboxes"
+LABEL ravel.sandbox.supervisor=1
+
+RUN pip install --no-cache-dir \
+        fastapi==0.115.6 \
+        uvicorn==0.32.1
+
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY src/ravel /opt/ravel-sandbox/ravel
+
+RUN chmod -R a+rX /opt/ravel-sandbox \
+    && mkdir -p /var/lib/ravel-sandbox \
+    && chmod 0700 /var/lib/ravel-sandbox
+
+ENV PYTHONPATH=/opt/ravel-sandbox
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV HOME=/tmp
+ENV DOCKER_CONFIG=/tmp/.docker
+ENV RAVEL_SANDBOX_STATE_DIR=/var/lib/ravel-sandbox
+ENV RAVEL_SANDBOX_IMAGE=ravel-sandbox:latest
+ENV RAVEL_SANDBOX_SUPERVISOR_BIND=0.0.0.0
+ENV RAVEL_SANDBOX_SUPERVISOR_PORT=8799
+
+EXPOSE 8799
+
+# The service refuses to start without a token; compose passes one through.
+ENTRYPOINT ["python3", "-m", "ravel.sandbox.service"]

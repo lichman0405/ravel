@@ -1,0 +1,46 @@
+# The sandbox image: Chromium, its system libraries, and RAVEL's in-container
+# helpers. The supervisor starts every project container from this image.
+#
+# Pinned by tag rather than digest because the Microsoft image is updated with
+# Playwright's browser build; changing the Playwright version without changing
+# the browser binaries it expects would make a previously certified render path
+# silently different. A release deployment should add the digest.
+#
+# Build from the repository root:
+#
+#   docker build -f infra/sandbox/Dockerfile.sandbox -t ravel-sandbox:latest .
+#
+# The image is not configured with a user: the supervisor passes
+# `--user 65534:65534` on every container, and the root-owned files below are
+# world-readable. Nothing in this image is writable at runtime except /tmp and
+# the one project workspace volume, because the supervisor also passes
+# `--read-only`.
+
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
+
+LABEL org.opencontainers.image.title="RAVEL sandbox"
+LABEL org.opencontainers.image.description="Isolated command and browser sandbox for RAVEL"
+LABEL ravel.sandbox=1
+
+# The Microsoft image ships the browser binaries and the Node bindings. It does
+# not always include the Python binding that `browser_fetch` uses, so install
+# exactly that binding, pinned to the Playwright release whose browser build is
+# already in the image. There is no project venv and no other dependency here:
+# the sandbox helpers themselves remain stdlib-only.
+RUN pip3 install --no-cache-dir "playwright==1.49.0"
+
+COPY src/ravel /opt/ravel-sandbox/ravel
+RUN chmod -R a+rX /opt/ravel-sandbox \
+    && mkdir -p /workspace \
+    && chmod 0777 /workspace
+
+ENV PYTHONPATH=/opt/ravel-sandbox
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV HOME=/tmp
+ENV TMPDIR=/tmp
+ENV RAVEL_SANDBOX_WORKSPACE=/workspace
+
+# The supervisor overrides this entrypoint with a sleep loop so the container
+# stays alive for `docker exec`. The default is the same lifecycle, which makes
+# a manually started sandbox usable for diagnosis without changing its flags.
+ENTRYPOINT ["/bin/sh", "-c", "trap : TERM INT; while :; do sleep 3600; done"]

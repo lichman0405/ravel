@@ -225,6 +225,43 @@ class Settings(BaseSettings):
     #: all. Controlled HTTP/API research does not read this.
     research_browser_sandbox_provider: str | None = None
 
+    # ── Sandbox supervisor ─────────────────────────────────────────────────
+    # RAVEL's own processes (API, DSH, agents) never hold a Docker socket. They
+    # reach a separately deployed supervisor over HTTP, and these are the only
+    # coordinates they need. The token is a deployment capability: it lets the
+    # holder ask the supervisor for a sandbox, so it is a secret and it is
+    # deliberately not a scientific authority. The supervisor still checks the
+    # project on every handle.
+    sandbox_supervisor_url: str | None = None
+    sandbox_supervisor_token: SecretStr | None = None
+    #: The image the supervisor starts. The supervisor's own configuration is
+    #: authoritative; this copy lets a RAVEL process describe what it expects
+    #: and is compared at startup by a deployment, not trusted as a fact.
+    sandbox_image: str | None = "ravel-sandbox:latest"
+    sandbox_state_dir: Path | None = None
+    #: Production ceilings. A project may be given less, never more. These are
+    #: configuration rather than a grant, and the supervisor reads the same
+    #: names from its own environment.
+    sandbox_max_cpu_cores: float = Field(default=2.0, gt=0)
+    sandbox_max_memory_bytes: int = Field(default=4 * 1024**3, gt=0)
+    sandbox_max_pids: int = Field(default=256, gt=0)
+    sandbox_max_scratch_bytes: int = Field(default=10 * 1024**3, gt=0)
+    sandbox_max_timeout_seconds: float = Field(default=120.0, gt=0)
+    #: Comma-separated exact `host:port` entries the browser proxy may reach.
+    #: Empty means no target is permitted, and the supervisor refuses to
+    #: provision a browser sandbox rather than starting one with open egress.
+    sandbox_proxy_allowlist: str | None = None
+    sandbox_proxy_port: int = Field(default=3128, ge=1, le=65535)
+    #: Comma-separated `NAME=VALUE` pairs injected into sandbox commands. There
+    #: is no inheritance from the supervisor's environment: an agent cannot
+    #: obtain `DATABASE_URL` or a cloud credential by printing `env`.
+    sandbox_env_allowlist: str | None = None
+    sandbox_output_limit_bytes: int = Field(default=2 * 1024**2, gt=0)
+    sandbox_max_file_bytes: int = Field(default=8 * 1024**2, gt=0)
+    sandbox_max_artifact_bytes: int = Field(default=32 * 1024**2, gt=0)
+    sandbox_max_artifacts: int = Field(default=32, gt=0)
+    sandbox_browser_startup_seconds: float = Field(default=30.0, gt=0)
+
     # ── Actions and budgets ────────────────────────────────────────────────
     # Defaults, not grants. An AuthorityEnvelope may be stricter and the
     # stricter bound wins. Money has no default at all: a project's paid limit
@@ -289,6 +326,11 @@ class Settings(BaseSettings):
         "postgres_dsn_override",
         "raspa_data_dir",
         "research_browser_sandbox_provider",
+        "sandbox_supervisor_url",
+        "sandbox_image",
+        "sandbox_state_dir",
+        "sandbox_proxy_allowlist",
+        "sandbox_env_allowlist",
         "gateway_public_origin",
         mode="before",
     )
@@ -304,7 +346,9 @@ class Settings(BaseSettings):
             return None
         return value
 
-    @field_validator("deepseek_api_key", "search_api_key", mode="before")
+    @field_validator(
+        "deepseek_api_key", "search_api_key", "sandbox_supervisor_token", mode="before"
+    )
     @classmethod
     def _blank_secret_is_absent(cls, value: object) -> object:
         """Treat a blank secret as unset, so an empty `.env` key is not a credential."""

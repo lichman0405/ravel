@@ -1559,12 +1559,51 @@
         "make premium-task TASK=T19"
       ],
       "classification": "internal",
-      "status": "PLANNED",
+      "status": "RUNNING",
       "test_nodeids": [
-        "tests/premium/T19"
+        "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
+        "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",
+        "tests/premium/T19/test_ac1_container.py::test_cross_project_files_and_handles_do_not_leak",
+        "tests/premium/T19/test_ac1_container.py::test_paths_that_escape_the_workspace_are_refused",
+        "tests/premium/T19/test_ac1_container.py::test_application_container_has_no_docker_socket_and_uses_the_supervisor",
+        "tests/premium/T19/test_ac1_container.py::test_only_the_supervisor_compose_service_mounts_the_socket",
+        "tests/premium/T19/test_ac2_quotas.py::test_cpu_quota_actually_throttles_four_busy_children",
+        "tests/premium/T19/test_ac2_quotas.py::test_memory_limit_kills_or_refuses_an_allocation_over_the_limit",
+        "tests/premium/T19/test_ac2_quotas.py::test_pid_limit_stops_forking_inside_the_container",
+        "tests/premium/T19/test_ac2_quotas.py::test_scratch_tmpfs_reaches_enospc_without_touching_the_workspace",
+        "tests/premium/T19/test_ac2_quotas.py::test_command_timeout_ends_the_run_and_leaves_no_process",
+        "tests/premium/T19/test_ac2_quotas.py::test_stop_cancels_a_blocked_command_and_reconnect_reuses_the_project_binding",
+        "tests/premium/T19/test_ac2_quotas.py::test_destroy_removes_container_and_volume_but_keeps_queryable_records",
+        "tests/premium/T19/test_ac2_quotas.py::test_a_request_wider_than_the_deployment_ceiling_is_refused",
+        "tests/premium/T19/test_ac2_quotas.py::test_authority_envelope_narrows_the_timeout_and_uses_it",
+        "tests/premium/T19/test_ac3_binding.py::test_command_sandbox_has_no_route_or_credential_for_database_or_cluster",
+        "tests/premium/T19/test_ac3_binding.py::test_secrets_are_redacted_from_argv_output_records_and_logs",
+        "tests/premium/T19/test_ac3_binding.py::test_reconnect_keeps_the_project_binding_and_refuses_a_wrong_epoch",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_runs_only_the_claimed_digest",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_refuses_every_mismatch_before_the_supervisor",
+        "tests/premium/T19/test_artifacts.py::test_sandbox_bytes_are_collected_hashed_and_registered_only_by_ravel",
+        "tests/premium/T19/test_artifacts.py::test_a_retrieval_whose_hash_does_not_match_its_bytes_is_refused",
+        "tests/premium/T19/test_browser.py::test_browser_sandbox_is_one_container_behind_one_proxy_on_an_internal_network",
+        "tests/premium/T19/test_browser.py::test_the_browser_has_no_direct_route_and_the_proxy_refuses_everything_else",
+        "tests/premium/T19/test_browser.py::test_egress_policy_refuses_metadata_and_private_networks_even_when_allowlisted",
+        "tests/premium/T19/test_browser.py::test_research_browser_renders_in_the_sandbox_and_registers_a_hash_checked_snapshot",
+        "tests/premium/T19/test_browser.py::test_browser_refuses_metadata_loopback_and_non_research_callers",
+        "tests/premium/T19/test_browser.py::test_the_research_navigator_refuses_without_a_bound_research_sandbox"
       ],
       "manual_evidence_refs": [],
       "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "upgrade",
+            "head"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
         {
           "argv": [
             ".venv/bin/python",
@@ -1576,6 +1615,15 @@
           ],
           "allow_skips": false,
           "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
           "external": false
         }
       ],

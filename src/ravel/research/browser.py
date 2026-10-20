@@ -12,37 +12,42 @@ Three properties matter more than the navigation itself:
   status, so nothing downstream has to know which path read the page. The one
   difference is recorded in `note`: that the text came from a rendered DOM
   rather than from the bytes the server sent.
-- **Playwright runs on its own thread.** Its synchronous API refuses to start
-  inside a running event loop, and RAVEL's callers are async. The navigator
-  therefore owns a single worker thread and every call goes through it, so the
-  API is safe to call from either kind of caller and no caller has to know
-  which kind it is.
-- **A missing browser is reported, not worked around.** Chromium needs system
-  libraries that a minimal container does not have. When it cannot start, the
-  navigator says exactly which command installs them, and the caller records
-  that the source could not be read in a browser. It does not fall back to an
-  unrendered fetch and present it as the page.
+- **Chromium runs in a container, not in this process.** T19's sandbox
+  supervisor owns the Docker socket and starts a per-project browser sandbox on
+  an internal network behind a filtering proxy. This module only speaks HTTP to
+  it, so an agent process gets no Docker access and imports no Playwright. A
+  synchronous call still runs on a worker thread because the navigator's callers
+  are async and a slow render must not block their loop; the thread no longer
+  runs a browser, only the supervisor request and the `Retrieval` construction.
+- **A missing browser is reported, not worked around.** When the sandbox cannot
+  start, or the supervisor is unreachable, the navigator raises
+  `BrowserUnavailable` and the caller records that the source could not be read
+  in a browser. It does not fall back to an unrendered fetch and present it as
+  the page.
 
 A browser makes requests RAVEL never asked for. A page can redirect to an
 address RAVEL refuses, and it can carry an image, a script, or a fetch whose URL
 points at the host's own network. Chromium issues all of those itself, so the
-check on the URL handed to `open` is not enough — the context installs a route
-handler that validates every request the browser makes, which is the same fix
-the fetcher applies at the transport. See `addressing` for what the policy is.
+check on the URL handed to `open` is not enough. The sandbox's proxy refuses
+every request that is not on the operator's exact allowlist, and the browser
+request route checks private and metadata addresses again. See `addressing` for
+what RAVEL's own policy is; the proxy is stricter and is the one that sees the
+socket.
 
-**The browser is fail-closed until it can be isolated.** A route handler can
-refuse a URL, but it cannot pin the address Chromium's own resolver and socket
-use, and it cannot contain what a compromised renderer reads from the host.
-RAVEL therefore refuses to start Playwright at all unless a configured sandbox
-provider is one this build implements (`_require_sandbox` and
-`BOUND_SANDBOX_PROVIDERS`). The set is empty until T19 binds an isolated,
-egress-filtered sandbox; before that, research uses the HTTP/API paths, which
-are pinned.
+**Binding is a deployment fact, not a name.** A provider name in configuration
+does not create isolation. `_require_sandbox` refuses unless the name has an
+adapter in this build, the supervisor URL and token are set, and the trusted
+environment names a project and the Research role; `_binding` then uses a
+handle only after the supervisor's capabilities attestation includes every
+isolation flag. `BOUND_SANDBOX_PROVIDERS` stays empty because T07 asserts this
+build does not *statically* claim a bound provider — T19's binding is the live,
+attested supervisor path above.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -54,6 +59,13 @@ from ravel.domain.enums import AccessStatus
 from ravel.research import addressing
 from ravel.research.fetching import MAX_INLINE_BYTES, excerpt_of, title_of
 from ravel.research.leads import Retrieval
+from ravel.sandbox.authority import SandboxAuthority, normalize_role
+from ravel.sandbox.models import (
+    SandboxError,
+    SandboxUnsafeTarget,
+    SandboxValidationError,
+)
+from ravel.sandbox.provider import DockerSandboxProvider
 from ravel.state.store import hash_chunks
 
 logger = logging.getLogger(__name__)
@@ -69,20 +81,28 @@ DEFAULT_TIMEOUT_MS = 45_000
 #: timeout when nothing is pending.
 SETTLE_TIMEOUT_MS = 10_000
 
-_INSTALL_HINT = (
-    "run `.venv/bin/python -m playwright install-deps chromium` (and "
-    "`.venv/bin/python -m playwright install chromium` for the browser itself); "
-    "on a host without passwordless sudo an administrator has to run it"
-)
-
-#: Sandbox providers this build can confine Chromium with. Empty on purpose:
-#: Playwright makes its own connections, examines its own DNS, and reads its own
-#: files, so `addressing` can refuse a URL but cannot pin the address the
-#: browser process actually connects to. Until T19 binds a provider that runs
-#: Chromium inside an isolated, egress-filtered sandbox, no provider is
-#: compliant and the browser path is closed. Naming one in configuration is not
-#: the same as implementing it, so an unknown name is refused too.
+#: Sandbox providers this build can confine Chromium with, *statically*. The
+#: set stays empty after T19 on purpose: a provider is not bound by naming it,
+#: and T07 asserts that this build does not claim one. T19's binding is a
+#: deployment configuration plus a live supervisor whose handle attests the
+#: isolation before any request is sent — see `_binding`. An unknown name is
+#: refused, so a typo closes the path rather than opening it.
 BOUND_SANDBOX_PROVIDERS: frozenset[str] = frozenset()
+
+#: Provider names with an implemented adapter. Configuration alone does not
+#: make one usable: `_binding` also requires the supervisor's URL, its token,
+#: the trusted project and role environment, and the supervisor's own
+#: capabilities attestation. A name in this set with none of the rest still
+#: raises `BrowserUnavailable`.
+IMPLEMENTED_SANDBOX_PROVIDERS: frozenset[str] = frozenset({"docker"})
+
+#: Environment names the tool server is launched with. They are trusted input:
+#: the composition writes them, not the model, and the provider is bound to the
+#: project this process was started for.
+_ENV_PROJECT = "RAVEL_PROJECT_ID"
+_ENV_ROLE = "RAVEL_ROLE"
+_ENV_BINDING = "RAVEL_BINDING_ID"
+_ENV_EPOCH = "RAVEL_LEASE_EPOCH"
 
 
 class BrowserUnavailable(RuntimeError):
@@ -107,24 +127,20 @@ class BrowserPolicy:
     respect_challenges: bool = True
 
 
-def _require_sandbox(settings: Settings) -> None:
-    """Refuse to launch a browser that has no isolation behind it.
+@dataclass(frozen=True, slots=True)
+class _Binding:
+    """A configured provider and the authority this process may use with it."""
 
-    Checked in the public entry points, after the URL has been refused or
-    accepted by `addressing` and before Playwright is imported or a worker
-    thread is asked for anything. The ordering is deliberate: an unsafe URL is
-    a decision about the URL and is reported as `UnsafeURL` whether or not a
-    browser exists, while a safe URL on an unbound deployment is a browser that
-    must not start.
+    provider: DockerSandboxProvider
+    authority: SandboxAuthority
 
-    The provider name is configuration, not an implementation. Only a name this
-    build knows how to run under is accepted, and this build knows none until
-    T19 supplies the adapter; a typo therefore closes the path rather than
-    opening it.
+
+def _configured_provider(settings: Settings) -> str:
+    """The provider name, or a refusal that keeps the path closed.
 
     Raises:
-        BrowserUnavailable: No sandbox provider is configured, or the named one
-            is not implemented by this build.
+        BrowserUnavailable: No provider is configured, or the name has no
+            adapter in this build.
     """
     provider = (settings.research_browser_sandbox_provider or "").strip().casefold()
     if not provider:
@@ -134,12 +150,104 @@ def _require_sandbox(settings: Settings) -> None:
             "filter. Controlled HTTP/API research remains available; T19 binds a "
             "sandbox provider and re-certifies browser egress"
         )
-    if provider not in BOUND_SANDBOX_PROVIDERS:
+    if provider not in IMPLEMENTED_SANDBOX_PROVIDERS:
         raise BrowserUnavailable(
             f"browser retrieval is disabled: {provider!r} is not a sandbox provider "
             "implemented by this build. Configuring a name does not create the "
             "isolation; T19 has to bind one"
         )
+    return provider
+
+
+def _require_sandbox(settings: Settings) -> None:
+    """Refuse to request a rendered fetch unless T19's sandbox is configured.
+
+    Checked in the public entry points, after the URL has been refused or
+    accepted by `addressing` and before any work is handed to the worker. This
+    function deliberately does no I/O: an unsafe URL is a decision about the
+    URL whether or not a supervisor is reachable, while a safe URL without the
+    deployment coordinates is a browser that must not be asked for.
+
+    The provider name is configuration, not an implementation. T19 implements
+    `docker`, but a name alone is not a binding: the supervisor URL, its token,
+    the trusted project and role, and the supervisor's attested capabilities
+    are all required. Every refusal retains "T19" so an operator can tell this
+    gate from a URL policy refusal.
+
+    Raises:
+        BrowserUnavailable: The provider is absent or unimplemented, or the
+            deployment coordinates or trusted project scope are missing/wrong.
+    """
+    _configured_provider(settings)
+    if not settings.sandbox_supervisor_url:
+        raise BrowserUnavailable(
+            "browser retrieval is disabled: the docker sandbox provider is named, "
+            "but RAVEL_SANDBOX_SUPERVISOR_URL is unset. T19 requires a separate "
+            "supervisor that owns Docker; this process must not hold the socket"
+        )
+    if settings.sandbox_supervisor_token is None or not (
+        settings.sandbox_supervisor_token.get_secret_value().strip()
+    ):
+        raise BrowserUnavailable(
+            "browser retrieval is disabled: RAVEL_SANDBOX_SUPERVISOR_TOKEN is unset, "
+            "and T19's supervisor refuses every request without its bearer token"
+        )
+    project = os.environ.get(_ENV_PROJECT, "").strip()
+    if not project:
+        raise BrowserUnavailable(
+            "browser retrieval is disabled: RAVEL_PROJECT_ID is unset, so this "
+            "process has no trusted project to bind the T19 sandbox to"
+        )
+    role = normalize_role(os.environ.get(_ENV_ROLE, ""))
+    if role != "RESEARCH":
+        raise BrowserUnavailable(
+            "browser retrieval is disabled: only the Research role may hold a "
+            f"browser sandbox, and this process's RAVEL_ROLE is {role or 'unset'!r}. "
+            "T19 separates browser egress to Research"
+        )
+
+
+def _binding(settings: Settings) -> _Binding:
+    """Build the project-bound provider once the configuration has passed.
+
+    The token travels in an Authorization header and never in a URL, so it is
+    not logged by a proxy's request line. The authority's project comes from
+    `RAVEL_PROJECT_ID`, which the composition writes; a model cannot supply it,
+    and the provider refuses an authority naming another project.
+    """
+    _require_sandbox(settings)
+    assert settings.sandbox_supervisor_url is not None
+    assert settings.sandbox_supervisor_token is not None
+    project = os.environ[_ENV_PROJECT].strip()
+    binding_id = os.environ.get(_ENV_BINDING, "").strip() or f"research-browser:{project}"
+    epoch: int | None = None
+    raw_epoch = os.environ.get(_ENV_EPOCH, "").strip()
+    if raw_epoch:
+        try:
+            epoch = int(raw_epoch)
+        except ValueError as exc:
+            raise BrowserUnavailable(
+                f"browser retrieval is disabled: RAVEL_LEASE_EPOCH={raw_epoch!r} is "
+                "not an integer, so T19 cannot bind the lease epoch"
+            ) from exc
+    try:
+        authority = SandboxAuthority(
+            project_id=project,
+            binding_id=binding_id,
+            agent_role="RESEARCH",
+            lease_epoch=epoch,
+        )
+        provider = DockerSandboxProvider(
+            base_url=settings.sandbox_supervisor_url,
+            token=settings.sandbox_supervisor_token.get_secret_value(),
+            project_id=project,
+        )
+    except SandboxValidationError as exc:
+        raise BrowserUnavailable(
+            f"browser retrieval is disabled: T19's sandbox configuration is invalid "
+            f"({exc})"
+        ) from exc
+    return _Binding(provider=provider, authority=authority)
 
 
 class BrowserNavigator:
@@ -154,13 +262,12 @@ class BrowserNavigator:
     ) -> None:
         self.settings = settings
         self.policy = policy or BrowserPolicy()
-        self.headless = settings.playwright_headless
         self.resolver = resolver
-        # One worker, started lazily. Playwright's sync API asserts it is not
-        # called from a thread with a running loop, and every RAVEL caller is
-        # async; running the whole session on a dedicated thread is what makes
-        # this callable from them without leaking that detail outward.
+        # One worker, started lazily. Every RAVEL caller is async and a sandbox
+        # render can take tens of seconds; the dedicated thread keeps that off
+        # the caller's loop. It runs no browser: Chromium is in the sandbox.
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ravel-browser")
+        self._binding_cache: _Binding | None = None
         self._closed = False
 
     def open(self, url: str) -> Retrieval:
@@ -200,6 +307,16 @@ class BrowserNavigator:
     def close(self) -> None:
         self._worker.shutdown(wait=True)
         self._closed = True
+        binding = self._binding_cache
+        self._binding_cache = None
+        if binding is not None:
+            try:
+                binding.provider.close_browser(binding.authority)
+            except SandboxError:
+                # Teardown runs after the caller's result, and a supervisor
+                # that is already gone is not a reason to replace that result
+                # with a shutdown error. The handle record remains queryable.
+                logger.debug("browser sandbox teardown failed", exc_info=True)
 
     def __enter__(self) -> BrowserNavigator:
         return self
@@ -221,56 +338,75 @@ class BrowserNavigator:
         future = self._worker.submit(work)
         try:
             return future.result()
+        except addressing.UnsafeURL:
+            raise
+        except SandboxUnsafeTarget as exc:
+            # The supervisor refused this URL before Chromium requested it.
+            # Report it as the URL decision it is, not as a navigation failure:
+            # "RAVEL would not fetch this" and "the page did not load" are
+            # different facts, and the second invites a retry.
+            raise addressing.UnsafeURL(exc.url, exc.reason) from None
         except BrowserUnavailable:
             raise
-        # Playwright raises its own exception types, and which one it raises
-        # for a timeout varies by version. They all mean the same thing to a
-        # caller — the navigation did not produce a document — so they are
-        # translated into that, with the original preserved as the cause.
+        # A supervisor that is unreachable, a browser image that cannot start,
+        # a timeout, and a refused capability all mean the same thing to a
+        # caller — the rendered fetch did not produce a document — so they are
+        # translated into that, with the typed cause preserved.
         except Exception as exc:
             raise BrowserUnavailable(f"navigation failed: {type(exc).__name__}: {exc}") from exc
 
     def _open(self, url: str) -> Retrieval:
-        with self._session() as view:
-            view.goto(url, self.policy.timeout_ms)
-            try:
-                view.page.wait_for_load_state("networkidle", timeout=self.policy.settle_ms)
-            # A page that keeps a connection open — an analytics beacon, a
-            # websocket — never goes idle, and it is still readable. Waiting is
-            # an optimisation here, so failing to wait is not a failure.
-            except Exception:
-                logger.debug("page did not reach network idle: %s", url)
-
-            html = view.page.content()
-            body = html.encode("utf-8", errors="replace")
-            title = (view.page.title() or "").strip() or title_of(body, "text/html")
-            return self._retrieval(
-                requested_url=url,
-                final_url=view.page.url,
-                status=view.status,
-                body=body,
-                title=title,
-                challenge=self.policy.respect_challenges
-                and _looks_like_a_challenge(title, html),
-            )
+        binding = self._binding()
+        page = binding.provider.fetch(
+            url=url,
+            authority=binding.authority,
+            timeout_ms=self.policy.timeout_ms,
+            settle_ms=self.policy.settle_ms,
+            max_bytes=self.policy.max_bytes,
+        )
+        body = page.body
+        title = page.title.strip() or title_of(body, "text/html")
+        challenge = self.policy.respect_challenges and _looks_like_a_challenge(
+            title, page.html
+        )
+        return self._retrieval(
+            requested_url=url,
+            final_url=page.final_url,
+            status=page.status_code,
+            body=body,
+            title=title,
+            challenge=challenge,
+        )
 
     def _links(self, url: str, limit: int) -> list[str]:
-        with self._session() as view:
-            view.goto(url, self.policy.timeout_ms)
-            seen: list[str] = []
-            for element in view.page.query_selector_all("a[href]"):
-                href = element.get_attribute("href")
-                if not href:
-                    continue
-                absolute = _absolute(href, view.page.url)
-                if absolute and absolute not in seen:
-                    seen.append(absolute)
-                if len(seen) >= limit:
-                    break
-            return seen
+        binding = self._binding()
+        page = binding.provider.fetch(
+            url=url,
+            authority=binding.authority,
+            timeout_ms=self.policy.timeout_ms,
+            settle_ms=self.policy.settle_ms,
+            max_bytes=self.policy.max_bytes,
+        )
+        seen: list[str] = []
+        for href in page.links:
+            absolute = _absolute(href, page.final_url)
+            if absolute and absolute not in seen:
+                seen.append(absolute)
+            if len(seen) >= limit:
+                break
+        return seen
 
-    def _session(self) -> _Session:
-        return _Session(self)
+    def _binding(self) -> _Binding:
+        """The configured provider, built once per navigator.
+
+        Built on the worker thread so the construction and every request happen
+        on the same thread. No Playwright is imported here: Chromium lives in
+        the sandbox image, and this process only sees the JSON record the
+        supervisor returns.
+        """
+        if self._binding_cache is None:
+            self._binding_cache = _binding(self.settings)
+        return self._binding_cache
 
     def _retrieval(
         self,
@@ -324,6 +460,107 @@ class BrowserNavigator:
             note=note,
         )
 
+    def _session(self) -> _Session:
+        """A route-guard session, for testing the policy without Chromium.
+
+        The production path never calls this: it renders inside the T19
+        sandbox. The guard is nevertheless the same code that decides which
+        page-chosen requests are allowed, and it is worth exercising where
+        Chromium cannot run.
+        """
+        return _Session(self)
+
+
+class _Session:
+    """The browser-request policy, usable with fakes.
+
+    RAVEL does not launch a browser in the application process any more; the
+    sandbox owns Chromium. This class therefore refuses to start a browser of
+    its own. It can still install the route guard on a browser object that a
+    caller already has — a test that supplies one, for instance — and it is
+    that small piece of setup the route-policy tests inspect. Acquiring a
+    browser is outside this class, so no configuration or request can turn it
+    into a local Chromium path.
+    """
+
+    def __init__(self, outer: BrowserNavigator, *, browser: Any = None) -> None:
+        self.outer = outer
+        self.response: Any = None
+        #: The first navigation this session was told not to make, if any.
+        #: `goto` re-raises it so a redirected navigation reports a refusal
+        #: rather than a generic Playwright failure.
+        self.refused: addressing.UnsafeURL | None = None
+        self._browser = browser
+        self._context: Any = None
+        self._page: Any = None
+
+    @property
+    def page(self) -> Any:
+        return self._page
+
+    @property
+    def status(self) -> int | None:
+        """The HTTP status of the last navigation, when there was one."""
+        return self.response.status if self.response is not None else None
+
+    def goto(self, url: str, timeout_ms: int) -> None:
+        """Navigate, reporting a refused navigation as the refusal it is.
+
+        Raises:
+            addressing.UnsafeURL: The navigation was aborted by the guard.
+        """
+        try:
+            self.response = self._page.goto(
+                url, wait_until="domcontentloaded", timeout=timeout_ms
+            )
+        except Exception:
+            if self.refused is not None:
+                raise self.refused from None
+            raise
+
+    def __enter__(self) -> _Session:
+        if self._browser is None:
+            raise BrowserUnavailable(
+                "Chromium is started only inside the T19 sandbox; this application "
+                "process has no browser to enter"
+            )
+        # `service_workers="block"` because a worker's requests do not pass
+        # through `context.route`; the route handler below would never see them.
+        # The sandbox's browser uses the same setting; the proxy is the second,
+        # independent decision point in that path.
+        self._context = self._browser.new_context(service_workers="block")
+        # Registered before the first page exists, so there is no window in
+        # which a navigation could be made unguarded. This setup is also what
+        # the route-policy tests inspect; it never happens unless the caller
+        # supplied the browser.
+        self._context.route("**/*", self._guard_route)
+        self._page = self._context.new_page()
+        return self
+
+    def _guard_route(self, route: Any, request: Any) -> None:
+        """Refuse a request the browser is about to make, or let it through.
+
+        The URLs this sees were chosen by the page, not by RAVEL: a redirect to
+        somewhere private, an `<img>` pointing at the metadata service, a
+        script fetching the cluster's API. The sandbox proxy makes the same
+        decision at the socket, which is where it cannot be bypassed.
+        """
+        try:
+            addressing.guard(request.url, resolver=self.outer.resolver)
+        except addressing.UnsafeURL as exc:
+            if request.is_navigation_request():
+                self.refused = exc
+            logger.info("refused a browser request: %s", exc)
+            route.abort()
+            return
+        route.continue_()
+
+    def __exit__(self, *_: object) -> None:
+        # The context belongs to the caller's browser; closing it here would
+        # close a page the caller may still be using. The production path does
+        # not use this class at all.
+        return None
+
 
 def _looks_like_a_challenge(title: str, html: str) -> bool:
     """Whether a page is an interstitial rather than the thing it stands for.
@@ -344,143 +581,6 @@ def _looks_like_a_challenge(title: str, html: str) -> bool:
             "verify you are human",
         )
     )
-
-
-class _Session:
-    """One browser, its context, its page, and the last navigation's response.
-
-    Held together because their lifetimes are identical: a page is only valid
-    while its context and browser are, and a caller that closed one early would
-    get a confusing error from Playwright rather than from RAVEL.
-    """
-
-    def __init__(self, outer: BrowserNavigator) -> None:
-        self.outer = outer
-        self.response: Any = None
-        #: The first navigation this session was told not to make, if any.
-        #: `goto` re-raises it so that a redirected navigation reports a
-        #: refusal rather than a failure — see `_guard_route`.
-        self.refused: addressing.UnsafeURL | None = None
-
-    @property
-    def page(self) -> Any:
-        return self._page
-
-    @property
-    def status(self) -> int | None:
-        """The HTTP status of the last navigation, when there was one.
-
-        Playwright reports no response for a `data:` or `about:` document, and
-        a rendered page with no status is still a page; None is the honest
-        answer rather than a fabricated 200.
-        """
-        return self.response.status if self.response is not None else None
-
-    def goto(self, url: str, timeout_ms: int) -> None:
-        """Navigate, reporting a refused navigation as the refusal it is.
-
-        A refused navigation reaches Playwright as an aborted request, which
-        surfaces as a generic navigation error. That would be recorded
-        downstream as "this source could not be read" — a different and untrue
-        statement about a URL RAVEL declined to request, and the record an
-        attacker probing the internal network would be trying to obtain.
-
-        Raises:
-            addressing.UnsafeURL: The navigation was aborted by the guard.
-        """
-        try:
-            self.response = self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-        except Exception:
-            if self.refused is not None:
-                raise self.refused from None
-            raise
-
-    def __enter__(self) -> _Session:
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as exc:
-            raise BrowserUnavailable(
-                f"the playwright package is not installed: {exc}. Install it with "
-                "`uv pip install playwright`, then " + _INSTALL_HINT
-            ) from exc
-
-        self._playwright = sync_playwright().start()
-        try:
-            self._browser = self._playwright.chromium.launch(headless=self.outer.headless)
-        # The failure this catches is usually not Playwright's: Chromium exits
-        # at startup when a shared library is missing, and the exception then
-        # carries the loader's message rather than anything about browsers. The
-        # message is kept and the install command appended, because that is
-        # what makes this error actionable on a minimal host.
-        except Exception as exc:
-            self._playwright.stop()
-            raise BrowserUnavailable(
-                f"Chromium could not be launched: {type(exc).__name__}: {exc}. "
-                f"To install its system libraries, {_INSTALL_HINT}"
-            ) from exc
-        # `service_workers="block"` because a service worker's requests do not
-        # go through `context.route`. A page that registers one would otherwise
-        # have a way to fetch addresses the guard never sees — the one bypass a
-        # route handler cannot close by checking harder. RAVEL reads documents;
-        # it has no use for an offline cache, and a page that needs one to show
-        # its content is a page RAVEL should read some other way.
-        self._context = self._browser.new_context(
-            user_agent=self._user_agent(), service_workers="block"
-        )
-        # Every request this context makes, not just the one RAVEL asked for.
-        # Registered before the first page exists, so there is no window in
-        # which a navigation could be made unguarded.
-        self._context.route("**/*", self._guard_route)
-        self._page = self._context.new_page()
-        return self
-
-    def _guard_route(self, route: Any, request: Any) -> None:
-        """Refuse a request the browser is about to make, or let it through.
-
-        The URLs this sees were chosen by the page, not by RAVEL: a `302` to
-        somewhere private, an `<img>` pointing at the metadata service, a script
-        fetching `http://localhost:7233`. Chromium would make all of them
-        itself, which would make RAVEL the client for a request nobody wrote —
-        the failure `addressing` exists to prevent, and the reason the fetcher
-        guards at the transport rather than in front of it.
-
-        An aborted subresource is simply missing from the rendered document,
-        which is the correct outcome for a request RAVEL declined to make. An
-        aborted navigation is recorded so that `goto` can report it as a
-        refusal.
-
-        Resolving the host for each request costs a lookup the browser would
-        otherwise have done itself. That is the price of checking the address
-        the connection will actually use, and it is paid against a request that
-        is about to cross the network anyway.
-        """
-        try:
-            addressing.guard(request.url, resolver=self.outer.resolver)
-        except addressing.UnsafeURL as exc:
-            if request.is_navigation_request():
-                self.refused = exc
-            logger.info("refused a browser request: %s", exc)
-            route.abort()
-            return
-        route.continue_()
-
-    def __exit__(self, *_: object) -> None:
-        for closer in (self._context.close, self._browser.close, self._playwright.stop):
-            try:
-                closer()
-            # Teardown runs while an exception may be in flight. A failure to
-            # close the browser must not replace the result the caller was
-            # about to receive with a shutdown error.
-            except Exception:
-                logger.debug("browser teardown step failed", exc_info=True)
-
-    def _user_agent(self) -> str:
-        from ravel.research.fetching import FetchError, user_agent
-
-        try:
-            return user_agent(self.outer.settings)
-        except FetchError:
-            return "RAVEL/0.1 (research source gateway)"
 
 
 def _absolute(href: str, base: str) -> str | None:
