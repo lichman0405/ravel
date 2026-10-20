@@ -160,6 +160,35 @@ class ActionRepository(ProjectScopedRepository[Action]):
         )
         return [from_row(Action, row) for row in rows]
 
+    def live_for_node(self, node_id: str) -> Action | None:
+        """The Action holding this node's execution slot, if one exists.
+
+        A finished run can leave an `ACCEPTED` or `UNKNOWN` Action behind:
+        acceptance records that the external system took the work, not that
+        the work ended. The newest live Action is the one the run belongs to;
+        an older Action for the same node is already terminal and has released
+        its slot.
+        """
+        rows = (
+            self.session.execute(
+                self._scoped(
+                    ActionRow.node_id == node_id,
+                    ActionRow.status.in_(
+                        (
+                            ActionStatus.CLAIMED.value,
+                            ActionStatus.ACCEPTED.value,
+                            ActionStatus.UNKNOWN.value,
+                        )
+                    ),
+                )
+                .order_by(ActionRow.created_at.desc())
+                .limit(1)
+            )
+            .scalars()
+            .all()
+        )
+        return from_row(Action, rows[0]) if rows else None
+
     def held_for_concurrency(self, *, kind: ActionKind) -> int:
         """How many Actions of this kind currently hold a concurrency slot.
 

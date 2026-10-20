@@ -100,6 +100,58 @@ def test_a_foreign_submission_claim_without_a_record_is_unknown(tmp_path) -> Non
     assert cluster.jobs == {}
 
 
+def test_a_foreign_claim_with_an_existing_preparing_record_is_unknown(
+    tmp_path,
+) -> None:
+    """Losing the claim blocks submission even when the owner's record exists.
+
+    The owner may be between its PREPARING write and its sbatch, or it may be
+    dead. Neither state permits this process to rewrite the record, upload, or
+    submit under the same key; the scheduler is the only witness that can turn
+    the uncertainty into an adoption.
+    """
+    cluster = ScriptedTargetCluster()
+    request = support.request(workspace=support.workspace(tmp_path))
+    remote = f"{support.REMOTE_ROOT}/{PROJECT}/{NODE}/{ATTEMPT}"
+    cluster.directories.add(remote + ".claim")
+    path = support.write_record(
+        cluster,
+        support.intent_record(request, support.target(TARGET_A), status="PREPARING"),
+    )
+    before = cluster.files[path]
+
+    with pytest.raises(SlurmSubmissionUncertain, match="claimed by another process"):
+        support.backend(cluster).submit(request)
+
+    assert cluster.sbatch_calls() == 0
+    assert cluster.jobs == {}
+    assert cluster.files[path] == before, (
+        "the process without the claim rewrote the owner's PREPARING record"
+    )
+
+
+def test_a_foreign_claim_with_a_visible_job_adopts_it(tmp_path) -> None:
+    """A job the scheduler reports is the one ending that is safe to adopt."""
+    cluster = ScriptedTargetCluster()
+    request = support.request(workspace=support.workspace(tmp_path))
+    first = support.backend(cluster).submit(request)
+    # A process between its PREPARING write and its response leaves an intent
+    # with no job id, while the job it already submitted is visible.
+    support.write_record(
+        cluster,
+        support.intent_record(request, support.target(TARGET_A), status="PREPARING"),
+    )
+
+    second = support.backend(cluster).submit(request)
+
+    assert second.backend_job_ref == first.backend_job_ref
+    assert second.backend_state == "found on the cluster"
+    assert cluster.sbatch_calls() == 1
+    record = support.read_record(cluster)
+    assert record["status"] == "SUBMITTED"
+    assert record["job_id"] == first.backend_job_ref.split(":")[2]
+
+
 def test_a_restarted_worker_adopts_the_record_and_does_not_submit_again(tmp_path) -> None:
     cluster = ScriptedTargetCluster()
     request = support.request(workspace=support.workspace(tmp_path))

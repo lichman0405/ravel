@@ -31,10 +31,13 @@ from sqlalchemy.orm import Session
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from ravel.actions.service import ActionService
 from ravel.config import Settings
 from ravel.domain.artifacts import ArtifactVersion
 from ravel.domain.contracts import ExecutionContract
 from ravel.domain.enums import (
+    ActionAttemptOutcome,
+    ActionStatus,
     CompletenessVerdict,
     JobState,
     NodeStatus,
@@ -965,6 +968,16 @@ class NodeRunActivities:
                         actor_id=step.actor_id,
                         decision_ref=step.decision_ref,
                     )
+            # The run is over, so the Action that admitted it can stop holding
+            # a compute slot. Written in this transaction with the Execution
+            # Record: a record that exists and an Action that still holds the
+            # slot would be an accounting state the next start pays for.
+            _settle_node_action(
+                session,
+                project_id=plan.project_id,
+                node_id=plan.node_id,
+                termination=record.termination_status,
+            )
         return _outcome(record, retry_reason)
 
 
@@ -1241,6 +1254,83 @@ def _ending_steps(
             deviation.resolved_by_decision_ref,
         ),
     )
+
+
+#: The endings in which the external work is known to have stopped.
+_CONFIRMED_ENDINGS = frozenset(
+    {
+        TerminationStatus.FAILED,
+        TerminationStatus.CANCELLED,
+        TerminationStatus.DEVIATION,
+    }
+)
+
+
+def _settle_node_action(
+    session: Session,
+    *,
+    project_id: str,
+    node_id: str,
+    termination: TerminationStatus,
+) -> None:
+    """Release the execution slot held by the run's Action.
+
+    The Action is the record of the approval, the budget reservation and the
+    compute concurrency slot; `start_execution` leaves it `ACCEPTED`, because
+    acceptance is not completion. Until it reaches a terminal outcome the slot
+    stays held, which is correct while the work may still run and a leak once
+    the run has ended. `finish_node_run` calls this in the same transaction
+    that writes the Execution Record, so the record and the released slot
+    cannot disagree.
+
+    A run that timed out is the one ending that does not settle. `abandon_job`
+    asks the backend to stop and records whether it agreed, but when it did
+    not, work may still be running; `UNKNOWN` keeps the slot and the budget
+    reservation held for T11's reconciliation rather than reading a refused
+    cancellation as a confirmed stop. The same applies to an Action that was
+    already `UNKNOWN` when the run ended.
+    """
+    service = ActionService(session, project_id)
+    action = service.live_for_node(node_id)
+    if action is None:
+        return
+    if action.status is ActionStatus.UNKNOWN:
+        if termination is TerminationStatus.COMPLETED:
+            action = service.reconcile(
+                action.action_id, outcome=ActionAttemptOutcome.ACCEPTED
+            )
+        elif termination is TerminationStatus.FAILED:
+            action = service.reconcile(
+                action.action_id,
+                outcome=ActionAttemptOutcome.FAILED_CONFIRMED,
+                note=f"the run ended {termination.value}",
+            )
+        else:
+            return
+    if (
+        action.status is ActionStatus.CLAIMED
+        and termination is TerminationStatus.COMPLETED
+    ):
+        action = service.record_accepted(action.action_id)
+    if action.status is not ActionStatus.ACCEPTED:
+        return
+    if termination is TerminationStatus.COMPLETED:
+        # The Action was declared free when it was created (`estimated_cny=0`,
+        # `cost_known=True`); settling at zero is that declared price, not a
+        # guess about a priced site's actual cost.
+        service.complete(action.action_id, actual_cny="0")
+    elif termination in _CONFIRMED_ENDINGS:
+        service.record_failed_confirmed(
+            action.action_id, reason=f"the run ended {termination.value}"
+        )
+    else:
+        service.record_unknown(
+            action.action_id,
+            reason=(
+                f"the run ended {termination.value}; whether the external work "
+                "stopped is not known, so the slot stays held until reconciled"
+            ),
+        )
 
 
 def _delivery_message(plan: RunPlan, record: ExecutionRecord) -> WorkerMessage | None:

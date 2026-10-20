@@ -579,6 +579,33 @@ class SlurmComputeBackend:
                         "ACCOUNT_REJECTED": SlurmAccountRejected,
                     }.get(recorded_state, SlurmSubmissionRejected)
                     raise rejection(detail, state=recorded_state)
+                if not claimed:
+                    # The claim belongs to another process. It may be between
+                    # its PREPARING write and its sbatch, or it may be dead;
+                    # either way this call must not rewrite the record, upload
+                    # or submit under the same key. Only a job the scheduler
+                    # already reports is enough to adopt; otherwise the
+                    # outcome stays UNKNOWN.
+                    found = self._find_by_name(ssh, job_name, target=target)
+                    if found is not None:
+                        self._write_target_submission(
+                            ssh, remote_dir, found, digest, request, target, submission_key
+                        )
+                        return self._handle(
+                            found,
+                            digest,
+                            "found on the cluster",
+                            target_id=target.target_id,
+                        )
+                    raise SlurmSubmissionUncertain(
+                        self.redact(
+                            f"submission {submission_key} is claimed by another "
+                            "process and no scheduler job is visible yet; RAVEL "
+                            "will not submit it again"
+                        ),
+                        submission_key=submission_key,
+                        target_id=target.target_id,
+                    )
                 if status == "SUBMITTING":
                     # A previous call wrote the intent and then did not return.
                     # Do not submit. Reconcile, and only after both probes and
