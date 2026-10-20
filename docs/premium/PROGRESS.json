@@ -323,18 +323,21 @@
       "note": "未派发，未执行。"
     },
     "T19": {
-      "status": "RUNNING",
+      "status": "DONE",
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T19",
       "base_sha": "679cc79",
-      "head_sha": "679cc79",
-      "source_digest": null,
-      "review_ref": null,
-      "gate_refs": [],
-      "integration_merge_sha": null,
+      "head_sha": "15e17bd",
+      "source_digest": "b6431338f964dc02cb2f38422b3a5f47da05e45dabde1a32bfbd01eeb2b280fa",
+      "review_ref": "reviews/T19/1.json",
+      "gate_refs": [
+        "evidence/T19/run-20261020-141705/manifest.json",
+        "evidence/T19/run-20261020-150257/manifest.json"
+      ],
+      "integration_merge_sha": "e9c26fe",
       "blocker_refs": [],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T19 已派发；base 679cc79；边界：src/ravel/sandbox/**（除 vm.py）、infra/sandbox/**、tests/premium/T19/**，共享 config.py 与 research/browser.py 已授权；Docker 可用，要求真实容器隔离证据；等待实现、门禁与独立 Review。"
+      "note": "T19 DONE。独立 review 1 APPROVE（reviews/T19/1.json，source 0b58061，digest b6431338…）；任务门禁 run-20261020-141705 PASS（28 tests，真实 Docker 29.1.3）；T14 合入后从 integration 750f415 重建候选（merge 13da1fd、evidence e9c26fe），候选门禁 run-20261020-150257 PASS（28 tests、alembic+lint 0，digest f3cab0ea… 覆盖已集成的 T10–T14；T19 子树与 reviewed 15e17bd 无差异）；ff-only 合入 integration。已知限制（P2，review advisory，必须如实记录）：F1 项目绑定校验的是调用者自报的 project id，supervisor 只有部署级共享 bearer token；知道别的 project/handle id 的 token 持有者可跨项目操作，authority.py 与 implementer tasklog 的措辞高估了隔离，integration 记录以 review 为准；F2 10 GiB 配额只作用于 /tmp tmpfs，持久 workspace volume 与 execute 输出流文件未设上限。F3–F10 P3（硬编码 capabilities、timeout 未入 digest、setsid 子进程、路径 docstring、symlink TOCTOU、artifact basename 冲突、egress 注释、RunRef docstring）。上述 F1/F2 列为 T23 加固前置条件，不影响 review 已给的 APPROVE。"
     },
     "T20": {
       "status": "TODO",

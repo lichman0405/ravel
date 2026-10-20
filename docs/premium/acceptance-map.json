@@ -1866,7 +1866,7 @@
         "make premium-task TASK=T19"
       ],
       "classification": "internal",
-      "status": "RUNNING",
+      "status": "DONE",
       "test_nodeids": [
         "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
         "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",

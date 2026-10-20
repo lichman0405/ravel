@@ -1,56 +1,7 @@
 {
   "schema_version": 1,
   "writer": "SUPERVISOR_ONLY",
-  "active_locks": [
-    {
-      "path": "src/ravel/sandbox/",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    },
-    {
-      "path": "infra/sandbox/",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    },
-    {
-      "path": "tests/premium/T19/",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    },
-    {
-      "path": "src/ravel/config.py",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    },
-    {
-      "path": "src/ravel/research/browser.py",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    },
-    {
-      "path": "docs/premium/acceptance-map.json",
-      "task_id": "T19",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T19-docker-sandbox",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T19 integrated"
-    }
-  ],
+  "active_locks": [],
   "shared_paths": [
     "src/ravel/config.py",
     "src/ravel/domain/enums.py",

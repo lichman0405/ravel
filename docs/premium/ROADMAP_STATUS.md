@@ -6,5 +6,5 @@
 
 - M0: 4/4 DONE
 - M1: 10/11 DONE
-- M2: 14/24 DONE
+- M2: 15/24 DONE
 - M3: 0/6 DONE
