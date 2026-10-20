@@ -178,32 +178,36 @@
       "note": "T09 DONE：105 tests PASS，alembic+lint 0；independent review 3 APPROVE；target registry/known_hosts/atomic claim/UNKNOWN；Action slot settlement；真实 HPC（T25）为 BLOCKED_EXTERNAL(B05)；P2/P3 advisory 已记录。"
     },
     "T10": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T10",
+      "base_sha": "9c58f3d",
+      "head_sha": "9c58f3d",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
-      "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "blocker_refs": [
+        "B05"
+      ],
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T10 已派发；base 9c58f3d；边界：preparation/raspa.py、compute/raspa/**、schemas/premium/compute/**、tests/premium/T10/**；真实 RASPA run 属 T25（BLOCKED_EXTERNAL B05），等待实现、门禁与独立 Review。"
     },
     "T11": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T11",
+      "base_sha": "9c58f3d",
+      "head_sha": "9c58f3d",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
-      "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "blocker_refs": [
+        "B05"
+      ],
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T11 已派发；base 9c58f3d；边界：backends/lab/**、routes/lab.py、preparation/lab.py、domain/state（锁）、tests/premium/T11/**；真实真人实验属 T26（BLOCKED_EXTERNAL B05），等待实现、门禁与独立 Review。"
     },
     "T12": {
       "status": "DONE",

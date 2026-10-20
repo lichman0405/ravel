@@ -35,14 +35,6 @@
       "release_condition": "T13 integrated"
     },
     {
-      "path": "schemas/premium/",
-      "task_id": "T13",
-      "owner": "SUPERVISOR",
-      "branch": "cc/T13-api-events",
-      "granted_at": "2026-10-20 Asia/Shanghai",
-      "release_condition": "T13 integrated"
-    },
-    {
       "path": "tests/premium/T13/",
       "task_id": "T13",
       "owner": "SUPERVISOR",
@@ -57,6 +49,150 @@
       "branch": "cc/T13-api-events",
       "granted_at": "2026-10-20 Asia/Shanghai",
       "release_condition": "T13 integrated"
+    },
+    {
+      "path": "src/ravel/preparation/raspa.py",
+      "task_id": "T10",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T10-raspa-package",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T10 integrated"
+    },
+    {
+      "path": "src/ravel/compute/raspa/",
+      "task_id": "T10",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T10-raspa-package",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T10 integrated"
+    },
+    {
+      "path": "schemas/premium/compute/",
+      "task_id": "T10",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T10-raspa-package",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T10 integrated"
+    },
+    {
+      "path": "tests/premium/T10/",
+      "task_id": "T10",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T10-raspa-package",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T10 integrated"
+    },
+    {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T10",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T10-raspa-package",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T10 integrated"
+    },
+    {
+      "path": "src/ravel/backends/lab/",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/routes/lab.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/preparation/lab.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/domain/enums.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/domain/lab.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/tables.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/mapping.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/guards.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/migrations/versions/",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/repositories/lab.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "src/ravel/state/repositories/preparations.py",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "tests/premium/T11/",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
+    },
+    {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T11",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T11-human-lab",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T11 integrated"
     }
   ],
   "shared_paths": [
