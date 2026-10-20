@@ -83,6 +83,10 @@ class ScientificReportRepository(ProjectScopedRepository[ScientificReport]):
         index = LedgerIndex.load(self.session, self.project_id)
         built = build_report(index, self.project_id, request)
         self.add(built.report)
+        # The report row must reach PostgreSQL before its children: the link
+        # tables carry foreign keys, and SQLAlchemy does not order inserts by
+        # those keys alone (there are no ORM relationships between the rows).
+        self.session.flush()
         for claim in built.claims:
             self.session.add(build_row(ReportClaimRow, claim))
         for evidence_ref in built.evidence_refs:

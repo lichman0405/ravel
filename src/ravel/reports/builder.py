@@ -150,7 +150,7 @@ def build_report(
     claims: list[ReportClaim] = []
     for claim_request in request.claims:
         claim_id = str(uuid4())
-        rejected = _claim_conflicts(
+        claim_conflicts, rejected = _claim_conflicts(
             index=index,
             claim_request=claim_request,
             claim_id=claim_id,
@@ -158,8 +158,8 @@ def build_report(
             resolved=resolved,
             conflicted_evidence=conflicted_evidence,
         )
+        conflicts.extend(claim_conflicts)
         if rejected:
-            conflicts.extend(rejected)
             continue
         claims.append(
             ReportClaim(
@@ -197,7 +197,6 @@ def build_report(
             index,
             project_id=project_id,
             evidence_refs=evidence_rows,
-            claims=claim_rows,
             conflicts=conflicts,
             status=report_status,
             reason=reason,
@@ -212,7 +211,6 @@ def render_facts(
     *,
     project_id: str,
     evidence_refs: tuple[ReportEvidenceRef, ...],
-    claims: tuple[ReportClaim, ...],
     conflicts: list[dict[str, Any]],
     status: ReportStatus,
     reason: str,
@@ -241,33 +239,26 @@ def render_facts(
     )
     review_outcomes = Counter(review.outcome for review in index.reviews)
     review_checkpoints = Counter(review.checkpoint for review in index.reviews)
-    evidence_by_ref = {ref.evidence_id: ref for ref in evidence_refs}
-    claim_ids_by_evidence: dict[str, list[str]] = {}
-    for claim in claims:
-        for evidence_id in claim.evidence_ids:
-            claim_ids_by_evidence.setdefault(evidence_id, []).append(claim.claim_id)
-    artifacts = [
-        {
-            "artifact_id": artifact.artifact_id,
-            "name": artifact.name,
-            "kind": artifact.kind,
-            "provenance": artifact.provenance,
-            "created_by": artifact.created_by,
-            "node_id": artifact.node_id,
-            "latest_version": (
-                index.latest_version(artifact.artifact_id).version
-                if index.latest_version(artifact.artifact_id) is not None
-                else None
-            ),
-            "content_hash": (
-                index.latest_version(artifact.artifact_id).content_hash
-                if index.latest_version(artifact.artifact_id) is not None
-                else None
-            ),
-            "simulated": artifact_is_simulated(index, artifact),
-        }
-        for artifact in sorted(index.artifacts.values(), key=lambda row: row.artifact_id)
-    ]
+    artifacts = []
+    for artifact in sorted(
+        index.artifacts.values(), key=lambda row: row.artifact_id
+    ):
+        version = index.latest_version(artifact.artifact_id)
+        artifacts.append(
+            {
+                "artifact_id": artifact.artifact_id,
+                "name": artifact.name,
+                "kind": artifact.kind,
+                "provenance": artifact.provenance,
+                "created_by": artifact.created_by,
+                "node_id": artifact.node_id,
+                "latest_version": version.version if version is not None else None,
+                "content_hash": (
+                    version.content_hash if version is not None else None
+                ),
+                "simulated": artifact_is_simulated(index, artifact),
+            }
+        )
     return {
         "project_id": project_id,
         "status": status.value,
@@ -324,11 +315,9 @@ def render_facts(
                 "execution_type": ref.execution_type.value,
                 "locator": ref.locator,
                 "content_hash": ref.content_hash,
-                "claim_ids": sorted(claim_ids_by_evidence.get(ref.evidence_id, [])),
                 "original_record": ref.original_record,
             }
             for ref in sorted(evidence_refs, key=lambda row: row.position)
-            if ref.evidence_id in evidence_by_ref
         ],
         "conflict_codes": sorted(
             {str(conflict["code"]) for conflict in conflicts}
@@ -345,8 +334,14 @@ def _claim_conflicts(
     requested_ids: set[str],
     resolved: dict[str, Classification],
     conflicted_evidence: dict[str, tuple[str, ...]],
-) -> list[dict[str, Any]]:
-    """Every reason this claim may not become a report claim."""
+) -> tuple[list[dict[str, Any]], bool]:
+    """The conflicts this claim raises, and whether it must be rejected.
+
+    A claim is rejected when it raises any conflict, and also when it cites
+    evidence whose own citation failed — in that second case the evidence-level
+    conflict already names the failure, so no duplicate claim-level conflict is
+    invented, but the claim still may not be persisted.
+    """
     conflicts: list[dict[str, Any]] = []
     cited = tuple(dict.fromkeys(claim_request.evidence_ids))
     for evidence_id in cited:
@@ -424,7 +419,10 @@ def _claim_conflicts(
     conflicts.extend(
         _execution_conflicts(index, claim_request, claim_id=claim_id, types=types)
     )
-    return conflicts
+    cited_conflicted = any(
+        evidence_id in conflicted_evidence for evidence_id in cited
+    )
+    return conflicts, bool(conflicts) or cited_conflicted
 
 
 def _execution_conflicts(
