@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "2c4354d",
+  "integration_head_sha": "679cc79",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -311,18 +311,18 @@
       "note": "未派发，未执行。"
     },
     "T19": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T19",
+      "base_sha": "679cc79",
+      "head_sha": "679cc79",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T19 已派发；base 679cc79；边界：src/ravel/sandbox/**（除 vm.py）、infra/sandbox/**、tests/premium/T19/**，共享 config.py 与 research/browser.py 已授权；Docker 可用，要求真实容器隔离证据；等待实现、门禁与独立 Review。"
     },
     "T20": {
       "status": "TODO",
