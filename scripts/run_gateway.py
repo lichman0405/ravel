@@ -15,6 +15,13 @@ than from a second place a unit file could disagree with.
 Both end in the same application. This one is the deployment's entry point and
 is what `infra/systemd/ravel-gateway.service` starts.
 
+**The stream's replay window is deployment configuration.** `create_app` is
+started as a factory, and uvicorn's factory call carries no arguments, so the
+window is named by `RAVEL_EVENT_RETENTION` and read by the application. This
+entry point validates the same variable before uvicorn starts, turning a
+mistyped window into one line on stderr and a non-zero exit rather than a
+server that runs unbounded.
+
 **The Gateway beats here, not below.** `create_app` installs the lifespan that
 reports this process alive and records its shutdown; uvicorn runs it. That
 means the two ways of starting the Gateway differ in exactly the ways above and
@@ -31,6 +38,7 @@ import uvicorn
 
 from ravel.config import Settings
 from ravel.domain.services import GATEWAY
+from ravel.gateway.app import event_retention_from_environment
 from ravel.service import configure_logging
 
 
@@ -61,11 +69,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     settings = Settings()
+    try:
+        retention = event_retention_from_environment()
+    except ValueError as refused:
+        print(f"gateway: {refused}", file=sys.stderr)
+        return 2
     configure_logging(GATEWAY, level=settings.log_level, log_format=settings.log_format)
 
     host = args.host or settings.gateway_host
     port = args.port or settings.gateway_port
-    print(f"\n  gateway on http://{host}:{port}\n\n  Ctrl-C to stop\n")
+    window = "unbounded" if retention is None else f"{retention} sequences"
+    print(
+        f"\n  gateway on http://{host}:{port}"
+        f"\n  event replay window: {window}\n\n  Ctrl-C to stop\n"
+    )
 
     uvicorn.run(
         "ravel.gateway.app:create_app",

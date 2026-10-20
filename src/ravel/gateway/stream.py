@@ -14,9 +14,16 @@ write, which is a stream that silently omits most of the project — and a live
 view that is wrong in a way nobody can see is worse than no live view.
 PostgreSQL is where the events are, so PostgreSQL is what the stream reads.
 
-**Missing an event is not a state a client can reach.** Nothing prunes the
-event table in V0, so a client's `after_seq` is always still replayable and the
-answer to "am I behind?" is yes-or-no rather than "yes, and the rest is gone".
+**Missing an event is not a state a client can reach, within the window the
+server promises.** Nothing prunes the event table in V0, so by default a
+client's `after_seq` is always still replayable and the answer to "am I behind?"
+is yes-or-no rather than "yes, and the rest is gone". A caller may nonetheless
+declare a *retention window* — the number of most recent sequences the versioned
+surface promises to replay — and then a cursor older than that window is
+answered with a resynchronization frame carrying a fresh snapshot, not with an
+empty success. The rows are still there; what changes is that the server no
+longer claims it can reconstruct the client's view from a cursor that far back,
+and says so rather than quietly skipping the gap.
 `ProjectEvent.as_wire` already calls its output "a JSON-safe view for the
 WebSocket projection"; this is the projection it names.
 
@@ -42,7 +49,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -75,6 +82,18 @@ class Cadence:
 
 
 DEFAULT_CADENCE = Cadence()
+
+#: What a resynchronization frame is called and the code it carries. The name
+#: is the frame type a client switches on; the code is the same vocabulary
+#: `CONTRACTS.md` §8 uses for HTTP refusals, because a client should not need
+#: two glossaries for one situation.
+RESYNC_FRAME = "resync_required"
+RESYNC_CODE = "RESYNC_REQUIRED"
+
+#: Produces the same snapshot `GET /v1/projects/{id}/snapshot` returns. A
+#: callable rather than an import because this module sits below the routes
+#: that know what a snapshot contains.
+Snapshot = Callable[[], dict[str, Any]]
 
 
 def read_anchor(database: Database, project_id: str) -> dict[str, Any]:
@@ -120,15 +139,40 @@ class EventFeed:
         project_id: str,
         after_seq: int = 0,
         cadence: Cadence | None = None,
+        retention: int | None = None,
+        snapshot: Snapshot | None = None,
     ) -> None:
         self.database = database
         self.project_id = project_id
         self.after_seq = max(0, after_seq)
         self.cadence = cadence or DEFAULT_CADENCE
+        #: How many of the most recent sequences this feed promises to replay.
+        #: `None` keeps the legacy behaviour: no declared window, replay
+        #: everything. A window without a snapshot is a feed that could refuse
+        #: to resume and then have nothing to offer, so it is a construction
+        #: error rather than a runtime surprise.
+        if retention is not None and retention < 1:
+            raise ValueError("an event retention window must hold at least one event")
+        if retention is not None and snapshot is None:
+            raise ValueError("a retention window requires a snapshot provider")
+        self.retention = retention
+        self.snapshot = snapshot
 
     def anchor(self) -> dict[str, Any]:
         """The projection the client starts from."""
         return read_anchor(self.database, self.project_id)
+
+    def _outside_retention(self, head_seq: int) -> bool:
+        """Whether the cursor is older than the window this feed promises.
+
+        The window counts sequences, not rows, because sequence numbers are
+        what a client holds and what the contract promises. A feed with no
+        declared window never resynchronizes: V0 retains every event, and the
+        legacy socket's behaviour is not changed by a policy only `/v1` names.
+        """
+        if self.retention is None:
+            return False
+        return head_seq - self.after_seq > self.retention
 
     async def frames(self) -> AsyncGenerator[dict[str, Any], None]:
         """The anchor, then every event after it, then each one as it lands.
@@ -154,7 +198,33 @@ class EventFeed:
         # is already anomalous, and cannot leave the client wrong.
         if self.after_seq > anchor["head_seq"]:
             self.after_seq = 0
-        yield anchor
+
+        if self._outside_retention(anchor["head_seq"]):
+            # The cursor names a position the server no longer promises to
+            # replay. Answering with an anchor and no events would look exactly
+            # like "you are up to date" — the one reading that is certainly
+            # wrong — so the feed sends what the client actually needs: a new
+            # snapshot and the sequence it is anchored at, then follows from
+            # there. Events that land between the snapshot and this frame's
+            # delivery are replayed by the loop below and are deduplicated by
+            # sequence on the client, which is why a duplicate is allowed at
+            # this boundary but a gap is not.
+            assert self.snapshot is not None  # guaranteed by __init__
+            requested = self.after_seq
+            fresh = await asyncio.to_thread(self.snapshot)
+            resumed = max(0, int(fresh.get("anchor_seq") or 0))
+            yield {
+                "type": RESYNC_FRAME,
+                "code": RESYNC_CODE,
+                "project_id": self.project_id,
+                "requested_after_seq": requested,
+                "head_seq": anchor["head_seq"],
+                "anchor_seq": resumed,
+                "snapshot": fresh,
+            }
+            self.after_seq = resumed
+        else:
+            yield anchor
 
         last_spoke = time.monotonic()
         while True:
@@ -182,4 +252,14 @@ class EventFeed:
             await asyncio.sleep(self.cadence.poll_seconds)
 
 
-__all__ = ["DEFAULT_CADENCE", "PAGE", "Cadence", "EventFeed", "read_anchor", "read_page"]
+__all__ = [
+    "DEFAULT_CADENCE",
+    "PAGE",
+    "RESYNC_CODE",
+    "RESYNC_FRAME",
+    "Cadence",
+    "EventFeed",
+    "Snapshot",
+    "read_anchor",
+    "read_page",
+]

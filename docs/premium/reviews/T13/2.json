@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "task_id": "T13",
+  "attempt": 2,
+  "reviewer_id": "independent-T13-AC1-AC4",
+  "base_sha": "463376a",
+  "candidate_sha": "59c2fc7048f573f3a046145fbc108765ab950528",
+  "source_digest": "b09a58cd8d2284e115ce60a7f556f6d4ce6df5028d7e53d0c4d38131910bba37",
+  "reviewed_at": "2026-10-20 12:55 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T13-AC1",
+      "result": "PASS",
+      "evidence": "Gate integrity re-checked at candidate HEAD 59c2fc7: the source digest recomputed with the gate algorithm (git ls-tree over the tree, progress/records prefixes excluded) is b09a58cd8d2284e115ce60a7f556f6d4ce6df5028d7e53d0c4d38131910bba37, identical to the manifest and the coordinator's source_digest; the manifest records source_commit 7957ba5, and 59c2fc7 adds only evidence/tasklog paths that the digest excludes. I re-ran the gate in the canonical ravel-premium-ubuntu24 container against an isolated PostgreSQL database (ravel_t13_review_test): alembic upgrade head exit 0; pytest tests/premium/T13 -q -rxXs => 20 passed, 0 failed, 0 skipped; ruff clean; pyright (pointed at the review venv) 0 errors. The 20 JUnit nodeids equal the acceptance map's 20 exactly, with no diff in either direction, including the two new tests in tests/premium/T13/test_deployment_retention.py. (The worktree .venv was created on Windows and is empty inside the container, so I used the review venv /tmp/t13-review-venv with an editable install; the test command, flags and RAVEL_POSTGRES_DSN/RAVEL_TEST_DB environment are otherwise the same.) Stream behavior is unchanged by the delta and still passes: events are project-scoped and seq only moves forward; a sibling project's events never appear; reconnect from after_seq=5 receives exactly seq 6 and 7 with persisted sequence 1..7 complete; revoking membership closes the open socket with 4404 inside the 5s bound (test recheck ~0.2s). Code inspection confirms _watch_authority still calls the same authenticate/standing_in functions through _standing (which now returns the Principal; the watcher ignores the value) and the 401/403/404 close-code map is unchanged, so F2's Principal return does not alter authorization or close semantics. Gate run-20261020-124427 is PASS; the earlier failed run-20261020-124340 is retained with an empty command list and a tasklog explanation (docker socket not mounted), which is the required handling of a failed gate attempt."
+    },
+    {
+      "id": "T13-AC2",
+      "result": "PASS",
+      "evidence": "The resync projection finding F2 is fixed and independently verified. support.py now has a single _projection(session, project_id, role) used by both read_snapshot and snapshot_for_project, and events.py captures the Principal returned by the handshake and builds the retention snapshot provider from it, so the resync frame carries the caller's role; _snapshot_provider fixes the standing at connection time. test_resync now asserts both exact key-set equality (set(fresh) == set(snapshot_body)) and field-for-field dict equality (fresh == snapshot_body) on top of the anchor/counts/seq assertions, so the docstring's claim is now actually tested. I reproduced this over real uvicorn/TCP against real PostgreSQL: with RAVEL_EVENT_RETENTION=4, create_app() called with no explicit retention resolved app.state.event_retention=4; GET /v1/projects/{id}/snapshot returned anchor 7 with role; the WebSocket at after_seq=0 returned a resync_required frame with code RESYNC_REQUIRED and a snapshot exactly equal to the HTTP body (keys and values, including role); the next emitted event seq 8 was then delivered live. With the variable unset, state was None and after_seq=0 produced an anchor (head 8) plus replay with no resync. Deployment wiring (F3) verified: RAVEL_EVENT_RETENTION is read inside create_app when no argument is passed; scripts/run_gateway.py validates it before serving and exits 2 with one stderr line naming the variable for malformed values; event_retention_from_environment returns None for unset and blank, 7 for \"7\", and raises ValueError for 0, -1, \"four\" and \"1.5\"; config.py is unchanged in the delta; both new deployment-retention tests pass inside the 20. Pagination and isolation behavior are unchanged by the delta and remain covered by the passing suite: after_seq=head-retention=3 is in-window (anchor plus seq 4..7); limit 101/0 -> 422 INVALID_REQUEST; malformed cursor -> 400 with a fixed message and no clamping; cross-project and absent-project snapshot/DAG -> 404 with an indistinguishable message; expired token -> 401 HTTP and 4401 WebSocket; non-member -> 4404; the 422 envelope strips submitted input and replaces unsafe request ids."
+    },
+    {
+      "id": "T13-AC3",
+      "result": "PASS",
+      "evidence": "The generated-client finding F1 is fixed and the client typecheck is now part of the gate. packages/api-client/openapi.json, src/types.ts and src/index.ts are byte-identical to the attempt-1 candidate. generate.py now emits conditional spreads for optional query/body/signal (and builds RequestInit incrementally in call()), src/client.ts was regenerated with the DO NOT EDIT header, all 30 async operation methods use the new form, and the strictness configuration is unchanged (strict + exactOptionalPropertyTypes + noUncheckedIndexedAccess; TypeScript pinned exactly to 5.6.3). I regenerated twice in the canonical container into separate directories: all four generated files were byte-identical to each other and to the committed copies. I then ran npm install and npm run typecheck on clean copies: TypeScript 5.6.3 both times, tsc exit 0 both times, no package-lock produced, no tracked changes, and node_modules/ is ignored. The exact gate command (acceptance-map.json line 1286: npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client) exits 0 in the worktree, and the gate manifest records it as command 4 with exit 0. The API-surface check still holds: openapi.json has 26 /v1 paths and 30 operations; the only /dag path is /v1/projects/{project_id}/dag and it is GET-only; the premium package imports neither DagRepository nor DagMutationService; client.ts has 30 async methods. The T13 acceptance-map execution commands now include the client typecheck alongside alembic, pytest and make lint, so the committed package is compiled by the gate rather than only regenerated. The remaining npm reproducibility advisory is finding N1."
+    },
+    {
+      "id": "T13-AC4",
+      "result": "PASS",
+      "evidence": "test_live_stack still uses the real create_app and real PostgreSQL and passes in the independently rerun 20-test suite: client.app is a FastAPI instance, app.state.ravel.database is the test Database, current_database() ends with _test and equals the engine database; after writing real rows through the repositories the snapshot/counts change, counts equal SELECT count(*) for nodes/decisions/reviews/executions/deviations/evidence/actions/events, anchor_seq equals max(seq), and the legacy events payload contains the written body. There is no static JSON backend. My independent live-TCP resync probe also used the real app under uvicorn and the real ravel_t13_review_test database. The gate manifest records data_mode REAL, database_lock true, preflight_exit 0 and exit_code 0. The retained failed run-20261020-124340 is not used as evidence."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T13/run-20261020-124427/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1286,
+      "trigger": "Run the T13 gate, whose fourth execution command is npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client.",
+      "impact": "No package-lock.json is committed for packages/api-client and the install is explicitly told not to create one, so the gate resolves the TypeScript compiler from the public registry on every run with no integrity-hash pin. Today version drift is unlikely to be harmful: packages/api-client/package.json line 17 pins typescript exactly to \"5.6.3\" and the package has no other dependencies (npm ls shows only typescript@5.6.3), and a registry failure makes install or tsc exit nonzero, which fails the gate loudly rather than silently accepting a different compiler. But the gate is not hermetic or fully reproducible from the repository alone, and the shared runner hardcodes external_resources to [] (scripts/premium_task.py), so the evidence manifest does not record the network dependency or what was fetched. I ran the exact command twice in the canonical container: both installed TypeScript 5.6.3, exited 0, left no package-lock and no tracked changes.",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Commit a package-lock.json generated for packages/api-client and use npm ci in the gate (recording the external registry/resource in the manifest), or resolve the pinned tarball from an internal mirror; if neither is done, state in the task record that the gate requires registry access and is not hermetic.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "scripts/run_gateway.py",
+      "line": 41,
+      "trigger": "Inspect the T13 write boundaries before integrating fix commit 7957ba5.",
+      "impact": "7957ba5 changes scripts/run_gateway.py (event_retention_from_environment import at line 20, validation block around line 41, banner around line 73) but the file is not in docs/premium/FILE_LOCKS.json active_locks or shared_paths for T13 and has no PROGRESS.json record; the tasklog describes it as a boundary extension. The change is small, is covered by test_deployment_retention, and does not collide with an active lock, but a file changed outside the recorded write boundary undermines the lock protocol unless the extension is recorded.",
+      "acceptance_id": null,
+      "required_fix": "Record scripts/run_gateway.py in the T13 boundary (FILE_LOCKS or an explicit Supervisor authorization in the task record) before integration, or move the entrypoint validation into a path already inside the T13 boundary (app.py and its tests).",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1116,
+      "trigger": "Inspect commit d69b992 on the T13 branch.",
+      "impact": "d69b992 changes T12's acceptance-map status from PLANNED to DONE in addition to adding the T13 probe-coverage nodeid. T12's status is the Supervisor's integration record; the change is outside T13's authorized entry. The attempt-2 tasklog now asserts that the Supervisor authorized keeping T12 DONE, but no FILE_LOCKS or PROGRESS record in the tree documents that authorization, so the claim cannot be independently confirmed from the candidate.",
+      "acceptance_id": null,
+      "required_fix": "Have the Supervisor explicitly confirm at integration that d69b992 is authorized to carry the T12 status change, or revert the T12 portion in the T13 candidate and let the Supervisor set it.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "packages/api-client/src/client.ts",
+      "line": 8,
+      "trigger": "Construct V1Client to call POST /v1/auth/login or POST /v1/auth/refresh before any token exists.",
+      "impact": "ClientOptions.token remains required and call() always sets Authorization: Bearer ... (lines 82-96). The OpenAPI for /v1/auth/login, /v1/auth/refresh and /v1/auth/logout declares no security requirement, so the generated client still cannot represent an unauthenticated call: a consumer must pass a placeholder token and the client sends a bearer header the operation does not need. Login works because the route does not require the header, so this is API ergonomics, not a security or functional failure, and F1's typecheck fix did not change it.",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Make the token optional (or add an unauthenticated mode) and omit the Authorization header when no token is supplied; regenerate and re-check byte identity and typecheck.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The resync frame's head_seq is read from a separate anchor() transaction before the snapshot; concurrent commits can make the snapshot's anchor_seq greater than head_seq. Clients must resume from anchor_seq, not head_seq; the feed resumes at the snapshot anchor, so no event is lost. This is unchanged from attempt 1 and is not exercised by the passing tests under concurrency.",
+    "The npm gate is not hermetic: no committed lockfile, no integrity pin, and an install from the public registry on every run (finding N1). It currently fails closed, and the package has exactly one direct dependency pinned to 5.6.3, but an offline or registry-mirror-less run cannot reproduce the typecheck from the repository alone.",
+    "RAVEL_EVENT_RETENTION is now honored by create_app and validated by scripts/run_gateway.py, but it is not documented in DEPLOYMENT.md or .env.example (grep finds it only in app.py, run_gateway.py, the new tests and the tasklog). An operator deploying V0 will not discover the knob; unset means unbounded replay and an unreachable RESYNC_REQUIRED path. Documenting it should be a Supervisor-authorized follow-up because those files are outside T13's current write boundary.",
+    "The two new deployment-retention tests exercise create_app and the run_gateway entrypoint in-process (Settings/contextlib/uvicorn.run monkeypatched), not a full uvicorn process launch. My independent live-TCP probe launched the real app with the variable set and unset, which mitigates this but is not part of the committed evidence.",
+    "The v1 WebSocket tests inside the gate use TestClient rather than real TCP. My live-TCP probes in attempt 1 (outsider 4404, resync, live seq 8) and attempt 2 (HTTP snapshot vs resync equality, env set/unset) mitigate that gap but are not committed evidence.",
+    "tests/support/routes.py::effective_routes loses the outer /v1 prefix for a nested WebSocket route, so the shared all-route table covers the 26 HTTP paths and 30 operations but not the socket; the socket is covered by real connection tests and by the independent probes.",
+    "The full tests/e2e/test_tui.py file was not run by the implementer or by me. The T13 legacy compatibility test passes inside the 20, and my probes used real uvicorn/TCP, but the other legacy TUI cases remain unexercised in this review.",
+    "The gate and this review used isolated databases (ravel_t13_test and ravel_t13_review_test) because the shared test database had been stamped by a parallel, un-integrated migration. A full shared-database regression on the integration tip remains unverified in this worktree.",
+    "ProjectAudit.assemble reads the whole project ledger, including every event, to produce counts and the anchor. With the production default of unbounded retention (the env var unset), snapshot cost grows without bound in a long-lived project; setting a window bounds resync eligibility but not the audit read.",
+    "acceptance-map.json still records T13 as RUNNING; the Supervisor updates it after this review and integration. The scripts/run_gateway.py boundary extension and the T12 status carry-over (findings N2 and F4) also require Supervisor bookkeeping.",
+    "Lab sign-off still returns 501 UNSUPPORTED after authorization in V0; this is contract-consistent and is not a user DAG mutation path.",
+    "The generated client is still source-only (no published version) and cannot represent unauthenticated login/refresh (finding F5), so consumers must vendor it and pass a placeholder token for the auth operations until that is addressed."
+  ],
+  "integration_candidate": true
+}

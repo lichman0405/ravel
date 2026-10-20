@@ -1,0 +1,3589 @@
+{
+  "components": {
+    "schemas": {
+      "AccessStatus": {
+        "description": "How a source was reached. `OK` is the only status that yields content.\n\nA restricted source is recorded as restricted. Guessing its contents from\nan abstract or from model memory would put a fabricated claim in the\nEvidence Ledger.",
+        "enum": [
+          "OK",
+          "PAYWALLED",
+          "AUTH_REQUIRED",
+          "ACCESS_LIMITED",
+          "POLICY_BLOCKED"
+        ],
+        "title": "AccessStatus",
+        "type": "string"
+      },
+      "ActionAnswer": {
+        "description": "A human's answer, bound to the exact content they saw.",
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Note",
+            "type": "string"
+          },
+          "payload_hash": {
+            "description": "The hash of the Action content this answer approves or rejects.",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Payload Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payload_hash"
+        ],
+        "title": "ActionAnswer",
+        "type": "object"
+      },
+      "ActorType": {
+        "description": "Who caused an event.",
+        "enum": [
+          "USER",
+          "AGENT",
+          "SYSTEM",
+          "BACKEND"
+        ],
+        "title": "ActorType",
+        "type": "string"
+      },
+      "ClaimClass": {
+        "description": "Whether a statement is observed, derived, or proposed.",
+        "enum": [
+          "FACT",
+          "INFERENCE",
+          "HYPOTHESIS"
+        ],
+        "title": "ClaimClass",
+        "type": "string"
+      },
+      "ClientMessage": {
+        "description": "What a person says, and the identifier their client uses to retry it.",
+        "properties": {
+          "body": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "client_message_id": {
+            "description": "Chosen once by the client; a retry with the same value is not a new message.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Client Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "client_message_id"
+        ],
+        "title": "ClientMessage",
+        "type": "object"
+      },
+      "CompletenessCheck": {
+        "additionalProperties": false,
+        "description": "The Worker's answer to \"did we receive everything required?\".",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "checked_by": {
+            "default": "",
+            "title": "Checked By",
+            "type": "string"
+          },
+          "delivered_outputs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Delivered Outputs",
+            "type": "array"
+          },
+          "missing_outputs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Outputs",
+            "type": "array"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "required_outputs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Outputs",
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/CompletenessVerdict"
+          }
+        },
+        "required": [
+          "verdict"
+        ],
+        "title": "CompletenessCheck",
+        "type": "object"
+      },
+      "CompletenessVerdict": {
+        "description": "Delivery completeness, which is not the same as scientific acceptance.",
+        "enum": [
+          "COMPLETE",
+          "INCOMPLETE_DELIVERY"
+        ],
+        "title": "CompletenessVerdict",
+        "type": "string"
+      },
+      "Confidence": {
+        "description": "A coarse confidence band. Deliberately not a number.",
+        "enum": [
+          "LOW",
+          "MEDIUM",
+          "HIGH"
+        ],
+        "title": "Confidence",
+        "type": "string"
+      },
+      "DeviationRequest": {
+        "description": "What a lab user reports when the plan and the bench disagree.",
+        "properties": {
+          "description": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "requested_action": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Requested Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requested_action",
+          "description"
+        ],
+        "title": "DeviationRequest",
+        "type": "object"
+      },
+      "EnvelopeLimits": {
+        "description": "The envelope's budget. Every field absent means unbounded.",
+        "properties": {
+          "max_compute_hours": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Compute Hours"
+          },
+          "max_cost_units": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cost Units"
+          },
+          "max_experiment_runs": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Experiment Runs"
+          },
+          "max_iterations": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Iterations"
+          },
+          "max_wall_clock_hours": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Wall Clock Hours"
+          }
+        },
+        "title": "EnvelopeLimits",
+        "type": "object"
+      },
+      "EnvelopeRequest": {
+        "description": "A new version of the envelope.\n\nThere is no `version` field, and that is the point: which version this is\nis a fact about the record, not a claim the caller gets to make. A body\nthat carried one would let two clients both write version 4 and one of them\nsilently lose.",
+        "properties": {
+          "budget_time_limits": {
+            "$ref": "#/components/schemas/EnvelopeLimits"
+          },
+          "max_dag_nodes_without_approval": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Dag Nodes Without Approval"
+          },
+          "max_parallel_branches_without_approval": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Parallel Branches Without Approval"
+          },
+          "requires_approval": {
+            "items": {
+              "$ref": "#/components/schemas/EnvelopeRequirement"
+            },
+            "title": "Requires Approval",
+            "type": "array"
+          }
+        },
+        "title": "EnvelopeRequest",
+        "type": "object"
+      },
+      "EnvelopeRequirement": {
+        "description": "One class of action a human must approve before Master may take it.",
+        "properties": {
+          "action": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "rationale": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "required_role": {
+            "$ref": "#/components/schemas/UserRole"
+          }
+        },
+        "required": [
+          "action",
+          "required_role"
+        ],
+        "title": "EnvelopeRequirement",
+        "type": "object"
+      },
+      "Evidence": {
+        "additionalProperties": false,
+        "description": "One claim, its class, and what supports it.\n\n`claim_class` keeps observation and speculation apart. A `FACT` must cite a\nsource that was read; an `INFERENCE` must say what it was inferred from; a\n`HYPOTHESIS` is allowed to rest on nothing yet, which is exactly what makes\nit a hypothesis rather than a finding.",
+        "properties": {
+          "access_status": {
+            "$ref": "#/components/schemas/AccessStatus",
+            "default": "OK"
+          },
+          "claim_class": {
+            "$ref": "#/components/schemas/ClaimClass"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence",
+            "default": "MEDIUM"
+          },
+          "conflicts_with": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Conflicts With",
+            "type": "array"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_id": {
+            "title": "Display Id",
+            "type": "string"
+          },
+          "evidence_id": {
+            "title": "Evidence Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "research_task_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Task Ref"
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "source_refs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Refs",
+            "type": "array"
+          },
+          "source_tier": {
+            "$ref": "#/components/schemas/EvidenceSourceTier"
+          },
+          "statement": {
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "statement",
+          "claim_class",
+          "source_tier"
+        ],
+        "title": "Evidence",
+        "type": "object"
+      },
+      "EvidenceSource": {
+        "additionalProperties": false,
+        "description": "One place a claim came from, as it was actually reached.\n\nThe fields that matter most are the ones that are easy to fake:\n`retrieved_at` (when it was read, not when it was written down),\n`content_hash` (the bytes that were read), and `access_status` (whether it\nwas read at all).",
+        "properties": {
+          "access_status": {
+            "$ref": "#/components/schemas/AccessStatus"
+          },
+          "artifact_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Ref"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "declared_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Type"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "publisher": {
+            "default": "",
+            "title": "Publisher",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "snapshot_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Ref"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSourceTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "url",
+          "access_status"
+        ],
+        "title": "EvidenceSource",
+        "type": "object"
+      },
+      "EvidenceSourceTier": {
+        "description": "Source quality tiers, A (strongest) to D (weakest).",
+        "enum": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "title": "EvidenceSourceTier",
+        "type": "string"
+      },
+      "EvidenceView": {
+        "description": "One claim together with every source it cites.",
+        "properties": {
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "evidence",
+          "sources"
+        ],
+        "title": "EvidenceView",
+        "type": "object"
+      },
+      "ExecutionAttempt": {
+        "additionalProperties": false,
+        "description": "One try at the work.\n\nRetries are recorded as separate attempts rather than as a counter, because\nthe interesting question after a failure is usually what differed between\nthe attempts.",
+        "properties": {
+          "attempt": {
+            "minimum": 1.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "backend_job_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Job Ref"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TerminationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempt"
+        ],
+        "title": "ExecutionAttempt",
+        "type": "object"
+      },
+      "ExecutionRecord": {
+        "additionalProperties": false,
+        "description": "The immutable record of one execution.\n\nWritten once, when the work ends — by delivery, by failure, by cancellation,\nor by an open deviation. It references the contract version it ran under,\nso a later change to what workers may do cannot rewrite what this one did.",
+        "properties": {
+          "attempts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExecutionAttempt"
+            },
+            "title": "Attempts",
+            "type": "array"
+          },
+          "backend": {
+            "minLength": 1,
+            "title": "Backend",
+            "type": "string"
+          },
+          "backend_job_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Job Ref"
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/CompletenessCheck"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deviations": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Deviations",
+            "type": "array"
+          },
+          "display_id": {
+            "title": "Display Id",
+            "type": "string"
+          },
+          "executed_by": {
+            "default": "",
+            "title": "Executed By",
+            "type": "string"
+          },
+          "execution_contract_ref": {
+            "title": "Execution Contract Ref",
+            "type": "string"
+          },
+          "execution_contract_version": {
+            "minimum": 1.0,
+            "title": "Execution Contract Version",
+            "type": "integer"
+          },
+          "execution_id": {
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "log_refs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Log Refs",
+            "type": "array"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "output_refs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Refs",
+            "type": "array"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "termination_status": {
+            "$ref": "#/components/schemas/TerminationStatus"
+          }
+        },
+        "required": [
+          "project_id",
+          "node_id",
+          "execution_contract_ref",
+          "execution_contract_version",
+          "backend",
+          "completeness",
+          "termination_status"
+        ],
+        "title": "ExecutionRecord",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "description": "What a person types.",
+        "properties": {
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "MailDraft": {
+        "description": "What a person wants to send, and the identifier their client retries with.",
+        "properties": {
+          "bcc": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Bcc",
+            "type": "array"
+          },
+          "body": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Cc",
+            "type": "array"
+          },
+          "client_message_id": {
+            "description": "Chosen once by the client; a retry with the same value is the same draft.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Client Message Id",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "body",
+          "client_message_id"
+        ],
+        "title": "MailDraft",
+        "type": "object"
+      },
+      "MailView": {
+        "description": "One mail Action, its content, and whether a human must reconcile it.",
+        "properties": {
+          "action": {
+            "additionalProperties": true,
+            "title": "Action",
+            "type": "object"
+          },
+          "bcc": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Bcc",
+            "type": "array"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cc",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "requires_manual_review": {
+            "title": "Requires Manual Review",
+            "type": "boolean"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "message_id",
+          "to",
+          "cc",
+          "bcc",
+          "subject",
+          "body",
+          "requires_manual_review"
+        ],
+        "title": "MailView",
+        "type": "object"
+      },
+      "MasterMessage": {
+        "additionalProperties": false,
+        "description": "One thing said between a person and Master, in the order it was said.\n\nThe conversation is recorded here rather than read back out of the harness,\nfor the reason a checkpoint is: a DSH session dies with its process and\ncannot be resumed across one, so a conversation kept only there would\nvanish at the moment somebody wants to read what was decided. `docs/04`\nalso makes the point the other way round — DSH session is not Project — and\na transcript stored in the harness would be exactly that confusion.\n\nA row is one utterance, and it is append-only like everything else. Nothing\nedits a message and nothing unsays one, which is what lets a later reader\ntreat the transcript as a record of what was actually said rather than of\nwhat somebody last thought should have been said.\n\n`turn_id` groups a question with whatever answering it produced. Master may\ntake several turns' worth of tool calls before it says anything, so the\nreply is not necessarily one message, and a grouping that was inferred from\ntimestamps would be a guess.",
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "author_type": {
+            "$ref": "#/components/schemas/ActorType"
+          },
+          "body": {
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "author_id",
+          "author_type",
+          "body"
+        ],
+        "title": "MasterMessage",
+        "type": "object"
+      },
+      "NewProject": {
+        "description": "What a person must say to open a project.\n\nBoth fields are required and neither has a default. The objective is what\nMaster plans against, so a project without one is a project whose first\nturn has nothing to plan from, and `\"Untitled\"` would be a title RAVEL\ninvented rather than one somebody chose.",
+        "properties": {
+          "objective": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Objective",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "objective"
+        ],
+        "title": "NewProject",
+        "type": "object"
+      },
+      "NodeView": {
+        "description": "One node of the DAG, as a reader sees it.\n\nA subset of `DagNode` rather than the whole record, and that is the one\nplace this module narrows. A node carries its contract references, its\njoin policy and its failure policy — all of which are how the node is\n*executed* — and a DAG view is for reading what the project is doing, not\nfor re-deriving how it would be run. What is kept is what a person needs in\norder to follow the graph: what the node is for, who executes it, what it\ndepends on, and where it has got to.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Ref"
+          },
+          "dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "display_id": {
+            "title": "Display Id",
+            "type": "string"
+          },
+          "executor_role": {
+            "title": "Executor Role",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_type": {
+            "title": "Node Type",
+            "type": "string"
+          },
+          "objective": {
+            "title": "Objective",
+            "type": "string"
+          },
+          "roadmap_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Phase"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "display_id",
+          "objective",
+          "node_type",
+          "status",
+          "executor_role",
+          "dependencies",
+          "roadmap_phase",
+          "decision_ref",
+          "created_at",
+          "started_at",
+          "completed_at"
+        ],
+        "title": "NodeView",
+        "type": "object"
+      },
+      "Page_EvidenceSource_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSource"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[EvidenceSource]",
+        "type": "object"
+      },
+      "Page_EvidenceView_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[EvidenceView]",
+        "type": "object"
+      },
+      "Page_ExecutionRecord_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ExecutionRecord]",
+        "type": "object"
+      },
+      "Page_MailView_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MailView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[MailView]",
+        "type": "object"
+      },
+      "Page_MasterMessage_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MasterMessage"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[MasterMessage]",
+        "type": "object"
+      },
+      "Page_NodeView_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NodeView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[NodeView]",
+        "type": "object"
+      },
+      "Page_ProjectSummary_": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[ProjectSummary]",
+        "type": "object"
+      },
+      "Page_dict_str__Any__": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[dict[str, Any]]",
+        "type": "object"
+      },
+      "PauseRequest": {
+        "description": "Why the project is being stopped. Recorded, and may be empty.",
+        "properties": {
+          "reason": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "PauseRequest",
+        "type": "object"
+      },
+      "ProjectSummary": {
+        "description": "One project, as it appears in a list.",
+        "properties": {
+          "display_id": {
+            "title": "Display Id",
+            "type": "string"
+          },
+          "objective": {
+            "title": "Objective",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "display_id",
+          "title",
+          "objective",
+          "status",
+          "role"
+        ],
+        "title": "ProjectSummary",
+        "type": "object"
+      },
+      "RefreshRequest": {
+        "description": "The grant handed back by a previous login or refresh.",
+        "properties": {
+          "refresh_token": {
+            "minLength": 1,
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
+      "TerminationStatus": {
+        "description": "How an execution ended.",
+        "enum": [
+          "COMPLETED",
+          "FAILED",
+          "CANCELLED",
+          "TIMED_OUT",
+          "DEVIATION"
+        ],
+        "title": "TerminationStatus",
+        "type": "string"
+      },
+      "TokenPair": {
+        "description": "What a successful authentication returns.\n\nBoth halves are returned because they answer different needs: the access\ntoken is what a client sends on every request and cannot be revoked, and\nthe refresh token is single-use and is what a client keeps. A client handed\nonly the first would have to log in again within the hour; one handed only\nthe second would refresh before every request.",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in",
+          "user_id",
+          "username"
+        ],
+        "title": "TokenPair",
+        "type": "object"
+      },
+      "TurnView": {
+        "description": "One exchange, and whether this response replayed a stored one.",
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MasterMessage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deduplicated": {
+            "title": "Deduplicated",
+            "type": "boolean"
+          },
+          "question": {
+            "$ref": "#/components/schemas/MasterMessage"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "question",
+          "answer",
+          "deduplicated"
+        ],
+        "title": "TurnView",
+        "type": "object"
+      },
+      "UserRole": {
+        "description": "The three V0 user roles. No complex RBAC.",
+        "enum": [
+          "PROJECT_OWNER",
+          "LAB_USER",
+          "ADMIN"
+        ],
+        "title": "UserRole",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "A short-lived access token.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "summary": "The runtime's user-facing surface. It is not a DSH proxy.",
+    "title": "RAVEL Research Gateway",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/auth/login": {
+      "post": {
+        "description": "The same login, rate limit and refusal timing as the legacy route.",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange a username and password for tokens",
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "The same idempotent chain cut as the legacy route.",
+        "operationId": "logout_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Logout V1 Auth Logout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cut a login chain",
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "description": "The same single-use rotation and family revocation as the legacy route.",
+        "operationId": "refresh_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange a refresh grant for a new pair",
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "description": "Every project the caller is a member of, ordered by identifier.\n\nThe ordering is by identifier rather than by the membership's grant time\nbecause the cursor has to name a key that cannot move: a grant time is\nstable too, but it is not in the legacy projection, and adding a field to\nthat projection to make this page deterministic would change the shape the\nTUI reads. Project identifiers are opaque and unique, which is enough for a\nstable keyset.",
+        "operationId": "list_projects_v1_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ProjectSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Projects this caller may open",
+        "tags": [
+          "v1-projects"
+        ]
+      },
+      "post": {
+        "description": "Create the project and its first membership, and nothing else.\n\nNo DAG node is written. Opening a project gives Master an objective to plan\nagainst; the planning is Master's next turn, through the same tools a\nconversation reaches. A route that seeded a node here would be a user\ncredential writing the Scientific DAG.",
+        "operationId": "create_project_v1_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Create Project V1 Projects Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Open a project, owned by whoever opened it",
+        "tags": [
+          "v1-projects"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/actions": {
+      "get": {
+        "description": "The project's Actions, newest first, projected through the public view.\n\nThe public view is the schema's projection and not `model_dump`: the schema\nforbids additional properties, so an internal field leaking here would be a\nbroken client rather than a harmless extra.",
+        "operationId": "list_actions_v1_projects__project_id__actions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Only Actions in this state.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only Actions in this state.",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Only Actions of this kind.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only Actions of this kind.",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Actions, newest first",
+        "tags": [
+          "v1-actions"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/actions/{action_id}/approve": {
+      "post": {
+        "description": "Record this caller's yes and release the Action to READY.\n\nRaises:\n    HTTPException: 409 `STALE_VERSION` if the supplied hash does not\n        describe the Action. The service's own refusals — a stale approval,\n        a required role the caller does not hold, budget — travel as the\n        codes `CONTRACTS.md` §8 names.",
+        "operationId": "approve_v1_projects__project_id__actions__action_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionAnswer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve V1 Projects  Project Id  Actions  Action Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve the exact Action content named by payload_hash",
+        "tags": [
+          "v1-actions"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/actions/{action_id}/reject": {
+      "post": {
+        "description": "Record this caller's no and release anything the Action reserved.",
+        "operationId": "reject_v1_projects__project_id__actions__action_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionAnswer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reject V1 Projects  Project Id  Actions  Action Id  Reject Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject the exact Action content named by payload_hash",
+        "tags": [
+          "v1-actions"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/authority-envelope": {
+      "get": {
+        "description": "The envelope in force, or `null` when none has been set.\n\n`null` is an ordinary state and not a 404, exactly as on the legacy route.",
+        "operationId": "read_envelope_v1_projects__project_id__authority_envelope_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Read Envelope V1 Projects  Project Id  Authority Envelope Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "What Master may decide alone",
+        "tags": [
+          "v1-control"
+        ]
+      },
+      "post": {
+        "description": "Append, never edit. The server chooses the version number.",
+        "operationId": "write_envelope_v1_projects__project_id__authority_envelope_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvelopeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Write Envelope V1 Projects  Project Id  Authority Envelope Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Append a new Authority Envelope version",
+        "tags": [
+          "v1-control"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/computations": {
+      "get": {
+        "description": "Execution records, oldest first.",
+        "operationId": "list_computations_v1_projects__project_id__computations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ExecutionRecord_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compute and experiment executions",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/computations/{execution_id}": {
+      "get": {
+        "description": "One execution by identifier, scoped to this project.",
+        "operationId": "read_computation_v1_projects__project_id__computations__execution_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "title": "Execution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One execution record",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/conversation": {
+      "get": {
+        "description": "A page of the transcript in the order it happened.\n\nOldest first, because a transcript read backwards is not a transcript. A\nclient that wants the newest messages starts from the newest page and walks\nbackwards with the cursor it receives, rather than asking this route for a\ndifferent order.",
+        "operationId": "read_conversation_v1_projects__project_id__conversation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Only the messages belonging to one exchange.",
+            "in": "query",
+            "name": "turn_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the messages belonging to one exchange.",
+              "title": "Turn Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_MasterMessage_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The conversation with Master, oldest first",
+        "tags": [
+          "v1-conversation"
+        ]
+      },
+      "post": {
+        "description": "Record the question, run one Master turn, record the answer if there is one.\n\nThe question is committed before the turn starts, so a turn that dies leaves\nan unanswered question rather than no question. The advisory lock covers the\ncheck-and-insert only; it is not held across the model turn, because holding\na transaction open for minutes would block every writer to the project for a\nreason that has nothing to do with them.",
+        "operationId": "say_v1_projects__project_id__conversation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientMessage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Say something to Master, once per client_message_id",
+        "tags": [
+          "v1-conversation"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/dag": {
+      "get": {
+        "description": "The graph, in creation order. There is no method on this path but GET.",
+        "operationId": "read_dag_v1_projects__project_id__dag_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_NodeView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The Scientific DAG, read-only",
+        "tags": [
+          "v1-projects"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/evidence": {
+      "get": {
+        "description": "Claims in the order they were registered, with their citations joined in.",
+        "operationId": "list_evidence_v1_projects__project_id__evidence_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Only claims recorded against this research task.",
+            "in": "query",
+            "name": "node_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only claims recorded against this research task.",
+              "title": "Node Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_EvidenceView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The Evidence Ledger, each claim with its sources",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/evidence/{evidence_id}": {
+      "get": {
+        "description": "A single claim. A reference to another project answers as absent.",
+        "operationId": "read_evidence_v1_projects__project_id__evidence__evidence_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "evidence_id",
+            "required": true,
+            "schema": {
+              "title": "Evidence Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One claim and the sources it rests on",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks": {
+      "get": {
+        "description": "The tasks the legacy screen shows, in the order the DAG created them.\n\nThe pagination is applied to the same list the legacy route returns, so a\ntask has exactly the fields the bench has always seen — the node, its\ninstruction, the job, the handover, the deviations and the mechanism for\nreporting one.",
+        "operationId": "list_tasks_v1_projects__project_id__lab_tasks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Only this node, for a lab user following one task.",
+            "in": "query",
+            "name": "node_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this node, for a lab user following one task.",
+              "title": "Node Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The experiment tasks this project has",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks/{task_id}": {
+      "get": {
+        "description": "The same record the bench reads, including what is still owed.",
+        "operationId": "read_task_v1_projects__project_id__lab_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Task V1 Projects  Project Id  Lab Tasks  Task Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One task, in full",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks/{task_id}/deviations": {
+      "post": {
+        "description": "Record the observation and tell the run, exactly as the legacy route does.",
+        "operationId": "report_deviation_v1_projects__project_id__lab_tasks__task_id__deviations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Report Deviation V1 Projects  Project Id  Lab Tasks  Task Id  Deviations Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report that the plan and the bench disagree",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks/{task_id}/handover/documents/{document}": {
+      "get": {
+        "description": "The bytes RAVEL wrote, under the name the manifest recorded.",
+        "operationId": "read_document_v1_projects__project_id__lab_tasks__task_id__handover_documents__document__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document",
+            "required": true,
+            "schema": {
+              "title": "Document",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One file out of the package the bench was given",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks/{task_id}/sign-off": {
+      "post": {
+        "description": "Refuse, because there is no sign-off record to write.\n\nThe membership check runs first, so a caller who may not see this project\nlearns only that it has no such task — the same 404 a missing one gives.\nA member is told the truth: the action is not supported in this deployment\nand no record was created.",
+        "operationId": "sign_off_v1_projects__project_id__lab_tasks__task_id__sign_off_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sign Off V1 Projects  Project Id  Lab Tasks  Task Id  Sign Off Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Acknowledge a handover (not available in V0)",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/lab/tasks/{task_id}/uploads": {
+      "post": {
+        "description": "File the body against an output the handover actually owed.",
+        "operationId": "upload_output_v1_projects__project_id__lab_tasks__task_id__uploads_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The required output this file answers.",
+            "in": "query",
+            "name": "output",
+            "required": true,
+            "schema": {
+              "description": "The required output this file answers.",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Output",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filename",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 255,
+              "title": "Filename",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media_type",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Media Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Output V1 Projects  Project Id  Lab Tasks  Task Id  Uploads Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload the file that answers one required output",
+        "tags": [
+          "v1-lab"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/mail": {
+      "get": {
+        "description": "Every mail Action in this project, whatever its state.\n\nReads all of them rather than only drafts: an owner opening this screen\nafter a send is asking what happened to it, and a list that hid accepted or\nuncertain sends would answer the wrong question. The state is in the\nprojection so the screen can group them.",
+        "operationId": "list_mail_v1_projects__project_id__mail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_MailView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mail Actions, newest first",
+        "tags": [
+          "v1-mail"
+        ]
+      },
+      "post": {
+        "description": "Create the Action for one message, once per `client_message_id`.\n\nThe Action may come back `AWAITING_APPROVAL` or `READY`, depending on the\nenvelope in force; both mean \"recorded, not sent\". A second call with the\nsame client identifier returns the original Action in whatever state it has\nreached, because its Message-ID — and therefore its idempotency key — is\nthe same.",
+        "operationId": "draft_v1_projects__project_id__mail_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Draft a mail send as an Action",
+        "tags": [
+          "v1-mail"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/pause": {
+      "post": {
+        "description": "The same transition, recorded with the same reason and event.",
+        "operationId": "pause_v1_projects__project_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PauseRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Pause V1 Projects  Project Id  Pause Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop the project where it stands",
+        "tags": [
+          "v1-control"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/resume": {
+      "post": {
+        "description": "The same transition; a project that is not paused is refused by it.",
+        "operationId": "resume_v1_projects__project_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Resume V1 Projects  Project Id  Resume Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Let the project move on again",
+        "tags": [
+          "v1-control"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/snapshot": {
+      "get": {
+        "description": "The whole project view, with `anchor_seq` read from the same transaction.\n\n`anchor_seq` is the last event sequence the aggregate reflects. A client\nstores it and reconnects the event stream with `after_seq=anchor_seq`, so\nevery event that arrived after the snapshot is delivered exactly once and\nno event already reflected in the snapshot is replayed into it.",
+        "operationId": "snapshot_v1_projects__project_id__snapshot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Snapshot V1 Projects  Project Id  Snapshot Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The aggregate state and the event anchor it corresponds to",
+        "tags": [
+          "v1-projects"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/sources": {
+      "get": {
+        "description": "Sources ordered by URL and identifier.\n\nSources carry no creation timestamp — a source can be re-read without\nbecoming a new row — so the ordering key is the URL and the opaque source\nidentifier. Both are stable, which is what a keyset cursor needs.",
+        "operationId": "list_sources_v1_projects__project_id__sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The cursor returned by the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cursor returned by the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_EvidenceSource_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Every source this project reached",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    },
+    "/v1/projects/{project_id}/sources/{source_id}": {
+      "get": {
+        "description": "The source record, and bytes ``[offset, offset+limit)`` of its snapshot.\n\n`next_offset` is present only when more bytes remain; a caller pages through\nthe content with it. The bytes are decoded as UTF-8 with replacement so a\ntext source reads as text; a binary source is still returned this way and\nthe `media_type` in the record tells the reader what it was.",
+        "operationId": "read_source_v1_projects__project_id__sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 10000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100000,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Source V1 Projects  Project Id  Sources  Source Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One source, with a bounded range of its stored content",
+        "tags": [
+          "v1-research"
+        ]
+      }
+    }
+  }
+}

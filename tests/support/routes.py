@@ -147,12 +147,19 @@ def effective_routes(app: FastAPI) -> list[ProbedRoute]:
 #: not, so the e2e probe failed on a route the integration probe had been
 #: updated for. A placeholder taught in one place is taught in both.
 ABSENT_PLACEHOLDERS: dict[str, str] = {
+    "action_id": "an-action-that-does-not-exist",
     "artifact_id": "an-artifact-that-does-not-exist",
     "approval_id": "an-approval-that-does-not-exist",
     # A name the package does not hold, which is the interesting probe for that
     # route anyway: what a probe asserts is that the DAG did not move, and a
     # document read that succeeded would have gone through the manifest.
     "document": "a-document-that-does-not-exist",
+    # The records the versioned read routes address. They are well-formed and
+    # absent, so a probe reaches the route's authorization and lookup rather
+    # than a literal `{source_id}` that nothing serves.
+    "evidence_id": "an-evidence-that-does-not-exist",
+    "execution_id": "an-execution-that-does-not-exist",
+    "source_id": "a-source-that-does-not-exist",
     # A user identifier, which the membership routes address. The value is
     # deliberately one nobody holds: a probe asserts that the DAG did not move,
     # and a withdrawal that *succeeded* would have moved something else.
