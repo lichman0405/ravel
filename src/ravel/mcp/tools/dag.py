@@ -25,7 +25,12 @@ from ravel.domain.contracts import AcceptanceCriterion, CriterionProvenance
 from ravel.domain.dag import DagNode
 from ravel.domain.enums import Confidence, DecisionType, JoinPolicy, NodeType
 from ravel.domain.project import RoadmapPhase
-from ravel.mcp.context import ToolContext, as_json, require_master
+from ravel.mcp.context import (
+    ToolContext,
+    as_json,
+    require_current_lease,
+    require_master,
+)
 from ravel.state.repositories.projects import RoadmapRepository
 from ravel.state.services.dag import DagMutationService, DecisionDraft
 from ravel.state.services.terms import commit_terms
@@ -379,6 +384,7 @@ def add_dag_node(context: ToolContext) -> Any:
         are reachable.
         """
         require_master(context, "add_dag_node")
+        require_current_lease(context, "add_dag_node")
         node = _node(
             context,
             node_type=node_type,
@@ -451,6 +457,7 @@ def commit_roadmap_phase(context: ToolContext) -> Any:
         that may now be expanded.
         """
         require_master(context, "commit_roadmap_phase")
+        require_current_lease(context, "commit_roadmap_phase")
         phase_name = name.strip()
         if not phase_name:
             raise ValueError("a roadmap stage needs a name; a node names its stage by name")
@@ -548,6 +555,7 @@ def expand_dag_phase(context: ToolContext) -> Any:
         anything to plan from.
         """
         require_master(context, "expand_dag_phase")
+        require_current_lease(context, "expand_dag_phase")
         if not nodes:
             raise ValueError("expanding a phase commits no nodes; pass the work it consists of")
         built = [
@@ -605,6 +613,7 @@ def cancel_dag_node(context: ToolContext) -> Any:
         it.
         """
         require_master(context, "cancel_dag_node")
+        require_current_lease(context, "cancel_dag_node")
         draft = _draft(
             rationale,
             DecisionType.CANCEL_NODE,
