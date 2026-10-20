@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "task_id": "T13",
+  "attempt": 4,
+  "reviewer_id": "independent-T13-review-4",
+  "base_sha": "bb4d333",
+  "candidate_sha": "51db369151bdbbbb3569415a7a6a4e7242ec8b6a",
+  "source_commit": "4ae569067149cb0dd521bda428bac3eadf623084",
+  "source_digest": "37e8e82dc108cd9634e37a667843366d51a8c9773a5bad8bef852e22fb9c8b7d",
+  "reviewed_at": "2026-10-20 14:37 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T13-AC1",
+      "result": "PASS",
+      "evidence": "The delta is generated-artifact only: git diff --name-status bb4d333..4ae5690 is exactly M packages/api-client/openapi.json and M packages/api-client/src/types.ts, so no event-stream runtime code changed and the attempt-3 AC1 approval is not invalidated. I independently created ravel_t13_review4_test, migrated it from empty with alembic upgrade head (exit 0, head c4e8d1a7f3b2) and ran pytest tests/premium/T13 -q -rxXs --junitxml=/tmp/t13-review4-junit.xml (exit 0, 20 passed, 0 failed, 0 errors, 0 skipped). The three test_stream.py nodeids are among the 20 and passed: project scoping and monotonic seq, reconnect from the last processed seq with no loss or duplicate, and revocation closing the socket with 4404 inside the 5s bound. The manifest JUnit and the acceptance map contain exactly the same 20 nodeids in both directions."
+    },
+    {
+      "id": "T13-AC2",
+      "result": "PASS",
+      "evidence": "The same independent 20-test run on ravel_t13_review4_test includes test_resync.py (2), test_isolation.py (4) and test_pagination.py (2), all passing. The delta does not touch src/ravel/gateway/routes/premium/support.py, events.py, the error envelope or pagination code, so the attempt-2/3 resync-isomorphism and isolation properties remain the reviewed ones. The four new fields are optional request fields on an existing /v1 route; they add no read path and no change to snapshot/replay behaviour. No skip or xfail was added anywhere in the delta."
+    },
+    {
+      "id": "T13-AC3",
+      "result": "PASS",
+      "evidence": "I independently regenerated the client on this integrated tree inside the Linux build container with .venv/bin/python packages/api-client/generate.py --output /tmp/t13-review4-gen, and a second time into /tmp/t13-review4-gen2. All four committed files are byte-identical to the generator output and the two generator runs are identical to each other: openapi.json sha256 9421129ab207683f4e3679ab986d973c2254d3a582435aad542a4faf57ecf1cd (103020 bytes), src/types.ts acc50eba03b11c260b5b3aa8b0c1b48210657c9f3ef48a5de5af4703d4371224 (5973), src/client.ts 6e9351d989b0d1fc0c7f18883302d67254df0cd06a289931a32d910dfe857075 (25281), src/index.ts 5fc0e69eecf7886923e446ea75075cc49700d7991f6750361da98ca337465ed6 (114); generator output contains zero CRLF bytes. A structural comparison against bb4d333 shows paths identical (26 /v1 paths, 30 operations, every path starts with /v1/), info and securitySchemes identical, the same 41 component schemas, and exactly one changed schema: DeviationRequest gained only the optional protocol_version, raw_output_ref, raw_output_sha256 and sample_id properties while required stayed [requested_action, description]. No DAG-write operation exists and no legacy operation entered the generated document. tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte is present with no failure child in the manifest JUnit and passed in my independent run; npm run typecheck exited 0; the legacy TUI compatibility test passed in the same run."
+    },
+    {
+      "id": "T13-AC4",
+      "result": "PASS",
+      "evidence": "I created my own fresh database ravel_t13_review4_test and migrated it while holding DatabaseLock: alembic upgrade head went from the empty database through the T11 migrations b8d3f2a6c9e1 and c4e8d1a7f3b2 to head c4e8d1a7f3b2 (exit 0; alembic current confirms c4e8d1a7f3b2). test_live_stack.py::test_the_api_reads_the_rows_the_test_writes_through_the_same_engine passed in my independent 20-test run against that real PostgreSQL and the real create_app; no static JSON backend is involved. The reviewed manifest records data_mode REAL, database_lock true, preflight_exit 0 and exit_code 0. The schema change under review is a request-model field addition; the generator builds the document from create_app and opens no database, which is the intended generation mode."
+    },
+    {
+      "id": "T13-AC5",
+      "result": "N/A",
+      "evidence": "No T13-AC5 is defined. docs/premium/TASKS/T13-api-events.md and docs/premium/acceptance-map.json define exactly T13-AC1..T13-AC4, as did reviews 1/2/3. This entry records the absence rather than inventing a criterion."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T13/run-20261020-142714/manifest.json"
+  ],
+  "findings": [
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1503,
+      "trigger": "Run the T13 gate; the client command is npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client.",
+      "impact": "No package-lock.json is committed and the install is explicitly told not to create one, so the typecheck resolves TypeScript 5.6.3 from the public registry without an integrity pin. package.json pins the exact compiler version and the command fails closed, so this is a hermeticity/reproducibility gap, not a correctness gap. Known and accepted as a V0 advisory; unchanged by this delta (the delta touches no manifest, package or lockfile).",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Commit a lockfile and use npm ci, or record the registry dependency explicitly. Not required for attempt-4 acceptance.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "scripts/run_gateway.py",
+      "line": 41,
+      "trigger": "Inspect the T13 write boundary against the RAVEL_EVENT_RETENTION validation added in fix commit 7957ba5 (import at line 41, validation in main around line 75).",
+      "impact": "The file is outside the recorded T13 boundary/FILE_LOCKS and the extension is recorded only in the tasklog and the integration record. The change is small and covered by test_deployment_retention, but the lock protocol requires the Supervisor to record the extension. Known and accepted as a V0 advisory; unchanged by this delta.",
+      "acceptance_id": null,
+      "required_fix": "Record scripts/run_gateway.py in the T13 boundary or an explicit Supervisor authorization at integration. Not required for attempt-4 acceptance.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "packages/api-client/src/client.ts",
+      "line": 8,
+      "trigger": "Construct V1Client to call POST /v1/auth/login or /v1/auth/refresh before any token exists.",
+      "impact": "ClientOptions.token is required and call() always sends Authorization: Bearer, so the generated client cannot represent an unauthenticated call without a placeholder token. Login works because the route does not require the header; this is API ergonomics, not a security or functional failure. Known and accepted as a V0 advisory; unchanged by this delta (client.ts was regenerated identically and is not modified).",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Make the token optional and omit the Authorization header when absent; regenerate and re-check byte identity and typecheck. Not required for attempt-4 acceptance.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "tests/premium/T13/test_contract.py",
+      "line": 158,
+      "trigger": "Run the T13 gate on the canonical Linux checkout, where the generated files materialise with LF.",
+      "impact": "The CRLF-normalization line is never exercised by the committed gate: on an LF checkout it is a no-op, so deleting it would not fail any committed test and only a Windows/CRLF checkout would regress. The determinism guarantee itself is intact and was re-verified for this delta (committed bytes equal generator bytes exactly, and two generator runs are identical). This is a test-coverage advisory about the transport path, not a correctness defect.",
+      "acceptance_id": "T13-AC3",
+      "required_fix": "Optional: extract the comparison into a helper and unit-test it with a CRLF-materialised copy, or add a parametrized case. Not required for V0 acceptance.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "docs/premium/acceptance-map.json",
+      "line": 1333,
+      "trigger": "Inspect commit d69b992 on the T13 branch and the T12 entry in the current acceptance map.",
+      "impact": "d69b992 set T12's status to DONE in addition to adding the T13 probe-coverage nodeid. T12's status is the Supervisor's integration record; the attempt-2 tasklog asserts Supervisor authorization but no FILE_LOCKS or PROGRESS record in the tree documents it. Carried forward unchanged from reviews 1/2/3 and untouched by this delta; it requires Supervisor bookkeeping, not a T13 code fix.",
+      "acceptance_id": null,
+      "required_fix": "Supervisor explicitly confirms the T12 status carry-over at integration, or reverts the T12 portion and sets it in the integration record. Not required for attempt-4 acceptance.",
+      "advisory": true
+    }
+  ],
+  "independent_verification": [
+    {
+      "command": "git diff --name-status bb4d333..4ae5690; git diff --name-status bb4d333..51db369",
+      "result": "The source commit changes only packages/api-client/openapi.json (+48) and packages/api-client/src/types.ts (+1/-1); no generator filter, no client.ts/index.ts, no T10/T11 source or test, no schema or manifest. The docs commit additionally adds only docs/premium/evidence/T13/run-20261020-142714/** and edits docs/premium/tasklogs/T13.md. git show --stat confirms the same split (4ae5690: 2 files; 51db369: 8 record files)."
+    },
+    {
+      "command": "Recomputed the gate source digest with the scripts/premium_task.py algorithm (git ls-tree -r, EXCLUDED_PREFIXES, sorted 'mode kind blob path', SHA-256) for bb4d333, 4ae5690, 51db369 and HEAD",
+      "result": "4ae5690 and 51db369 (and HEAD) => 37e8e82dc108cd9634e37a667843366d51a8c9773a5bad8bef852e22fb9c8b7d with 609 rows each; bb4d333 => 6c5cdc900d4377bbc28f084a1ab71eecb75bb18e21c589d843810c9540f91117. The manifest source_commit/source_digest pair matches the source commit, and the docs-only HEAD commit does not change the digest."
+    },
+    {
+      "command": "Inside the Linux build container on the reviewed worktree: .venv/bin/python packages/api-client/generate.py --output /tmp/t13-review4-gen (twice; second into /tmp/t13-review4-gen2), then byte comparison of all four committed files against both outputs",
+      "result": "Generated files import ravel from /workspace/ravel-worktrees/T13/src/ravel (the reviewed tree). For openapi.json, src/types.ts, src/client.ts and src/index.ts: committed SHA-256 equals generator SHA-256, normalized_equal True, deterministic True (gen == gen2), generator CRLF count 0. Sizes 103020/5973/25281/114 bytes."
+    },
+    {
+      "command": "Structural comparison of git show bb4d333:packages/api-client/openapi.json against the regenerated/committed document",
+      "result": "paths equal True (26 paths, 30 operations), info equal, securitySchemes equal, 41 schema names equal. Only DeviationRequest differs: added optional protocol_version, raw_output_ref, raw_output_sha256, sample_id; removed none; required unchanged. Every generated path starts with /v1/; no DAG-write path and no legacy operation."
+    },
+    {
+      "command": "Validated docs/premium/evidence/T13/run-20261020-142714/manifest.json and every artifact hash; parsed cmd-02-junit.xml",
+      "result": "result PASS, exit_code 0, preflight_exit 0, database_lock true, source_commit 4ae5690, source_digest 37e8e82d...; 4/4 commands exit 0 with skipped 0 and empty_selection false; all 6 artifact sha256/size pairs match; JUnit tests=20 failures=0 errors=0 skipped=0; the determinism nodeid is present with no failure/error child; the 20 JUnit nodeids equal the acceptance map exactly in both directions."
+    },
+    {
+      "command": "docker exec ravel-postgres-1 psql -U ravel -d postgres -c 'CREATE DATABASE ravel_t13_review4_test' (my own database)",
+      "result": "CREATE DATABASE. I did not reuse ravel_t13_regen_test, ravel_t13_test or any implementer run-id."
+    },
+    {
+      "command": "In the t13-build container with RAVEL_TEST_DB=ravel_t13_review4_test and RAVEL_POSTGRES_DSN=postgresql+psycopg://ravel:ravel_dev_password@127.0.0.1:55432/ravel_t13_review4_test: acquire DatabaseLock, then .venv/bin/python -m alembic upgrade head; .venv/bin/python -m alembic current",
+      "result": "Lock acquired; exit 0; the empty database ran the full chain including b8d3f2a6c9e1 and c4e8d1a7f3b2; alembic current reports c4e8d1a7f3b2 (head)."
+    },
+    {
+      "command": "RAVEL_TEST_DB=ravel_t13_review4_test .venv/bin/python -m pytest tests/premium/T13 -q -rxXs --junitxml=/tmp/t13-review4-junit.xml",
+      "result": "exit 0; 20 passed; JUnit tests=20 failures=0 errors=0 skipped=0; test_the_generated_client_reproduces_itself_byte_for_byte present and passed (no failure child)."
+    },
+    {
+      "command": "RAVEL_TEST_DB=ravel_t13_review4_test .venv/bin/python -m pytest tests/premium/T11 -q -rxXs --junitxml=/tmp/t13-review4-t11-junit.xml",
+      "result": "exit 0; 34 passed; JUnit tests=34 failures=0 errors=0 skipped=0. Regeneration did not break the source of the schema change."
+    },
+    {
+      "command": "make lint",
+      "result": "exit 0; ruff 'All checks passed!'; pyright 0 errors, 0 warnings, 0 informations."
+    },
+    {
+      "command": "npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client",
+      "result": "exit 0; tsc --noEmit produced no diagnostics (TypeScript 5.6.3)."
+    },
+    {
+      "command": "git diff bb4d333..51db369 -- docs/premium/reviews docs/premium/acceptance-map.json; git cat-file -e bb4d333:docs/premium/reviews/T13/3.json; git merge-base --is-ancestor f5bb03b 51db369",
+      "result": "No review or acceptance-map changes in the delta. Review 3 exists at bb4d333 as attempt 3, decision APPROVE, reviewer independent-T13-review-3, source commit bb7d7fe, source digest 6cbeffea..., and its commit f5bb03b is an ancestor of HEAD, so the prior approval is preserved by history. The acceptance map T13 section still has 20 nodeids and status RUNNING; the whole file is byte-unchanged across the delta, so no other task section was altered."
+    },
+    {
+      "command": "Final git status --porcelain=v1 --untracked-files=all; git rev-parse HEAD; git diff --check",
+      "result": "Status empty, HEAD 51db369151bdbbbb3569415a7a6a4e7242ec8b6a on cc/T13-api-events, diff --check clean. All independent runs used /tmp for generated output and JUnit; no worktree file was modified."
+    }
+  ],
+  "residual_risks": [
+    "The delta changes only generated artifacts, so runtime AC1/AC2/AC4 acceptance rests on the previously approved T13 runtime code plus my full independent 20-test rerun on a fresh database; no runtime source changed between bb4d333 and 51db369.",
+    "The reviewed gate command 1 log (cmd-01.txt) shows only alembic's context lines, not the upgrade chain, so that committed log does not by itself evidence a from-empty migration: the implementer migrated ravel_t13_regen_test before the gate run. The database is at c4e8d1a7f3b2 and I independently reproduced the full empty-to-head migration on ravel_t13_review4_test, so the claim is corroborated; this is an evidence-transparency nuance, not a failed gate.",
+    "The gate manifest does not record the ambient RAVEL_TEST_DB/RAVEL_POSTGRES_DSN used by commands 1-2. I used my own database, ravel_t13_review4_test, and did not reuse any implementer run-id or database.",
+    "The reviewed tree materialised the generated files with LF, so the byte comparison is exact without transport normalization; the committed test's CRLF normalization remains a no-op on the canonical Linux checkout (carried P3).",
+    "This review covers task-branch head 51db369. Per the integration protocol the Supervisor must still produce the integration candidate from the current integration tip, run the candidate gate, and record that candidate's source digest; this review is not the integration-candidate review.",
+    "Known accepted P3 advisories remain unchanged and are not blockers: npm registry dependency without a committed lockfile, scripts/run_gateway.py boundary recording, client token ergonomics, CRLF transport coverage, and the T12 status carry-over. No new P1/P2/P3 was found in this delta.",
+    "No T13-AC5 exists in the task card or acceptance map; this review records four acceptance criteria plus an explicit N/A AC5 entry rather than inventing one."
+  ],
+  "integration_candidate": false
+}

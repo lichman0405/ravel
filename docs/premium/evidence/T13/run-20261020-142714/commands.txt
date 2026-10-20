@@ -1,0 +1,51 @@
+===== command 1: .venv/bin/python -m alembic upgrade head =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m alembic upgrade head
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+
+===== command 2: .venv/bin/python -m pytest tests/premium/T13 -q -rxXs --junitxml=/workspace/ravel-worktrees/T13/docs/premium/evidence/T13/run-20261020-142714/cmd-02-junit.xml =====
+exit_code=0 ok=True reason=None
+$ .venv/bin/python -m pytest tests/premium/T13 -q -rxXs --junitxml=/workspace/ravel-worktrees/T13/docs/premium/evidence/T13/run-20261020-142714/cmd-02-junit.xml
+
+....................                                                     [100%]
+=============================== warnings summary ===============================
+src/ravel/gateway/routes/premium/actions.py:28
+  /workspace/ravel-worktrees/T13/src/ravel/gateway/routes/premium/actions.py:28: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from ravel.gateway.routes.premium.errors import problem
+
+tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged
+tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged
+tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged
+tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged
+tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged
+tests/premium/T13/test_isolation.py::test_a_v1_error_is_stable_and_does_not_echo_submitted_input
+tests/premium/T13/test_pagination.py::test_limit_above_the_contract_maximum_is_refused_and_the_maximum_is_accepted
+  /workspace/ravel-worktrees/T13/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+===== command 3: make lint =====
+exit_code=0 ok=True reason=None
+$ make lint
+
+make[1]: Entering directory '/workspace/ravel-worktrees/T13'
+.venv/bin/ruff check src tests
+All checks passed!
+pyright src tests
+0 errors, 0 warnings, 0 informations
+make[1]: Leaving directory '/workspace/ravel-worktrees/T13'
+
+===== command 4: npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client =====
+exit_code=0 ok=True reason=None
+$ npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client
+
+
+up to date in 157ms
+
+> @ravel/api-client@0.1.0 typecheck
+> tsc --noEmit
+
+

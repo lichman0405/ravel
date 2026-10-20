@@ -1,0 +1,8 @@
+$ npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client
+
+
+up to date in 157ms
+
+> @ravel/api-client@0.1.0 typecheck
+> tsc --noEmit
+

@@ -237,17 +237,17 @@
       "owner": "SUPERVISOR",
       "worktree": "C:/Users/lishi/code/ravel-worktrees/T13",
       "base_sha": "463376a",
-      "head_sha": "f5bb03b",
-      "source_digest": "6cbeffea8ee152190dfcb023e6707a017b4077852dc4d2e6f8d0aad702c08f6c",
-      "review_ref": "reviews/T13/3.json",
+      "head_sha": "a91299c",
+      "source_digest": "37e8e82dc108cd9634e37a667843366d51a8c9773a5bad8bef852e22fb9c8b7d",
+      "review_ref": "reviews/T13/4.json",
       "gate_refs": [
-        "evidence/T13/run-20261020-130223/manifest.json",
-        "evidence/T13/run-20261020-130628/manifest.json"
+        "evidence/T13/run-20261020-142714/manifest.json",
+        "evidence/T13/run-20261020-144605/manifest.json"
       ],
-      "integration_merge_sha": "ec7dc01",
+      "integration_merge_sha": "943c4ce",
       "blocker_refs": [],
       "last_updated": "2026-10-20 Asia/Shanghai",
-      "note": "T13 DONE：独立 review 3 APPROVE（reviews/T13/3.json；AC1–AC4 PASS，AC5 不存在记为 N/A）；任务门禁 run-20261020-130223 PASS（20 tests、alembic+lint+tsc 0）；CRLF determinism 缺陷已在 bb7d7fe 修复并由 reviewer 双向复现（CRLF 通过、真实内容变更失败）；集成候选 75962ce/ec7dc01 门禁 run-20261020-130628 PASS（20 tests、4 commands 0；source digest 含已集成 T10，T13 文件子树与 source commit 无差异）；ff-only 合入 integration。P3 advisory：npm install 无 lockfile；scripts/run_gateway.py 边界扩展由 Supervisor 记录；client token ergonomics；CRLF 归一化在 LF checkout 上为 no-op（仅测试覆盖建议）。"
+      "note": "T13 重开修复完成：T11 修改 /v1 DeviationRequest 后，committed client/openapi.json 与集成后 create_app 的 schema 不一致，determinism 测试在 integration 失败；重新生成 client 并通过独立 delta review 4 APPROVE（reviews/T13/4.json，reviewed source 4ae5690，digest 37e8e82d…，T13 子树与 a91299c 相同）。任务门禁 run-20261020-142714 PASS（20 tests、alembic+lint+typecheck 0）；集成候选 cc/candidate-T13-regen（merge b00dd6c，evidence 943c4ce）门禁 run-20261020-144605 PASS（20 tests、source digest 与 review 一致）；ff-only 合入 integration 943c4ce。P3（npm 无 lockfile、run_gateway.py 边界扩展、client token ergonomics、CRLF 归一化 no-op、T12 carry-over 记录）保留为 advisory。"
     },
     "T14": {
       "status": "RUNNING",

@@ -16,7 +16,7 @@ export type CompletenessVerdict = "COMPLETE" | "INCOMPLETE_DELIVERY";
 
 export type Confidence = "LOW" | "MEDIUM" | "HIGH";
 
-export type DeviationRequest = { description: string; requested_action: string };
+export type DeviationRequest = { description: string; protocol_version?: number | null; raw_output_ref?: string | null; raw_output_sha256?: string | null; requested_action: string; sample_id?: string | null };
 
 export type EnvelopeLimits = { max_compute_hours?: number | null; max_cost_units?: number | null; max_experiment_runs?: number | null; max_iterations?: number | null; max_wall_clock_hours?: number | null };
 
