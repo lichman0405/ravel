@@ -7,7 +7,7 @@
   "target_repo": "C:/Users/lishi/code/ravel",
   "main_base_sha": "79db86e07d8c2e541fd366d6667b54ee76f671fb",
   "integration_branch": "cc/ravel-premium-v1",
-  "integration_head_sha": "ec7dc01",
+  "integration_head_sha": "c59afb8",
   "tasks": {
     "T00": {
       "status": "DONE",
@@ -247,18 +247,18 @@
       "note": "T13 DONE：独立 review 3 APPROVE（reviews/T13/3.json；AC1–AC4 PASS，AC5 不存在记为 N/A）；任务门禁 run-20261020-130223 PASS（20 tests、alembic+lint+tsc 0）；CRLF determinism 缺陷已在 bb7d7fe 修复并由 reviewer 双向复现（CRLF 通过、真实内容变更失败）；集成候选 75962ce/ec7dc01 门禁 run-20261020-130628 PASS（20 tests、4 commands 0；source digest 含已集成 T10，T13 文件子树与 source commit 无差异）；ff-only 合入 integration。P3 advisory：npm install 无 lockfile；scripts/run_gateway.py 边界扩展由 Supervisor 记录；client token ergonomics；CRLF 归一化在 LF checkout 上为 no-op（仅测试覆盖建议）。"
     },
     "T14": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T14",
+      "base_sha": "c59afb8",
+      "head_sha": "c59afb8",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T14 已派发；base c59afb8；边界：apps/desktop/**、根 package/pnpm workspace 文件、tests/premium/T14/**、acceptance-map。Electron 安全外壳、登录、Windows 构建与启动测试；必须使用 T13 生成的客户端，桌面不得成为 source of truth，不绕过 gateway 权限。等待实现、门禁与独立 Review。"
     },
     "T15": {
       "status": "TODO",
