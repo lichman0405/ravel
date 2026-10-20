@@ -502,6 +502,44 @@ class EvidenceExecutionType(StrEnum):
     SIMULATED = "SIMULATED"
 
 
+class LabExecutionMode(StrEnum):
+    """Whether a laboratory handover is a real bench run or a software proof.
+
+    `SIMULATED` is the default and the only mode an automated suite can reach.
+    `REAL` requires both a lab lead's confirmation of SOP/site/device
+    suitability and a backend explicitly configured for a live laboratory;
+    neither is something a test or a model can supply on its own.
+    """
+
+    SIMULATED = "SIMULATED"
+    REAL = "REAL"
+
+
+class LabEventType(StrEnum):
+    """The five things a person at a bench may report.
+
+    Every one is person-reported by construction. Software does not write any
+    of these on its own behalf: a system withdrawal changes the handover and
+    is deliberately not a `STOP_CONFIRMED`.
+    """
+
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    START_REPORTED = "START_REPORTED"
+    DEVIATION_REPORTED = "DEVIATION_REPORTED"
+    OUTPUT_UPLOADED = "OUTPUT_UPLOADED"
+    STOP_CONFIRMED = "STOP_CONFIRMED"
+
+
+class LabUploadOutcome(StrEnum):
+    """What happened to one upload attempt, including the refused ones."""
+
+    ACCEPTED = "ACCEPTED"
+    REJECTED_LATE = "REJECTED_LATE"
+    REJECTED_UNKNOWN_OUTPUT = "REJECTED_UNKNOWN_OUTPUT"
+    REJECTED_WRONG_CONTRACT_VERSION = "REJECTED_WRONG_CONTRACT_VERSION"
+    REJECTED_WRONG_SAMPLE = "REJECTED_WRONG_SAMPLE"
+
+
 class ReportStatus(StrEnum):
     """Whether a report may be exported as certified.
 

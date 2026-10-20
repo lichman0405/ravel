@@ -1057,12 +1057,52 @@
         "make premium-task TASK=T11"
       ],
       "classification": "internal",
-      "status": "PLANNED",
+      "status": "RUNNING",
       "test_nodeids": [
-        "tests/premium/T11"
+        "tests/premium/T11/test_package_binding.py::test_the_package_is_bound_to_its_protocol_samples_raw_files_device_and_sop",
+        "tests/premium/T11/test_package_binding.py::test_a_package_without_a_covering_confirmation_is_not_ready_for_a_real_bench",
+        "tests/premium/T11/test_package_binding.py::test_the_lead_confirmation_is_recorded_and_readiness_is_derived",
+        "tests/premium/T11/test_package_binding.py::test_a_confirmation_for_another_device_sop_or_version_does_not_cover_the_package",
+        "tests/premium/T11/test_package_binding.py::test_only_the_project_owner_may_confirm_a_laboratory",
+        "tests/premium/T11/test_package_binding.py::test_a_live_deployment_with_a_covering_confirmation_opens_a_real_handover",
+        "tests/premium/T11/test_package_binding.py::test_automated_people_remain_software_proof_even_after_a_confirmation",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_person_reported_and_leaves_the_run_waiting",
+        "tests/premium/T11/test_person_events.py::test_sign_off_is_idempotent_because_a_retry_is_not_a_second_signature",
+        "tests/premium/T11/test_person_events.py::test_start_requires_the_persons_sign_off_and_never_reports_running",
+        "tests/premium/T11/test_person_events.py::test_only_a_lab_user_reports_a_bench_event",
+        "tests/premium/T11/test_person_events.py::test_a_foreign_project_member_cannot_reach_any_human_door",
+        "tests/premium/T11/test_person_events.py::test_a_system_cancel_awaits_a_manual_stop_and_never_claims_the_instrument_stopped",
+        "tests/premium/T11/test_records.py::test_events_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_person_reported_event_cannot_be_written_as_a_system_event",
+        "tests/premium/T11/test_records.py::test_a_signature_cannot_be_written_twice_around_the_route",
+        "tests/premium/T11/test_records.py::test_the_handover_mode_and_confirmation_are_immutable",
+        "tests/premium/T11/test_records.py::test_an_upload_receipt_cannot_be_edited_or_removed",
+        "tests/premium/T11/test_records.py::test_the_package_binding_and_lead_confirmation_are_append_only",
+        "tests/premium/T11/test_records.py::test_a_refused_upload_stored_no_artifact",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_accepted_upload_records_a_receipt_and_a_person_reported_event",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_unrequired_output_is_refused_and_leaves_a_rejection_receipt",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_wrong_contract_version_upload_is_recorded_and_cannot_complete_the_run",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_an_upload_is_a_file_not_a_scientific_verdict",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_keeps_verbatim_text_operator_time_hash_and_sample",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_a_sample_the_package_never_bound_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_for_another_contract_version_is_refused",
+        "tests/premium/T11/test_uploads_and_deviations.py::test_a_deviation_against_a_task_nobody_is_holding_is_still_recorded"
       ],
       "manual_evidence_refs": [],
       "execution_commands": [
+        {
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "upgrade",
+            "head"
+          ],
+          "allow_skips": false,
+          "needs_database": true,
+          "external": false
+        },
         {
           "argv": [
             ".venv/bin/python",
@@ -1074,6 +1114,15 @@
           ],
           "allow_skips": false,
           "needs_database": true,
+          "external": false
+        },
+        {
+          "argv": [
+            "make",
+            "lint"
+          ],
+          "allow_skips": false,
+          "needs_database": false,
           "external": false
         }
       ],

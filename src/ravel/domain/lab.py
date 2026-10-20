@@ -39,12 +39,19 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, model_validator
 
 from ravel.domain.base import Record
 from ravel.domain.clock import utcnow
-from ravel.domain.enums import JobState
+from ravel.domain.enums import (
+    EvidenceExecutionType,
+    JobState,
+    LabEventType,
+    LabExecutionMode,
+    LabUploadOutcome,
+)
 from ravel.domain.ids import new_id
 from ravel.domain.state_machines import can_transition_job
 
@@ -106,6 +113,14 @@ class LabHandover(Record):
     #: name here or it is an extra file: the check is against this list, not
     #: against what a delivery claims to have brought.
     required_outputs: tuple[str, ...] = ()
+    #: Set at the handover and immutable. A handover that is not authorized for
+    #: a live laboratory is `SIMULATED`, and uploads against it are filed with
+    #: the artifact kind `simulated`, so the evidence they produce is visibly a
+    #: software proof rather than a measurement.
+    execution_mode: LabExecutionMode = LabExecutionMode.SIMULATED
+    #: The lab lead's confirmation this handover was made under, if one was
+    #: recorded against the package before the handover. Empty means none did.
+    lead_confirmation_ref: str = ""
     state: JobState = JobState.WAITING_EXTERNAL
     detail: str = ""
     handed_over_at: datetime = Field(default_factory=utcnow)
@@ -170,8 +185,27 @@ class LabHandover(Record):
         handover rather than the cluster's job, because a node handed over
         twice has two handovers and the second must not inherit the first's
         deliverables.
+
+        The provenance identifies the handover in both modes. What tells a
+        reader whether the bytes are instrument evidence or a software proof
+        is the artifact's `kind`: uploads against a `SIMULATED` handover are
+        filed as `simulated`, so the report classifier types them SIMULATED
+        even though the provenance names a real handover row. Relabelling the
+        provenance would not change that.
         """
         return f"{UPLOAD_PROVENANCE}:{self.handover_id}"
+
+    @property
+    def evidence_execution_type(self) -> EvidenceExecutionType:
+        """How a report must type this handover's delivery.
+
+        Derived from the handover's own recorded mode rather than from a caller
+        label, for the same reason report classification is derived from
+        provenance: a simulated run cannot become real by relabelling a claim.
+        """
+        if self.execution_mode is LabExecutionMode.SIMULATED:
+            return EvidenceExecutionType.SIMULATED
+        return EvidenceExecutionType.HUMAN_LAB
 
     @property
     def execution_ref(self) -> str:
@@ -240,6 +274,133 @@ class LabHandover(Record):
         )
 
 
+class LabEvent(Record):
+    """One thing an authorized person at a bench reported.
+
+    The shape is the frozen `schemas/premium/lab_event.schema.json`. Every
+    event is person-reported and the field is a `Literal[True]` rather than a
+    boolean default, so a caller cannot construct a system-reported event even
+    if a future route tried to. The database enforces the same constant.
+
+    `protocol_version` is the execution-contract version the person was working
+    under, and it is checked against the handover before the event is written:
+    a report about version one cannot land on the handover for version two.
+    """
+
+    event_id: str = Field(default_factory=new_id)
+    project_id: str
+    handover_id: str = Field(min_length=1, max_length=64)
+    actor_user_id: str = Field(min_length=1, max_length=32)
+    protocol_version: int = Field(ge=1)
+    event_type: LabEventType
+    reported_at: datetime = Field(default_factory=utcnow)
+    person_reported: Literal[True] = True
+    sample_id: str | None = Field(default=None, max_length=128)
+    sop_ref: str | None = Field(default=None, max_length=256)
+    lead_confirmation_ref: str | None = Field(default=None, max_length=256)
+    raw_output_ref: str | None = Field(default=None, max_length=1024)
+    raw_output_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    deviation_note: str | None = Field(default=None, max_length=4000)
+
+
+class LabPackageBinding(Record):
+    """What one prepared package is bound to, written once when it is used.
+
+    The terms are copied from the preparation's own manifest rather than
+    re-read from the contract at delivery time: the contract may be revised
+    while the bench works, and a package whose sample list could change under
+    a result is a package that cannot be traced to what was actually done.
+
+    `required_raw_files` is the manifest's `required_outputs` verbatim. RAVEL
+    does not decide which of a contract's required deliverables count as "raw";
+    the contract's required list is the set a delivery must answer, and this
+    binding copies it rather than classifying it.
+    """
+
+    binding_id: str = Field(default_factory=new_id)
+    project_id: str
+    node_id: str
+    preparation_id: str = Field(min_length=1)
+    execution_contract_ref: str = Field(min_length=1)
+    execution_contract_version: int = Field(ge=1)
+    protocol_version: int = Field(ge=1)
+    sample_ids: tuple[str, ...] = ()
+    required_raw_files: tuple[str, ...] = ()
+    device_identity: str = ""
+    sop_refs: tuple[str, ...] = ()
+    bound_at: datetime = Field(default_factory=utcnow)
+
+
+class LabLeadConfirmation(Record):
+    """A lab lead's confirmation that SOP, site and device suit this package.
+
+    This is the only thing that can make `LabPackageBinding` ready for real
+    execution. It is a human record with an author and a statement; RAVEL can
+    check that it exists and that its references agree with the package, and
+    cannot check that the laboratory is what the statement says it is. That
+    last judgement belongs to the real acceptance task, not to software.
+    """
+
+    confirmation_id: str = Field(default_factory=new_id)
+    project_id: str
+    node_id: str
+    preparation_id: str = Field(min_length=1)
+    execution_contract_ref: str = Field(min_length=1)
+    execution_contract_version: int = Field(ge=1)
+    protocol_version: int = Field(ge=1)
+    sop_ref: str = Field(min_length=1, max_length=256)
+    site_ref: str = Field(min_length=1, max_length=256)
+    device_identity: str = Field(min_length=1, max_length=256)
+    statement: str = Field(min_length=1, max_length=4000)
+    confirmed_by: str = Field(min_length=1)
+    confirmed_at: datetime = Field(default_factory=utcnow)
+
+    def covers(self, binding: LabPackageBinding) -> bool:
+        """Whether this confirmation is about the package as it was built.
+
+        Four things have to agree: the protocol version, the device, one of
+        the SOP references the contract named, and a non-empty site. A lead
+        who confirmed a different instrument or a superseded protocol has not
+        confirmed this package.
+        """
+        return (
+            self.protocol_version == binding.protocol_version
+            and self.device_identity == binding.device_identity
+            and self.sop_ref in binding.sop_refs
+            and bool(self.site_ref.strip())
+        )
+
+
+class LabUploadReceipt(Record):
+    """One upload attempt, accepted or refused.
+
+    The artifact version records accepted bytes; this records every attempt,
+    including the ones the door refused. A late upload after a withdrawal and
+    a corrected upload that becomes version two both leave a receipt, which is
+    what makes "the bench kept sending after RAVEL stopped waiting" and "the
+    bench supplied a correction" different, traceable facts.
+    """
+
+    receipt_id: str = Field(default_factory=new_id)
+    project_id: str
+    node_id: str
+    handover_id: str
+    output: str = Field(min_length=1, max_length=200)
+    filename: str = ""
+    media_type: str = ""
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int = Field(ge=0)
+    uploaded_by: str = Field(min_length=1)
+    uploaded_at: datetime = Field(default_factory=utcnow)
+    outcome: LabUploadOutcome
+    detail: str = ""
+    artifact_id: str | None = None
+    artifact_version: int | None = None
+    protocol_version: int = Field(ge=1)
+
+
 def _unique(names: Iterable[str]) -> tuple[str, ...]:
     """`names`, each kept once, in the order first seen."""
     seen: dict[str, None] = {}
@@ -248,4 +409,12 @@ def _unique(names: Iterable[str]) -> tuple[str, ...]:
     return tuple(seen)
 
 
-__all__ = ["HANDOVER_STATES", "UPLOAD_PROVENANCE", "LabHandover"]
+__all__ = [
+    "HANDOVER_STATES",
+    "UPLOAD_PROVENANCE",
+    "LabEvent",
+    "LabHandover",
+    "LabLeadConfirmation",
+    "LabPackageBinding",
+    "LabUploadReceipt",
+]

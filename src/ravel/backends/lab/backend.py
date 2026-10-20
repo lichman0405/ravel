@@ -43,8 +43,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ravel.domain.artifacts import Artifact
-from ravel.domain.enums import JobState, NodeType
-from ravel.domain.lab import LabHandover
+from ravel.domain.enums import JobState, LabEventType, LabExecutionMode, NodeType
+from ravel.domain.lab import LabEvent, LabHandover, LabLeadConfirmation, LabPackageBinding
 from ravel.domain.preparation import PreparationOutcome, PreparationRecord
 from ravel.execution.backends import (
     DeviationReport,
@@ -57,7 +57,13 @@ from ravel.execution.backends import (
 from ravel.state.database import Database
 from ravel.state.mapping import from_row
 from ravel.state.repositories.base import NotFound
-from ravel.state.repositories.lab import LabHandoverRepository, arrived_outputs
+from ravel.state.repositories.lab import (
+    LabEventRepository,
+    LabHandoverRepository,
+    LabLeadConfirmationRepository,
+    LabPackageRepository,
+    arrived_outputs,
+)
 from ravel.state.repositories.preparations import PreparationRepository
 from ravel.state.repositories.records import DeviationRepository
 from ravel.state.tables import LabHandoverRow
@@ -101,6 +107,13 @@ class HumanLabBackend:
     #: than of a deployment's mood, and set here rather than passed in so that
     #: a laboratory backend cannot be pointed at a computation node.
     node_type: NodeType = NodeType.EXPERIMENT
+    #: Whether this deployment is authorized to open a handover at a real
+    #: bench. False by default, and that default is the product fact: the
+    #: automated T11 acceptance proves software handover only. Even here, a
+    #: handover becomes `REAL` only when a lab lead confirmation covers the
+    #: package's protocol, device and one of its SOP references; this flag can
+    #: withhold permission but cannot supply the confirmation.
+    live_lab: bool = False
 
     # ── The port ────────────────────────────────────────────────────────────
 
@@ -131,24 +144,50 @@ class HumanLabBackend:
                 "has to be materialized before it can run"
             )
         prepared = self._package(request)
-        handover = LabHandover(
-            project_id=request.project_id,
-            node_id=request.node_id,
-            attempt=request.attempt,
-            backend=self.name,
-            execution_contract_ref=request.execution_contract_ref,
-            execution_contract_version=request.execution_contract_version,
-            preparation_id=prepared.preparation_id,
-            workspace_path=request.workspace_path,
-            protocol=request.entrypoint,
-            required_outputs=request.required_outputs,
-            detail=(
-                f"handed to a bench as {prepared.materializer} "
-                f"v{prepared.materializer_version}"
-            ),
-        )
         with self.database.transaction() as session:
-            stored = LabHandoverRepository(session, request.project_id).hand_over(handover)
+            try:
+                binding = LabPackageRepository(
+                    session, request.project_id
+                ).ensure_bound(prepared)
+            except ValueError as unattributable:
+                raise LabConfigurationError(str(unattributable)) from unattributable
+            recorded = LabLeadConfirmationRepository(
+                session, request.project_id
+            ).for_package(prepared.preparation_id)
+            confirmation = (
+                recorded
+                if self.live_lab
+                and recorded is not None
+                and recorded.covers(binding)
+                else None
+            )
+            mode = (
+                LabExecutionMode.REAL
+                if confirmation is not None
+                else LabExecutionMode.SIMULATED
+            )
+            handover = LabHandover(
+                project_id=request.project_id,
+                node_id=request.node_id,
+                attempt=request.attempt,
+                backend=self.name,
+                execution_contract_ref=request.execution_contract_ref,
+                execution_contract_version=request.execution_contract_version,
+                preparation_id=prepared.preparation_id,
+                workspace_path=request.workspace_path,
+                protocol=request.entrypoint,
+                required_outputs=request.required_outputs,
+                execution_mode=mode,
+                lead_confirmation_ref=(
+                    confirmation.confirmation_id if confirmation is not None else ""
+                ),
+                detail=self._handover_note(
+                    prepared, binding, mode, recorded, confirmation
+                ),
+            )
+            stored = LabHandoverRepository(session, request.project_id).hand_over(
+                handover
+            )
         return JobHandle(
             backend_job_ref=self.reference_for(stored),
             state=stored.state,
@@ -213,6 +252,7 @@ class HumanLabBackend:
                 state=handover.state,
                 backend_state=BACKEND_WORD,
                 detail=handover.detail,
+                progress=self._progress(handover),
             )
 
         reported = self._reported_deviation(handover, delivery)
@@ -226,12 +266,13 @@ class HumanLabBackend:
                 backend_state=BACKEND_WORD,
                 detail=delivery.summary or "the bench reported something",
                 deviation=reported,
+                progress=self._progress(handover),
             )
 
         arrived = self._arrived(handover)
         owed = handover.owed(name for name, _artifact in arrived)
         if owed:
-            return self._still_owed(handover, owed, delivery)
+            return self._still_owed(handover, arrived, owed, delivery)
 
         with self.database.transaction() as session:
             closed = LabHandoverRepository(session, handover.project_id).close(
@@ -265,6 +306,7 @@ class HumanLabBackend:
         handover = self._handover(backend_job_ref)
         arrived = self._arrived(handover)
         names = tuple(name for name, _artifact in arrived)
+        events = self._events(handover)
         return JobOutputs(
             artifacts=tuple(artifact.artifact_id for _name, artifact in arrived),
             logs=(),
@@ -274,11 +316,34 @@ class HumanLabBackend:
                 "handover_id": handover.handover_id,
                 "preparation_id": handover.preparation_id,
                 "protocol": handover.protocol,
+                "execution_mode": handover.execution_mode.value,
+                "evidence_execution_type": handover.evidence_execution_type.value,
+                "lead_confirmation_ref": handover.lead_confirmation_ref,
                 "required_outputs": list(handover.required_outputs),
                 "missing_outputs": list(handover.owed(names)),
                 "uploaded": {
                     name: artifact.created_by for name, artifact in arrived
                 },
+                # What the raw-data chain is made of: each accepted file's
+                # artifact and the digest the person-reported upload event
+                # recorded for it. Empty when the bytes predate the event
+                # table, which is a gap a reader can see rather than one this
+                # code fills in with a guess.
+                "raw_outputs": {
+                    name: {
+                        "artifact_id": artifact.artifact_id,
+                        "sha256": self._uploaded_digest(events, artifact.artifact_id),
+                    }
+                    for name, artifact in arrived
+                },
+                "person_reported_events": [
+                    event.model_dump(mode="json") for event in events
+                ],
+                # An upload is a file, not a scientific verdict. The verdict
+                # is Review's, against criteria frozen before the run, and
+                # this field staying null is how the execution record says so.
+                "scientific_verdict": None,
+                "instrument_state": None,
             },
         )
 
@@ -309,8 +374,10 @@ class HumanLabBackend:
                 JobState.CANCELLED,
                 detail=(
                     "RAVEL withdrew this handover and will not accept a delivery "
-                    "against it; whether the bench stopped is not something RAVEL "
-                    "can see"
+                    "against it. This revokes handover and receiving eligibility "
+                    "only: it is awaiting manual stop confirmation from the bench, "
+                    "because whether the bench stopped is not something RAVEL can "
+                    "see and RAVEL does not claim the instrument stopped"
                 ),
             )
         return True
@@ -419,13 +486,46 @@ class HumanLabBackend:
             return arrived_outputs(session, handover)
 
     def _progress(self, handover: LabHandover) -> dict[str, object]:
-        """Which outputs are in and which are owed, for a reader of the job row."""
+        """Which outputs are in, which are owed, and what people reported.
+
+        The waiting line is the honest one: RAVEL reports the handover as
+        waiting and reports no instrument state, because it does not observe
+        the bench. `awaiting_manual_stop_confirmation` is true only for a
+        withdrawn handover with no person-reported stop, which is exactly the
+        case where the interface must not say the instrument stopped.
+        """
         arrived = tuple(name for name, _artifact in self._arrived(handover))
+        events = self._events(handover)
+        stopped = any(
+            event.event_type is LabEventType.STOP_CONFIRMED for event in events
+        )
         return {
             "delivered_outputs": list(arrived),
             "missing_outputs": list(handover.owed(arrived)),
             "required_outputs": list(handover.required_outputs),
+            "execution_mode": handover.execution_mode.value,
+            "evidence_execution_type": handover.evidence_execution_type.value,
+            "lead_confirmation_ref": handover.lead_confirmation_ref,
+            "awaiting_human_report": handover.is_waiting,
+            "awaiting_manual_stop_confirmation": (
+                handover.state is JobState.CANCELLED and not stopped
+            ),
+            "person_reported_events": [
+                event.model_dump(mode="json") for event in events
+            ],
+            # RAVEL has no instrument feed. Null is the observation, not a
+            # missing value: a number or a RUNNING state here would be system
+            # inference presented as instrument state.
+            "instrument_state": None,
+            "scientific_verdict": None,
         }
+
+    def _events(self, handover: LabHandover) -> list[LabEvent]:
+        """Every person-reported event recorded against this handover."""
+        with self.database.read_only() as session:
+            return LabEventRepository(
+                session, handover.project_id
+            ).for_handover(handover.handover_id)
 
     def _reported_deviation(
         self, handover: LabHandover, delivery: ExternalDelivery
@@ -475,6 +575,7 @@ class HumanLabBackend:
     def _still_owed(
         self,
         handover: LabHandover,
+        arrived: tuple[tuple[str, Artifact], ...],
         owed: tuple[str, ...],
         delivery: ExternalDelivery,
     ) -> JobStatus:
@@ -504,6 +605,64 @@ class HumanLabBackend:
             detail=noted.detail,
             progress=self._progress(noted),
         )
+
+    def _handover_note(
+        self,
+        prepared: PreparationRecord,
+        binding: LabPackageBinding,
+        mode: LabExecutionMode,
+        recorded: LabLeadConfirmation | None,
+        confirmation: LabLeadConfirmation | None,
+    ) -> str:
+        """Say how the handover was opened, and what that does not prove.
+
+        A simulated handover says so in its own record. The two reasons it can
+        be simulated are different facts — this deployment is not authorized
+        for a live bench, or no lead confirmation covers the package — and a
+        reader needs the one that applies rather than a generic "mock".
+        """
+        base = (
+            f"handed to a bench as {prepared.materializer} "
+            f"v{prepared.materializer_version}; package bound to protocol "
+            f"version {binding.protocol_version}, samples "
+            f"{list(binding.sample_ids)}, device "
+            f"{binding.device_identity or 'not named'}"
+        )
+        if mode is LabExecutionMode.REAL and confirmation is not None:
+            return (
+                f"{base}; REAL execution under lab lead confirmation "
+                f"{confirmation.confirmation_id}"
+            )
+        if not self.live_lab:
+            reason = (
+                "real-bench execution is not enabled for this deployment, so "
+                "this handover proves software handover only"
+            )
+        elif recorded is None:
+            reason = (
+                "no lab lead confirmation records that the SOP, site and device "
+                "suit this package, so it is not ready for real execution"
+            )
+        elif confirmation is None:
+            reason = (
+                "the recorded lab lead confirmation does not cover this "
+                "package's protocol version, device or SOP reference, so it is "
+                "not ready for real execution"
+            )
+        else:  # pragma: no cover - REAL was decided above when one covers
+            reason = "real execution was not authorized"
+        return f"{base}; SIMULATED: {reason}"
+
+    def _uploaded_digest(self, events: list[LabEvent], artifact_id: str) -> str:
+        """The digest the person-reported upload event recorded for an artifact."""
+        for event in reversed(events):
+            if (
+                event.event_type is LabEventType.OUTPUT_UPLOADED
+                and event.raw_output_ref == artifact_id
+                and event.raw_output_sha256
+            ):
+                return event.raw_output_sha256
+        return ""
 
     def _completed_note(
         self,
