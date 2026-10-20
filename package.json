@@ -1,0 +1,18 @@
+{
+  "name": "ravel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RAVEL workspace manifests for the thin desktop client.",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22.12.0 <23",
+    "pnpm": ">=9.15.9 <10"
+  },
+  "scripts": {
+    "desktop:build": "pnpm --dir apps/desktop build",
+    "desktop:typecheck": "pnpm --dir apps/desktop typecheck",
+    "desktop:test:unit": "pnpm --dir apps/desktop test:unit",
+    "desktop:test:e2e": "pnpm --dir apps/desktop test:e2e",
+    "desktop:package:win": "pnpm --dir apps/desktop package:win"
+  }
+}

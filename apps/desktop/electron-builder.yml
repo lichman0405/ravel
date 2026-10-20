@@ -1,0 +1,28 @@
+# Internal Windows build for the RAVEL desktop shell.
+#
+# The app bundles every runtime dependency (see scripts/build.mjs), so only
+# dist/ and the manifest are packaged. The V0 artifact is deliberately
+# unsigned and portable: it runs from an operator-chosen folder without an
+# installer or a machine-wide change. Code signing is a release decision that
+# needs a certificate this repository does not hold.
+appId: ai.ravel.desktop
+productName: RAVEL Desktop
+copyright: RAVEL
+directories:
+  output: release
+asar: true
+compression: maximum
+files:
+  - dist/**/*
+  - package.json
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  # Packaging must not try to rewrite the Electron executable's resources with
+  # an unavailable signing tool; the artifact stays unsigned and labelled so.
+  signAndEditExecutable: false
+portable:
+  artifactName: RAVEL-Desktop-${version}-win-x64-portable.${ext}
+  requestExecutionLevel: user
