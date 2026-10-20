@@ -204,18 +204,18 @@
       "note": "未派发，未执行。"
     },
     "T12": {
-      "status": "TODO",
-      "owner": null,
-      "worktree": null,
-      "base_sha": null,
-      "head_sha": null,
+      "status": "RUNNING",
+      "owner": "SUPERVISOR",
+      "worktree": "C:/Users/lishi/code/ravel-worktrees/T12",
+      "base_sha": "96f15c0",
+      "head_sha": "96f15c0",
       "source_digest": null,
       "review_ref": null,
       "gate_refs": [],
       "integration_merge_sha": null,
       "blocker_refs": [],
-      "last_updated": null,
-      "note": "未派发，未执行。"
+      "last_updated": "2026-10-20 Asia/Shanghai",
+      "note": "T12 �ѷ�����base 96f15c0���߽磺reports/**��report tools��Evidence projection/schema ���������룻�ȴ�ʵ��������Review��"
     },
     "T13": {
       "status": "TODO",
