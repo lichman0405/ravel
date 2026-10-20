@@ -63,9 +63,12 @@ def test_a_cursor_older_than_the_window_gets_a_snapshot_and_a_code_never_silence
         assert frame["head_seq"] == 7
         assert frame["anchor_seq"] == snapshot_body["anchor_seq"]
         fresh = frame["snapshot"]
+        # The two snapshots are one projection, so they agree on every key and
+        # every value — including `role`, which a resync frame carries because
+        # it is the same thing an HTTP snapshot refresh would return.
+        assert set(fresh) == set(snapshot_body)
+        assert fresh == snapshot_body
         assert fresh["anchor_seq"] == 7
-        assert fresh["project"] == snapshot_body["project"]
-        assert fresh["counts"] == snapshot_body["counts"]
         assert fresh["counts"]["events"] == 7
         assert fresh["counts"]["nodes"] == 0
 

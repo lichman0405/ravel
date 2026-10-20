@@ -97,14 +97,14 @@ export class V1Client {
       Accept: "application/json",
     };
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    const init: RequestInit = { method, headers };
+    if (options.signal !== undefined) init.signal = options.signal;
+    if (options.body !== undefined) {
+      init.body = JSON.stringify(options.body);
+    }
     const response = await this.fetcher(
       `${this.options.baseUrl.replace(/\/$/, "")}${path}${queryString(options.query)}`,
-      {
-        method,
-        headers,
-        signal: options.signal,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      },
+      init,
     );
     if (!response.ok) throw await ApiError.fromResponse(response);
     if (response.status === 204) return undefined as T;
@@ -117,8 +117,8 @@ export class V1Client {
     options: Login_v1_auth_login_postOptions,
   ): Promise<TokenPair> {
     return this.call<TokenPair>("POST", "/v1/auth/login", {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -126,8 +126,8 @@ export class V1Client {
     options: Logout_v1_auth_logout_postOptions,
   ): Promise<Record<string, string>> {
     return this.call<Record<string, string>>("POST", "/v1/auth/logout", {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -135,8 +135,8 @@ export class V1Client {
     options: Refresh_v1_auth_refresh_postOptions,
   ): Promise<TokenPair> {
     return this.call<TokenPair>("POST", "/v1/auth/refresh", {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -144,8 +144,8 @@ export class V1Client {
     options: List_projects_v1_projects_getOptions = {},
   ): Promise<Page_ProjectSummary_> {
     return this.call<Page_ProjectSummary_>("GET", "/v1/projects", {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -153,8 +153,8 @@ export class V1Client {
     options: Create_project_v1_projects_postOptions,
   ): Promise<Record<string, string>> {
     return this.call<Record<string, string>>("POST", "/v1/projects", {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -162,8 +162,8 @@ export class V1Client {
     options: List_actions_v1_projects__project_id__actions_getOptions,
   ): Promise<Page_dict_str__Any__> {
     return this.call<Page_dict_str__Any__>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/actions`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -171,8 +171,8 @@ export class V1Client {
     options: Approve_v1_projects__project_id__actions__action_id__approve_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/actions/${encodeURIComponent(options.path.action_id)}/approve`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -180,8 +180,8 @@ export class V1Client {
     options: Reject_v1_projects__project_id__actions__action_id__reject_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/actions/${encodeURIComponent(options.path.action_id)}/reject`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -189,7 +189,7 @@ export class V1Client {
     options: Read_envelope_v1_projects__project_id__authority_envelope_getOptions,
   ): Promise<Record<string, unknown> | null> {
     return this.call<Record<string, unknown> | null>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/authority-envelope`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -197,8 +197,8 @@ export class V1Client {
     options: Write_envelope_v1_projects__project_id__authority_envelope_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/authority-envelope`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -206,8 +206,8 @@ export class V1Client {
     options: List_computations_v1_projects__project_id__computations_getOptions,
   ): Promise<Page_ExecutionRecord_> {
     return this.call<Page_ExecutionRecord_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/computations`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -215,7 +215,7 @@ export class V1Client {
     options: Read_computation_v1_projects__project_id__computations__execution_id__getOptions,
   ): Promise<ExecutionRecord> {
     return this.call<ExecutionRecord>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/computations/${encodeURIComponent(options.path.execution_id)}`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -223,8 +223,8 @@ export class V1Client {
     options: Read_conversation_v1_projects__project_id__conversation_getOptions,
   ): Promise<Page_MasterMessage_> {
     return this.call<Page_MasterMessage_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/conversation`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -232,8 +232,8 @@ export class V1Client {
     options: Say_v1_projects__project_id__conversation_postOptions,
   ): Promise<TurnView> {
     return this.call<TurnView>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/conversation`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -241,8 +241,8 @@ export class V1Client {
     options: Read_dag_v1_projects__project_id__dag_getOptions,
   ): Promise<Page_NodeView_> {
     return this.call<Page_NodeView_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/dag`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -250,8 +250,8 @@ export class V1Client {
     options: List_evidence_v1_projects__project_id__evidence_getOptions,
   ): Promise<Page_EvidenceView_> {
     return this.call<Page_EvidenceView_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/evidence`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -259,7 +259,7 @@ export class V1Client {
     options: Read_evidence_v1_projects__project_id__evidence__evidence_id__getOptions,
   ): Promise<EvidenceView> {
     return this.call<EvidenceView>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/evidence/${encodeURIComponent(options.path.evidence_id)}`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -267,8 +267,8 @@ export class V1Client {
     options: List_tasks_v1_projects__project_id__lab_tasks_getOptions,
   ): Promise<Page_dict_str__Any__> {
     return this.call<Page_dict_str__Any__>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -276,7 +276,7 @@ export class V1Client {
     options: Read_task_v1_projects__project_id__lab_tasks__task_id__getOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks/${encodeURIComponent(options.path.task_id)}`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -284,8 +284,8 @@ export class V1Client {
     options: Report_deviation_v1_projects__project_id__lab_tasks__task_id__deviations_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks/${encodeURIComponent(options.path.task_id)}/deviations`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -293,7 +293,7 @@ export class V1Client {
     options: Read_document_v1_projects__project_id__lab_tasks__task_id__handover_documents__document__getOptions,
   ): Promise<void> {
     return this.call<void>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks/${encodeURIComponent(options.path.task_id)}/handover/documents/${encodeURIComponent(options.path.document)}`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -301,7 +301,7 @@ export class V1Client {
     options: Sign_off_v1_projects__project_id__lab_tasks__task_id__sign_off_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks/${encodeURIComponent(options.path.task_id)}/sign-off`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -309,8 +309,8 @@ export class V1Client {
     options: Upload_output_v1_projects__project_id__lab_tasks__task_id__uploads_postOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/lab/tasks/${encodeURIComponent(options.path.task_id)}/uploads`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -318,8 +318,8 @@ export class V1Client {
     options: List_mail_v1_projects__project_id__mail_getOptions,
   ): Promise<Page_MailView_> {
     return this.call<Page_MailView_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/mail`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -327,8 +327,8 @@ export class V1Client {
     options: Draft_v1_projects__project_id__mail_postOptions,
   ): Promise<MailView> {
     return this.call<MailView>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/mail`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -336,8 +336,8 @@ export class V1Client {
     options: Pause_v1_projects__project_id__pause_postOptions,
   ): Promise<Record<string, string>> {
     return this.call<Record<string, string>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/pause`, {
-      body: options.body,
-      signal: options.signal,
+      ...(options.body !== undefined ? { body: options.body } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -345,7 +345,7 @@ export class V1Client {
     options: Resume_v1_projects__project_id__resume_postOptions,
   ): Promise<Record<string, string>> {
     return this.call<Record<string, string>>("POST", `/v1/projects/${encodeURIComponent(options.path.project_id)}/resume`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -353,7 +353,7 @@ export class V1Client {
     options: Snapshot_v1_projects__project_id__snapshot_getOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/snapshot`, {
-      signal: options.signal,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -361,8 +361,8 @@ export class V1Client {
     options: List_sources_v1_projects__project_id__sources_getOptions,
   ): Promise<Page_EvidenceSource_> {
     return this.call<Page_EvidenceSource_>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/sources`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 
@@ -370,8 +370,8 @@ export class V1Client {
     options: Read_source_v1_projects__project_id__sources__source_id__getOptions,
   ): Promise<Record<string, unknown>> {
     return this.call<Record<string, unknown>>("GET", `/v1/projects/${encodeURIComponent(options.path.project_id)}/sources/${encodeURIComponent(options.path.source_id)}`, {
-      query: options.query,
-      signal: options.signal,
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
   }
 }

@@ -37,7 +37,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from ravel.gateway.auth.policy import normalize_origin
-from ravel.gateway.deps import Caller, GatewayState, authenticate, standing_in
+from ravel.gateway.deps import (
+    GatewayState,
+    Principal,
+    authenticate,
+    standing_in,
+)
 from ravel.gateway.routes.events import (
     CLOSE_BAD_REQUEST,
     CLOSE_FORBIDDEN,
@@ -85,11 +90,10 @@ def _origin_allowed(websocket: WebSocket, state: GatewayState) -> bool:
     return normalized is not None and normalized in state.allowed_origins
 
 
-def _standing(state: GatewayState, token: str | None, project_id: str) -> Caller:
+def _standing(state: GatewayState, token: str | None, project_id: str) -> Principal:
     """The two checks every request makes, in one place for the watcher."""
     caller = authenticate(state, token)
-    standing_in(state, project_id, caller)
-    return caller
+    return standing_in(state, project_id, caller)
 
 
 async def _watch_authority(
@@ -149,7 +153,7 @@ async def stream(
 
     token = _bearer(websocket.headers.get("authorization"))
     try:
-        await asyncio.to_thread(_standing, state, token, project_id)
+        standing = await asyncio.to_thread(_standing, state, token, project_id)
     except HTTPException as refused:
         await websocket.accept()
         await websocket.close(
@@ -167,7 +171,7 @@ async def stream(
         snapshot=(
             None
             if retention is None
-            else _snapshot_provider(state, project_id)
+            else _snapshot_provider(state, standing)
         ),
     )
     frames = feed.frames()
@@ -192,15 +196,15 @@ async def stream(
         await frames.aclose()
 
 
-def _snapshot_provider(state: GatewayState, project_id: str) -> Snapshot:
+def _snapshot_provider(state: GatewayState, standing: Principal) -> Snapshot:
     """A zero-argument callable producing the same snapshot the HTTP route does.
 
     It is built here rather than passed as `snapshot_for_project` directly so
-    the project identifier is fixed by the authenticated route, not by a frame.
+    the authenticated standing is fixed by the route, not by a frame.
     """
 
     def provide() -> dict[str, Any]:
-        return snapshot_for_project(state, project_id)
+        return snapshot_for_project(state, standing)
 
     return provide
 

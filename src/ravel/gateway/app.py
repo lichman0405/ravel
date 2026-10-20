@@ -24,8 +24,9 @@ arguments at all.
 
 from __future__ import annotations
 
+import os
 import re
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
@@ -75,6 +76,42 @@ GATEWAY_PULSE_SECONDS = 60.0
 #: no newlines, and a bounded length, so a log line cannot be forged with it.
 REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
+#: The deployment's name for the versioned stream's replay window. It is read
+#: here rather than held in `Settings` because the Gateway's two production
+#: launchers both invoke `create_app` as a no-argument uvicorn factory, and a
+#: factory call cannot carry keyword arguments. `None`, or no variable at all,
+#: keeps V0's unbounded replay and never resynchronizes.
+EVENT_RETENTION_ENV = "RAVEL_EVENT_RETENTION"
+
+
+def event_retention_from_environment(
+    environ: Mapping[str, str] | None = None,
+) -> int | None:
+    """The declared replay window, or `None` for unbounded.
+
+    Raises:
+        ValueError: The variable is set but is not a positive integer. A
+            deployment that mistypes its window fails to start rather than
+            silently running unbounded, which would make `RESYNC_REQUIRED`
+            unreachable at exactly the deployment that meant to declare a
+            window.
+    """
+    source = os.environ if environ is None else environ
+    raw = source.get(EVENT_RETENTION_ENV)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(
+            f"{EVENT_RETENTION_ENV} must be a positive integer, not {raw!r}"
+        ) from None
+    if value < 1:
+        raise ValueError(
+            f"{EVENT_RETENTION_ENV} must hold at least one sequence, not {value}"
+        )
+    return value
+
 
 def create_app(
     *,
@@ -120,10 +157,11 @@ def create_app(
             of a database rather than a deployment.
         event_retention: How many of the most recent event sequences the
             versioned stream promises to replay. `None` — the default, and what
-            V0 actually retains — replays everything and never resynchronizes.
-            A deployment may declare a smaller window; a cursor older than it
-            is answered with a fresh snapshot and `RESYNC_REQUIRED` rather than
-            with silence. The legacy socket is unaffected in either case.
+            V0 actually retains — reads `RAVEL_EVENT_RETENTION` and otherwise
+            replays everything and never resynchronizes. A deployment may
+            declare a smaller window; a cursor older than it is answered with a
+            fresh snapshot and `RESYNC_REQUIRED` rather than with silence. The
+            legacy socket is unaffected in either case.
 
     Raises:
         ValueError: The settings are not fit for the environment they name —
@@ -135,6 +173,8 @@ def create_app(
             rather than running.
     """
     resolved = settings or get_settings()
+    if event_retention is None:
+        event_retention = event_retention_from_environment()
     if event_retention is not None and event_retention < 1:
         raise ValueError("event_retention must hold at least one sequence, or be None")
     # Before the database: a Gateway that cannot be safely reached should not

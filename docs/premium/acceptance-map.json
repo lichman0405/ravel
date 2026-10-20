@@ -1230,6 +1230,8 @@
         "tests/premium/T13/test_contract.py::test_the_generated_client_reproduces_itself_byte_for_byte",
         "tests/premium/T13/test_contract.py::test_the_legacy_tui_surface_answers_as_before",
         "tests/premium/T13/test_dag_probe.py::test_probing_every_v1_write_leaves_the_scientific_dag_unchanged",
+        "tests/premium/T13/test_deployment_retention.py::test_the_application_takes_its_replay_window_from_the_environment",
+        "tests/premium/T13/test_deployment_retention.py::test_the_entrypoint_refuses_a_malformed_window_before_serving",
         "tests/premium/T13/test_isolation.py::test_a_token_for_one_project_cannot_read_another_projects_snapshot",
         "tests/premium/T13/test_isolation.py::test_an_expired_token_cannot_read_a_snapshot_or_open_a_replay",
         "tests/premium/T13/test_isolation.py::test_a_non_member_cannot_replay_a_projects_stream",
@@ -1279,6 +1281,12 @@
           "allow_skips": false,
           "needs_database": false,
           "external": false
+        },
+        {
+          "command": "npm install --prefix packages/api-client --no-package-lock --no-audit --no-fund && npm run typecheck --prefix packages/api-client",
+          "allow_skips": false,
+          "needs_database": false,
+          "external": true
         }
       ],
       "fill_rule": "T03 frozen plan: each AC has a unique id, a type, and expected evidence; internal tests must be concrete nodeids before a task can PASS.",

@@ -123,18 +123,20 @@ def paginate[T](
     )
 
 
-#: How many events the snapshot's event count reports reading. The snapshot
-#: does not include the events themselves — the stream is where they are read —
-#: so only the count is kept, and the count is of the same transaction.
-def _snapshot(session: Session, standing: Principal) -> dict[str, Any]:
-    audit = ProjectAudit.assemble(session, standing.project_id)
+#: One projection of a project, read inside the caller's transaction. Both the
+#: HTTP snapshot and the stream's resynchronization snapshot come from here, so
+#: the two cannot describe the same project with different fields. The role is
+#: part of the projection because it is part of what the caller is looking at:
+#: a resync frame and a snapshot refresh for the same caller must be equal.
+def _projection(session: Session, project_id: str, role: str) -> dict[str, Any]:
+    audit = ProjectAudit.assemble(session, project_id)
     anchor = audit.events[-1].seq if audit.events else 0
-    evidence = EvidenceRepository(session, standing.project_id).all()
-    actions = ActionRepository(session, standing.project_id).all()
+    evidence = EvidenceRepository(session, project_id).all()
+    actions = ActionRepository(session, project_id).all()
     return {
         "anchor_seq": int(anchor or 0),
         "project": audit.project.model_dump(mode="json"),
-        "role": standing.role.value,
+        "role": role,
         "success_contract": (
             audit.success_contract.model_dump(mode="json")
             if audit.success_contract is not None
@@ -170,52 +172,20 @@ def read_snapshot(standing: Principal, state: GatewayState) -> dict[str, Any]:
     """
     with state.database.read_only() as session:
         session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
-        return _snapshot(session, standing)
+        return _projection(session, standing.project_id, standing.role.value)
 
 
-def snapshot_for_project(state: GatewayState, project_id: str) -> dict[str, Any]:
-    """A snapshot addressed by project alone, for the stream's resync frame.
+def snapshot_for_project(state: GatewayState, standing: Principal) -> dict[str, Any]:
+    """The same snapshot, for the stream's resync frame.
 
-    The stream has already authenticated the caller against this project, so it
-    holds a `Principal`; this helper exists for the one case where the snapshot
-    is built from an identifier the socket already resolved. It reads the same
-    projection as `read_snapshot`, in the same isolation, and differs only in
-    not needing the role — a resync frame describes the project, not the
-    caller's authority in it.
+    The socket has already authenticated the caller, and the `Principal` is the
+    result of that check. Passing it whole rather than a project identifier and
+    a role means the snapshot is addressed exactly as the HTTP route addresses
+    it, and both paths call the one projection above.
     """
     with state.database.read_only() as session:
         session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
-        audit = ProjectAudit.assemble(session, project_id)
-        anchor = audit.events[-1].seq if audit.events else 0
-        evidence = EvidenceRepository(session, project_id).all()
-        actions = ActionRepository(session, project_id).all()
-        return {
-            "anchor_seq": int(anchor or 0),
-            "project": audit.project.model_dump(mode="json"),
-            "success_contract": (
-                audit.success_contract.model_dump(mode="json")
-                if audit.success_contract is not None
-                else None
-            ),
-            "roadmap": [phase.model_dump(mode="json") for phase in audit.roadmap],
-            "is_finished": audit.is_finished,
-            "is_concludable": audit.is_concludable,
-            "unfinished": [node.model_dump(mode="json") for node in audit.unfinished],
-            "open_deviations": [
-                deviation.model_dump(mode="json")
-                for deviation in audit.open_deviations
-            ],
-            "counts": {
-                "nodes": len(audit.nodes),
-                "decisions": len(audit.decisions),
-                "reviews": len(audit.reviews),
-                "executions": len(audit.executions),
-                "deviations": len(audit.deviations),
-                "evidence": len(evidence),
-                "actions": len(actions),
-                "events": len(audit.events),
-            },
-        }
+        return _projection(session, standing.project_id, standing.role.value)
 
 
 __all__ = [

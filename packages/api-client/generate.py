@@ -347,7 +347,14 @@ def render_client(document: dict[str, Any]) -> str:
         default = "" if required else " = {}"
         body_lines = []
         if query_parameters:
-            body_lines.append("      query: options.query,")
+            # Under `exactOptionalPropertyTypes`, an omitted optional argument
+            # and one explicitly set to `undefined` are different things. The
+            # caller omitted it, so the request must omit the property rather
+            # than pass `undefined` through a type that does not admit it.
+            body_lines.append(
+                "      ...(options.query !== undefined"
+                " ? { query: options.query } : {}),"
+            )
         if isinstance(
             operation.get("requestBody", {})
             .get("content", {})
@@ -355,8 +362,14 @@ def render_client(document: dict[str, Any]) -> str:
             .get("schema"),
             dict,
         ):
-            body_lines.append("      body: options.body,")
-        body_lines.append("      signal: options.signal,")
+            body_lines.append(
+                "      ...(options.body !== undefined"
+                " ? { body: options.body } : {}),"
+            )
+        body_lines.append(
+            "      ...(options.signal !== undefined"
+            " ? { signal: options.signal } : {}),"
+        )
         methods.append(
             "\n".join(
                 [
@@ -481,14 +494,14 @@ export class V1Client {{
       Accept: "application/json",
     }};
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    const init: RequestInit = {{ method, headers }};
+    if (options.signal !== undefined) init.signal = options.signal;
+    if (options.body !== undefined) {{
+      init.body = JSON.stringify(options.body);
+    }}
     const response = await this.fetcher(
       `${{this.options.baseUrl.replace(/\\/$/, "")}}${{path}}${{queryString(options.query)}}`,
-      {{
-        method,
-        headers,
-        signal: options.signal,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      }},
+      init,
     );
     if (!response.ok) throw await ApiError.fromResponse(response);
     if (response.status === 204) return undefined as T;
