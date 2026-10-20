@@ -1,0 +1,22 @@
+{
+  "description": "Every byte source the T10 parser tests read, labelled by what it is evidence of. The official output is a fixture committed by the RASPA authors; it verifies the parser and is never registered as a RAVEL computation. Synthetic outputs are generated in memory by tests/premium/T10/support.py:synthetic_output and are TEST_FIXTURE, used only for failure and convergence branches.",
+  "fixtures": [
+    {
+      "path": "official_output_100000.data",
+      "kind": "REFERENCE_FIXTURE",
+      "evidence_class": "SIMULATED",
+      "sha256": "aac482cb8e8e3275063362316d68c160e30803eef35391976d81df953bf84ffd",
+      "source": "https://github.com/iRASPA/RASPA2/blob/673ad2d52a9c11e5ee7db9e5e7339663bfabecf9/examples/Basic/7_Adsorption_of_Methane_in_MFI/Output/System_0/output_MFI_SI_2.2.2_300.000000_100000.data",
+      "license": "MIT",
+      "note": "Unmodified official output. It proves the parser reads RASPA 2.0 format; it does not prove RAVEL executed anything."
+    }
+  ],
+  "generated_test_fixtures": [
+    {
+      "path": "in memory: tests/premium/T10/support.py:synthetic_output",
+      "kind": "TEST_FIXTURE",
+      "evidence_class": "SIMULATED",
+      "note": "A minimal RASPA-shaped file written by the tests to exercise non-convergence, completion, state-point, unit, version and exit-code branches. Never compared to a scientific result."
+    }
+  ]
+}

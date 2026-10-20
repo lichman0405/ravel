@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ravel.local/schemas/premium/compute/raspa_scientific_contract.schema.json",
+  "title": "RAVEL RASPA GCMC scientific contract",
+  "description": "The frozen, canonical scientific terms a RASPA gas-adsorption package is written from. Canonical temperature is K and canonical pressure is Pa; the source pressure spelling is kept beside the converted value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "route_id",
+    "software",
+    "execution_contract",
+    "method",
+    "temperature",
+    "pressure",
+    "sampling",
+    "system",
+    "units"
+  ],
+  "properties": {
+    "route_id": {"const": "raspa/gcmc-gas-adsorption"},
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version_series"],
+      "properties": {
+        "name": {"const": "RASPA"},
+        "version_series": {"const": "2.0"}
+      }
+    },
+    "execution_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_ref", "contract_version"],
+      "properties": {
+        "contract_ref": {"type": "string", "minLength": 1},
+        "contract_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "method": {"const": "GCMC"},
+    "temperature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": {"type": "number", "exclusiveMinimum": 0},
+        "unit": {"const": "K"}
+      }
+    },
+    "pressure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "source_value", "source_unit"],
+      "properties": {
+        "value": {"type": "number", "exclusiveMinimum": 0},
+        "unit": {"const": "Pa"},
+        "source_value": {"type": "number", "exclusiveMinimum": 0},
+        "source_unit": {"enum": ["bar", "Pa"]}
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cycles",
+        "initialization_cycles",
+        "print_every",
+        "unit_cells",
+        "translation_probability",
+        "reinsertion_probability",
+        "swap_probability",
+        "seed"
+      ],
+      "properties": {
+        "cycles": {"type": "integer", "minimum": 1},
+        "initialization_cycles": {"type": "integer", "minimum": 0},
+        "print_every": {"type": "integer", "minimum": 1},
+        "unit_cells": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "translation_probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "reinsertion_probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "swap_probability": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "seed": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615}
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framework",
+        "molecule",
+        "molecule_definition",
+        "force_field",
+        "helium_void_fraction",
+        "cutoff_angstrom",
+        "remove_atom_number_code_from_label"
+      ],
+      "properties": {
+        "framework": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*\\.(cif|cssr|pdb|xyz|vasp|xsf)$"},
+        "molecule": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$"},
+        "molecule_definition": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$"},
+        "force_field": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$"},
+        "helium_void_fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "cutoff_angstrom": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "remove_atom_number_code_from_label": {"enum": ["yes", "no", null]}
+      }
+    },
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temperature",
+        "pressure",
+        "pressure_source",
+        "loading_primary",
+        "loading_secondary",
+        "seed",
+        "unit_cells",
+        "probability"
+      ],
+      "properties": {
+        "temperature": {"const": "K"},
+        "pressure": {"const": "Pa"},
+        "pressure_source": {"enum": ["bar", "Pa"]},
+        "loading_primary": {"const": "mol/kg framework"},
+        "loading_secondary": {"const": "molecules/unit cell"},
+        "seed": {"const": "dimensionless"},
+        "unit_cells": {"const": "count"},
+        "probability": {"const": "dimensionless"}
+      }
+    }
+  }
+}
