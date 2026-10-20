@@ -1,0 +1,210 @@
+{
+  "run_id": "run-20261020-145951",
+  "task_id": "T19",
+  "acceptance_map": {
+    "T19-AC1": {
+      "test_nodeids": [
+        "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
+        "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",
+        "tests/premium/T19/test_ac1_container.py::test_cross_project_files_and_handles_do_not_leak",
+        "tests/premium/T19/test_ac1_container.py::test_paths_that_escape_the_workspace_are_refused",
+        "tests/premium/T19/test_ac1_container.py::test_application_container_has_no_docker_socket_and_uses_the_supervisor",
+        "tests/premium/T19/test_ac1_container.py::test_only_the_supervisor_compose_service_mounts_the_socket",
+        "tests/premium/T19/test_ac2_quotas.py::test_cpu_quota_actually_throttles_four_busy_children",
+        "tests/premium/T19/test_ac2_quotas.py::test_memory_limit_kills_or_refuses_an_allocation_over_the_limit",
+        "tests/premium/T19/test_ac2_quotas.py::test_pid_limit_stops_forking_inside_the_container",
+        "tests/premium/T19/test_ac2_quotas.py::test_scratch_tmpfs_reaches_enospc_without_touching_the_workspace",
+        "tests/premium/T19/test_ac2_quotas.py::test_command_timeout_ends_the_run_and_leaves_no_process",
+        "tests/premium/T19/test_ac2_quotas.py::test_stop_cancels_a_blocked_command_and_reconnect_reuses_the_project_binding",
+        "tests/premium/T19/test_ac2_quotas.py::test_destroy_removes_container_and_volume_but_keeps_queryable_records",
+        "tests/premium/T19/test_ac2_quotas.py::test_a_request_wider_than_the_deployment_ceiling_is_refused",
+        "tests/premium/T19/test_ac2_quotas.py::test_authority_envelope_narrows_the_timeout_and_uses_it",
+        "tests/premium/T19/test_ac3_binding.py::test_command_sandbox_has_no_route_or_credential_for_database_or_cluster",
+        "tests/premium/T19/test_ac3_binding.py::test_secrets_are_redacted_from_argv_output_records_and_logs",
+        "tests/premium/T19/test_ac3_binding.py::test_reconnect_keeps_the_project_binding_and_refuses_a_wrong_epoch",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_runs_only_the_claimed_digest",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_refuses_every_mismatch_before_the_supervisor",
+        "tests/premium/T19/test_artifacts.py::test_sandbox_bytes_are_collected_hashed_and_registered_only_by_ravel",
+        "tests/premium/T19/test_artifacts.py::test_a_retrieval_whose_hash_does_not_match_its_bytes_is_refused",
+        "tests/premium/T19/test_browser.py::test_browser_sandbox_is_one_container_behind_one_proxy_on_an_internal_network",
+        "tests/premium/T19/test_browser.py::test_the_browser_has_no_direct_route_and_the_proxy_refuses_everything_else",
+        "tests/premium/T19/test_browser.py::test_egress_policy_refuses_metadata_and_private_networks_even_when_allowlisted",
+        "tests/premium/T19/test_browser.py::test_research_browser_renders_in_the_sandbox_and_registers_a_hash_checked_snapshot",
+        "tests/premium/T19/test_browser.py::test_browser_refuses_metadata_loopback_and_non_research_callers",
+        "tests/premium/T19/test_browser.py::test_the_research_navigator_refuses_without_a_bound_research_sandbox"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T19-AC2": {
+      "test_nodeids": [
+        "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
+        "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",
+        "tests/premium/T19/test_ac1_container.py::test_cross_project_files_and_handles_do_not_leak",
+        "tests/premium/T19/test_ac1_container.py::test_paths_that_escape_the_workspace_are_refused",
+        "tests/premium/T19/test_ac1_container.py::test_application_container_has_no_docker_socket_and_uses_the_supervisor",
+        "tests/premium/T19/test_ac1_container.py::test_only_the_supervisor_compose_service_mounts_the_socket",
+        "tests/premium/T19/test_ac2_quotas.py::test_cpu_quota_actually_throttles_four_busy_children",
+        "tests/premium/T19/test_ac2_quotas.py::test_memory_limit_kills_or_refuses_an_allocation_over_the_limit",
+        "tests/premium/T19/test_ac2_quotas.py::test_pid_limit_stops_forking_inside_the_container",
+        "tests/premium/T19/test_ac2_quotas.py::test_scratch_tmpfs_reaches_enospc_without_touching_the_workspace",
+        "tests/premium/T19/test_ac2_quotas.py::test_command_timeout_ends_the_run_and_leaves_no_process",
+        "tests/premium/T19/test_ac2_quotas.py::test_stop_cancels_a_blocked_command_and_reconnect_reuses_the_project_binding",
+        "tests/premium/T19/test_ac2_quotas.py::test_destroy_removes_container_and_volume_but_keeps_queryable_records",
+        "tests/premium/T19/test_ac2_quotas.py::test_a_request_wider_than_the_deployment_ceiling_is_refused",
+        "tests/premium/T19/test_ac2_quotas.py::test_authority_envelope_narrows_the_timeout_and_uses_it",
+        "tests/premium/T19/test_ac3_binding.py::test_command_sandbox_has_no_route_or_credential_for_database_or_cluster",
+        "tests/premium/T19/test_ac3_binding.py::test_secrets_are_redacted_from_argv_output_records_and_logs",
+        "tests/premium/T19/test_ac3_binding.py::test_reconnect_keeps_the_project_binding_and_refuses_a_wrong_epoch",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_runs_only_the_claimed_digest",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_refuses_every_mismatch_before_the_supervisor",
+        "tests/premium/T19/test_artifacts.py::test_sandbox_bytes_are_collected_hashed_and_registered_only_by_ravel",
+        "tests/premium/T19/test_artifacts.py::test_a_retrieval_whose_hash_does_not_match_its_bytes_is_refused",
+        "tests/premium/T19/test_browser.py::test_browser_sandbox_is_one_container_behind_one_proxy_on_an_internal_network",
+        "tests/premium/T19/test_browser.py::test_the_browser_has_no_direct_route_and_the_proxy_refuses_everything_else",
+        "tests/premium/T19/test_browser.py::test_egress_policy_refuses_metadata_and_private_networks_even_when_allowlisted",
+        "tests/premium/T19/test_browser.py::test_research_browser_renders_in_the_sandbox_and_registers_a_hash_checked_snapshot",
+        "tests/premium/T19/test_browser.py::test_browser_refuses_metadata_loopback_and_non_research_callers",
+        "tests/premium/T19/test_browser.py::test_the_research_navigator_refuses_without_a_bound_research_sandbox"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T19-AC3": {
+      "test_nodeids": [
+        "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
+        "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",
+        "tests/premium/T19/test_ac1_container.py::test_cross_project_files_and_handles_do_not_leak",
+        "tests/premium/T19/test_ac1_container.py::test_paths_that_escape_the_workspace_are_refused",
+        "tests/premium/T19/test_ac1_container.py::test_application_container_has_no_docker_socket_and_uses_the_supervisor",
+        "tests/premium/T19/test_ac1_container.py::test_only_the_supervisor_compose_service_mounts_the_socket",
+        "tests/premium/T19/test_ac2_quotas.py::test_cpu_quota_actually_throttles_four_busy_children",
+        "tests/premium/T19/test_ac2_quotas.py::test_memory_limit_kills_or_refuses_an_allocation_over_the_limit",
+        "tests/premium/T19/test_ac2_quotas.py::test_pid_limit_stops_forking_inside_the_container",
+        "tests/premium/T19/test_ac2_quotas.py::test_scratch_tmpfs_reaches_enospc_without_touching_the_workspace",
+        "tests/premium/T19/test_ac2_quotas.py::test_command_timeout_ends_the_run_and_leaves_no_process",
+        "tests/premium/T19/test_ac2_quotas.py::test_stop_cancels_a_blocked_command_and_reconnect_reuses_the_project_binding",
+        "tests/premium/T19/test_ac2_quotas.py::test_destroy_removes_container_and_volume_but_keeps_queryable_records",
+        "tests/premium/T19/test_ac2_quotas.py::test_a_request_wider_than_the_deployment_ceiling_is_refused",
+        "tests/premium/T19/test_ac2_quotas.py::test_authority_envelope_narrows_the_timeout_and_uses_it",
+        "tests/premium/T19/test_ac3_binding.py::test_command_sandbox_has_no_route_or_credential_for_database_or_cluster",
+        "tests/premium/T19/test_ac3_binding.py::test_secrets_are_redacted_from_argv_output_records_and_logs",
+        "tests/premium/T19/test_ac3_binding.py::test_reconnect_keeps_the_project_binding_and_refuses_a_wrong_epoch",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_runs_only_the_claimed_digest",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_refuses_every_mismatch_before_the_supervisor",
+        "tests/premium/T19/test_artifacts.py::test_sandbox_bytes_are_collected_hashed_and_registered_only_by_ravel",
+        "tests/premium/T19/test_artifacts.py::test_a_retrieval_whose_hash_does_not_match_its_bytes_is_refused",
+        "tests/premium/T19/test_browser.py::test_browser_sandbox_is_one_container_behind_one_proxy_on_an_internal_network",
+        "tests/premium/T19/test_browser.py::test_the_browser_has_no_direct_route_and_the_proxy_refuses_everything_else",
+        "tests/premium/T19/test_browser.py::test_egress_policy_refuses_metadata_and_private_networks_even_when_allowlisted",
+        "tests/premium/T19/test_browser.py::test_research_browser_renders_in_the_sandbox_and_registers_a_hash_checked_snapshot",
+        "tests/premium/T19/test_browser.py::test_browser_refuses_metadata_loopback_and_non_research_callers",
+        "tests/premium/T19/test_browser.py::test_the_research_navigator_refuses_without_a_bound_research_sandbox"
+      ],
+      "manual_evidence_refs": []
+    },
+    "T19-AC4": {
+      "test_nodeids": [
+        "tests/premium/T19/test_ac1_container.py::test_command_container_is_actually_isolated",
+        "tests/premium/T19/test_ac1_container.py::test_command_container_cannot_reach_host_secrets_or_any_network",
+        "tests/premium/T19/test_ac1_container.py::test_cross_project_files_and_handles_do_not_leak",
+        "tests/premium/T19/test_ac1_container.py::test_paths_that_escape_the_workspace_are_refused",
+        "tests/premium/T19/test_ac1_container.py::test_application_container_has_no_docker_socket_and_uses_the_supervisor",
+        "tests/premium/T19/test_ac1_container.py::test_only_the_supervisor_compose_service_mounts_the_socket",
+        "tests/premium/T19/test_ac2_quotas.py::test_cpu_quota_actually_throttles_four_busy_children",
+        "tests/premium/T19/test_ac2_quotas.py::test_memory_limit_kills_or_refuses_an_allocation_over_the_limit",
+        "tests/premium/T19/test_ac2_quotas.py::test_pid_limit_stops_forking_inside_the_container",
+        "tests/premium/T19/test_ac2_quotas.py::test_scratch_tmpfs_reaches_enospc_without_touching_the_workspace",
+        "tests/premium/T19/test_ac2_quotas.py::test_command_timeout_ends_the_run_and_leaves_no_process",
+        "tests/premium/T19/test_ac2_quotas.py::test_stop_cancels_a_blocked_command_and_reconnect_reuses_the_project_binding",
+        "tests/premium/T19/test_ac2_quotas.py::test_destroy_removes_container_and_volume_but_keeps_queryable_records",
+        "tests/premium/T19/test_ac2_quotas.py::test_a_request_wider_than_the_deployment_ceiling_is_refused",
+        "tests/premium/T19/test_ac2_quotas.py::test_authority_envelope_narrows_the_timeout_and_uses_it",
+        "tests/premium/T19/test_ac3_binding.py::test_command_sandbox_has_no_route_or_credential_for_database_or_cluster",
+        "tests/premium/T19/test_ac3_binding.py::test_secrets_are_redacted_from_argv_output_records_and_logs",
+        "tests/premium/T19/test_ac3_binding.py::test_reconnect_keeps_the_project_binding_and_refuses_a_wrong_epoch",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_runs_only_the_claimed_digest",
+        "tests/premium/T19/test_ac3_binding.py::test_database_action_guard_refuses_every_mismatch_before_the_supervisor",
+        "tests/premium/T19/test_artifacts.py::test_sandbox_bytes_are_collected_hashed_and_registered_only_by_ravel",
+        "tests/premium/T19/test_artifacts.py::test_a_retrieval_whose_hash_does_not_match_its_bytes_is_refused",
+        "tests/premium/T19/test_browser.py::test_browser_sandbox_is_one_container_behind_one_proxy_on_an_internal_network",
+        "tests/premium/T19/test_browser.py::test_the_browser_has_no_direct_route_and_the_proxy_refuses_everything_else",
+        "tests/premium/T19/test_browser.py::test_egress_policy_refuses_metadata_and_private_networks_even_when_allowlisted",
+        "tests/premium/T19/test_browser.py::test_research_browser_renders_in_the_sandbox_and_registers_a_hash_checked_snapshot",
+        "tests/premium/T19/test_browser.py::test_browser_refuses_metadata_loopback_and_non_research_callers",
+        "tests/premium/T19/test_browser.py::test_the_research_navigator_refuses_without_a_bound_research_sandbox"
+      ],
+      "manual_evidence_refs": []
+    }
+  },
+  "started_at": "2026-10-20 14:59:18 +0800",
+  "completed_at": "2026-10-20 15:02:11 +0800",
+  "source_commit": "48478996245bdcaeba6339ae67c7c6428707fdc4",
+  "source_digest": "017a9ae23f5303a97645f878434dc6b71a3a7d9c87910af6cc19206794a18a13",
+  "platform": "linux",
+  "dependencies": {
+    "python": "3.12.3",
+    "docker": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+    "compose": "Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1",
+    "git": "git version 2.43.0"
+  },
+  "commands": [
+    {
+      "command": ".venv/bin/python -m alembic upgrade head",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": ".venv/bin/python -m pytest tests/premium/T19 -q -rxXs --junitxml=/workspace/ravel-worktrees/candidate-T19/docs/premium/evidence/T19/run-20261020-145951/cmd-02-junit.xml",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0,
+      "empty_selection": false,
+      "skipped": 0,
+      "failure_reason": null
+    }
+  ],
+  "cwd": "/workspace/ravel-worktrees/candidate-T19",
+  "exit_code": 0,
+  "junit_path": "docs/premium/evidence/T19/run-20261020-145951/cmd-02-junit.xml",
+  "log_path": "docs/premium/evidence/T19/run-20261020-145951/commands.txt",
+  "artifacts": [
+    {
+      "ref": "docs/premium/evidence/T19/run-20261020-145951/cmd-01.txt",
+      "sha256": "834a93907e82c62a7bccf6cd026ac61af3935d19fabe410506527a7aab298001",
+      "size": 3590
+    },
+    {
+      "ref": "docs/premium/evidence/T19/run-20261020-145951/cmd-02-junit.xml",
+      "sha256": "6c64012912a7db8eda3c81cbb98c2d937fb14ba55a33cb239584fa10466b0327",
+      "size": 4231
+    },
+    {
+      "ref": "docs/premium/evidence/T19/run-20261020-145951/cmd-02.txt",
+      "sha256": "285b9b29076f8f08049dff237e59a9ef2919544bc6310b7ad3fbde035171f8de",
+      "size": 252
+    },
+    {
+      "ref": "docs/premium/evidence/T19/run-20261020-145951/cmd-03.txt",
+      "sha256": "2f5cea84f4e2f455f1f3f3ff0a90272a7c9dccda5bbd1b2e8ef1524b4c0159f1",
+      "size": 259
+    },
+    {
+      "ref": "docs/premium/evidence/T19/run-20261020-145951/commands.txt",
+      "sha256": "4c82fb344c412cbbb0c3fb7a814c051c54e348f9e8834f692f2d74603b8b04dd",
+      "size": 4489
+    }
+  ],
+  "data_mode": "REAL",
+  "external_resources": [],
+  "operator_authorization_ref": null,
+  "result": "PASS",
+  "blocked_reason": null,
+  "preflight_exit": 0,
+  "database_lock": true
+}
