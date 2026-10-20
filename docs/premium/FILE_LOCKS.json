@@ -89,6 +89,62 @@
       "branch": "cc/T12-evidence-report",
       "granted_at": "2026-10-20 Asia/Shanghai",
       "release_condition": "T12 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/routes/premium/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/stream.py",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "src/ravel/gateway/app.py",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "packages/api-client/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "schemas/premium/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "tests/premium/T13/",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
+    },
+    {
+      "path": "docs/premium/acceptance-map.json",
+      "task_id": "T13",
+      "owner": "SUPERVISOR",
+      "branch": "cc/T13-api-events",
+      "granted_at": "2026-10-20 Asia/Shanghai",
+      "release_condition": "T13 integrated"
     }
   ],
   "shared_paths": [
