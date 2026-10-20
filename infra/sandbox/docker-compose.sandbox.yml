@@ -1,0 +1,77 @@
+# The T19 sandbox overlay.
+#
+# Run this alongside the repository's docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f infra/sandbox/docker-compose.sandbox.yml up -d
+#
+# The only service in either file with /var/run/docker.sock is
+# `sandbox-supervisor`. RAVEL's own API, DSH host, and agent images either run
+# natively (as V0 does) or are built separately and must not mount it. The
+# supervisor is not privileged, drops all capabilities, has a read-only root
+# filesystem, and publishes only on loopback.
+#
+# The sandbox image must exist on the host daemon before a browser or command
+# sandbox can be provisioned:
+#
+#   docker build -f infra/sandbox/Dockerfile.sandbox -t ravel-sandbox:latest .
+#
+# The proxy's egress network is `bridge` in a default Docker installation. On a
+# host with a different default network, set RAVEL_SANDBOX_PROXY_EGRESS_NETWORKS
+# to the network that has the public route. It must be a network the supervisor
+# may attach the proxy to; the browser itself is never attached to it.
+
+name: ravel
+
+services:
+  sandbox-supervisor:
+    build:
+      context: ../..
+      dockerfile: infra/sandbox/Dockerfile.supervisor
+    image: ravel-sandbox-supervisor:latest
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    environment:
+      # Required. The service refuses to start with a shorter or missing token.
+      RAVEL_SANDBOX_SUPERVISOR_TOKEN: ${RAVEL_SANDBOX_SUPERVISOR_TOKEN:?set a supervisor token of at least 16 characters}
+      RAVEL_SANDBOX_IMAGE: ${RAVEL_SANDBOX_IMAGE:-ravel-sandbox:latest}
+      RAVEL_SANDBOX_STATE_DIR: /var/lib/ravel-sandbox
+      RAVEL_SANDBOX_SUPERVISOR_BIND: 0.0.0.0
+      RAVEL_SANDBOX_SUPERVISOR_PORT: "8799"
+      RAVEL_SANDBOX_MAX_CPU_CORES: ${RAVEL_SANDBOX_MAX_CPU_CORES:-2}
+      RAVEL_SANDBOX_MAX_MEMORY_BYTES: ${RAVEL_SANDBOX_MAX_MEMORY_BYTES:-4294967296}
+      RAVEL_SANDBOX_MAX_PIDS: ${RAVEL_SANDBOX_MAX_PIDS:-256}
+      RAVEL_SANDBOX_MAX_SCRATCH_BYTES: ${RAVEL_SANDBOX_MAX_SCRATCH_BYTES:-10737418240}
+      RAVEL_SANDBOX_MAX_TIMEOUT_SECONDS: ${RAVEL_SANDBOX_MAX_TIMEOUT_SECONDS:-120}
+      RAVEL_SANDBOX_PROXY_ALLOWLIST: ${RAVEL_SANDBOX_PROXY_ALLOWLIST:-}
+      RAVEL_SANDBOX_PROXY_EGRESS_NETWORKS: ${RAVEL_SANDBOX_PROXY_EGRESS_NETWORKS:-bridge}
+      RAVEL_SANDBOX_ENV_ALLOWLIST: ${RAVEL_SANDBOX_ENV_ALLOWLIST:-}
+    ports:
+      # Loopback only. The token is a deployment capability and the API
+      # provisions containers; exposing it on 0.0.0.0 would make every host on
+      # the network a sandbox operator.
+      - "127.0.0.1:${RAVEL_SANDBOX_SUPERVISOR_PORT:-8799}:8799"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-supervisor-state:/var/lib/ravel-sandbox
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8799/healthz', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  # Handles, runs, and collected artifact bytes. Project workspaces live in
+  # separate `ravel-t19-ws-<project>` volumes created by the supervisor; they
+  # survive a supervisor restart and are destroyed only by an explicit destroy.
+  sandbox-supervisor-state:

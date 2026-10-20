@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "task_id": "T19",
+  "attempt": 1,
+  "reviewer_id": "independent-T19-review",
+  "base_sha": "679cc79",
+  "candidate_sha": "2367072",
+  "source_commit": "0b580615241518f7605b5e3843e0af89d722b73f",
+  "source_digest": "b6431338f964dc02cb2f38422b3a5f47da05e45dabde1a32bfbd01eeb2b280fa",
+  "reviewed_at": "2026-10-20 14:35 Asia/Shanghai",
+  "decision": "APPROVE",
+  "acceptance_results": [
+    {
+      "id": "T19-AC1",
+      "result": "PASS",
+      "evidence": "tests/premium/T19/test_ac1_container.py (6 tests), test_artifacts.py (2), test_browser.py (5). The command container is inspected as deployed, not from argv: ReadonlyRootfs=true, Privileged=false, PidMode empty, IpcMode != host, CapDrop=['ALL'], no-new-privileges, Docker default seccomp read back from /proc/self/status as Seccomp=2 and NoNewPrivs=1, NanoCpus=2000000000, Memory=MemorySwap=4 GiB, PidsLimit=256, exactly one /workspace volume and no docker.sock or host bind, and no supervisor token/secret/DB variables in Config.Env. The command sandbox has --network none; cross-project handle/run lookups and raw HTTP requests get 404/403 without revealing that the object exists; lexical, symlink and hardlink escapes are refused. The canonical ravel-premium-ubuntu24 application container has no Docker socket and drives the provider over HTTP while `docker version` fails inside it; the compose overlay mounts /var/run/docker.sock only into sandbox-supervisor. The browser path uses real Chromium in ravel-sandbox on a per-project --internal network whose only peers are the browser and proxy; the proxy alone is attached to the fixture egress network. A raw-socket probe from inside the browser gets 200 only for the exact allowlisted host:port and 403 for unlisted, metadata, private-network and port-22 targets; direct connections to the fixture, metadata and private addresses fail; a client on the proxy's egress network is refused 403; the browser workspace is read-only (EROFS on write). BrowserNavigator -> provider.fetch -> real Chromium -> ResearchSourceGateway.register stores a snapshot whose content_hash, storage_key and bytes agree. The independent gate created 15+ distinct ravel-t19-cmd-* containers plus browser, proxy and fixture-http containers from ravel-sandbox:latest; Docker events show their start/die/destroy lifecycle and `docker ps -a` is empty for ravel-t19 after the run."
+    },
+    {
+      "id": "T19-AC2",
+      "result": "PASS",
+      "evidence": "tests/premium/T19/test_ac2_quotas.py (9 tests), all against real containers and Docker state. Inspect confirms NanoCpus, Memory, MemorySwap, PidsLimit and the /tmp tmpfs size/noexec/nosuid flags. Four busy children saturate the 2-CPU quota; an allocation beyond the memory limit fails while the container survives; fork fails with EAGAIN/ENOMEM at the PIDs bound; a 16 MiB tmpfs write gets ENOSPC while the workspace remains writable; a 1 s timeout kills a 30 s sleep, records TIMED_OUT and leaves no process; a concurrent stop cancels a 60 s sleep as CANCELLED, stops the container, and reconnect reuses the same binding/epoch in READY; destroy removes the container and workspace volume while the run record remains queryable; an over-ceiling request (4 CPU, 8 GiB, 1024 PIDs, 20 GiB scratch, 121 s) is refused; an AuthorityEnvelope of 0.001 compute-hours narrows the timeout to 3.6 s. The 10 GiB disk quota is the /tmp tmpfs; the persistent workspace volume and the supervisor's transient exec-output files are not size-capped (finding F2)."
+    },
+    {
+      "id": "T19-AC3",
+      "result": "PASS",
+      "evidence": "tests/premium/T19/test_ac3_binding.py (5 tests) and test_artifacts.py (2). From inside the command sandbox, connections to the real integration PostgreSQL host/port, the Docker gateway and the metadata address all fail (network none); the sandbox environment contains no authoritative DB, SSH or cluster paths. A secret injected through the env allowlist is redacted from stdout, run JSON, logs and handle records. Reconnect under a different epoch is refused; another project's handle/run is a 404. A real PostgreSQL CLAIMED SANDBOX_EXEC with the exact command digest executes and is completed with external_ref=run_id; unclaimed, wrong-digest, wrong-binding, wrong-actor and wrong-project Actions are refused before the supervisor with the run-record count unchanged and the Action untouched. Artifact collection hashes the bytes in the supervisor, and artifact_bytes re-hashes the stored copy and raises SandboxIntegrityError after tampering; ResearchSourceGateway.register recomputes the retrieval hash and refuses a mismatched claim. Redaction covers exact secret values plus assignment, Bearer, URL-userinfo, credential-flag and query-parameter forms."
+    },
+    {
+      "id": "T19-AC4",
+      "result": "PASS",
+      "evidence": "The independent canonical gate ran with real Docker 29.1.3 and ravel-sandbox:latest present; preflight exit 0, all three commands exit 0, manifest result PASS, data_mode REAL, external_resources [], blocked_reason null, database_lock true. Real sandbox containers were created and removed during the run (Docker events). No BLOCKED_EXTERNAL was triggered. If Docker is absent, conftest.py:128-137 fails the suite with `T19 isolation gate is BLOCKED_EXTERNAL(resource=Linux/Docker)` and never skips or mocks; because premium_task.py has only PASS/FAIL manifest results, such a run is recorded as FAIL with the BLOCKED_EXTERNAL diagnosis in its log and the task cannot be marked DONE. Live public-web Research is deferred to the external Research row; the documentation-range fixture is a deterministic local browser target, not a claim of public-web evidence."
+    }
+  ],
+  "gate_evidence_refs": [
+    "evidence/T19/run-20261020-141705/manifest.json"
+  ],
+  "independent_verification": {
+    "gate_run_id": "run-20261020-142737",
+    "gate_command": "docker run --rm --network host -v /mnt/c/Users/lishi/code:/workspace -v ravel-premium-venv-t19:/workspace/ravel-worktrees/T19/.venv -v /var/run/docker.sock:/var/run/docker.sock -w /workspace/ravel-worktrees/T19 -e RAVEL_TEST_DB=ravel_t19_review_test -e RAVEL_POSTGRES_DB=ravel_t19_review_test -e RAVEL_POSTGRES_DSN=postgresql+psycopg://ravel:***@127.0.0.1:55432/ravel_t19_review_test -e RAVEL_PREMIUM_LOCK_DIR=/workspace/.ravel-test-locks ravel-premium-ubuntu24:latest bash -lc 'git config --global --add safe.directory \"*\" && make premium-task TASK=T19'",
+    "gate_result": "PASS, exit 0, source_commit 2367072506eae8c5545d5d94870dec7aaba63cd6, source_digest b6431338f964dc02cb2f38422b3a5f47da05e45dabde1a32bfbd01eeb2b280fa, preflight_exit 0, database_lock true, data_mode REAL, external_resources [], 3/3 commands exit 0.",
+    "gate_tests": "JUnit cmd-02-junit.xml: 28 testcases, 0 failures, 0 errors, 0 skipped; terminal count dots only because pytest 9.1.1 omits the summary line when --junitxml is used. The 28 nodeids match acceptance-map.json T19 exactly in both directions with no duplicates. Fresh database ravel_t19_review_test (0 tables before the run, alembic a4d2e6f8b1c3 and 49 tables after) was dropped after parsing.",
+    "real_containers": "Docker events in the run window (2026-10-20 14:28:41-14:29:39 +0800) contain 50 ravel-t19 events and at least 15 distinct ravel-t19-cmd-* containers plus ravel-t19-browser-*, ravel-t19-proxy-* and ravel-t19-fixture-http-* containers from ravel-sandbox:latest, with start/die/kill/destroy actions. `docker ps -a` after the run contains no ravel-t19 container; the project network is removed. The five ravel-t19-ws-* volumes present after the run were already present before my run and were not created or removed by me.",
+    "digest_recomputation": "Reimplemented the scripts/premium_task.py algorithm (git ls-tree -r, excluded record prefixes, sorted mode/kind/blob/path, sha256): 0b580615241518f7605b5e3843e0af89d722b73f and 2367072506eae8c5545d5d94870dec7aaba63cd6 both give b6431338f964dc02cb2f38422b3a5f47da05e45dabde1a32bfbd01eeb2b280fa; 679cc79da5b87c4afc729ade4a71399de7067dac gives cdce7151e478ff0c83ff6a8aaeb82cc94bf4f15ac2642a019ad934473b481864. `git diff --name-only 0b58061..2367072` contains only docs/premium/evidence/T19/run-20261020-141705/* and docs/premium/tasklogs/T19.md.",
+    "boundary_check": "`git diff --name-only 679cc79..2367072` contains exactly docs/premium/acceptance-map.json, docs/premium/evidence/T19/run-20261020-141705/{cmd-01.txt,cmd-02-junit.xml,cmd-02.txt,cmd-03.txt,commands.txt,manifest.json}, docs/premium/tasklogs/T19.md, infra/sandbox/{Dockerfile.sandbox,Dockerfile.supervisor,README.md,docker-compose.sandbox.yml}, src/ravel/config.py, src/ravel/research/browser.py, src/ravel/sandbox/* and tests/premium/T19/*; no src/ravel/sandbox/vm.py; no change under src/ravel/backends, src/ravel/state or tests/unit. Only the T19 section of acceptance-map.json changed (28 nodeids, database_suite true, the three exact execution_commands).",
+    "implementer_manifest_check": "docs/premium/evidence/T19/run-20261020-141705/manifest.json: result PASS, preflight 0, database_lock true, source_commit 0b58061, source_digest b6431338..., all three commands exit 0, JUnit 28 tests / 0 failures / 0 errors / 0 skipped, data_mode REAL, external_resources [], blocked_reason null. Every artifact sha256/size matches the files on disk.",
+    "base_unit_failures": "On a clean `git archive 679cc79` export in /tmp (PYTHONPATH pointing at that export), the two named tests both fail (FF): tests/unit/backends/slurm/test_backend.py::test_a_retry_gets_its_own_directory_so_it_cannot_read_the_attempt_before_it (SlurmComputeBackend.target AttributeError) and tests/unit/state/test_schema.py::test_every_repository_can_order_what_it_returns[BudgetReservationRepository] (BudgetReservationRow.created_at AttributeError). The same two fail at HEAD. T19 changes no file under src/ravel/backends, src/ravel/state or tests/unit, so they are pre-existing and unrelated to T19.",
+    "cleanup": "The gate container was --rm. All ravel-t19 containers and the per-project network created by my run were removed by the fixtures; the pre-existing workspace volumes were left untouched. The isolated database was dropped. My run's evidence directory was parsed and copied to /tmp/t19-review-evidence/run-20261020-142737 (outside the repository) and then removed from the worktree so the only committed review artifact is this file. `git status --porcelain=v1 --untracked-files=all` is empty except for this review file before its commit.",
+    "not_rerun": "The full unit suite (only the two named tests were run), live public web/Research, T25/T29 external certification, and adversarial implementations of findings F5 (daemonized child after timeout) and F7 (intermediate symlink race) were not executed; those two findings are code inspection only."
+  },
+  "findings": [
+    {
+      "priority": "P2",
+      "file": "src/ravel/sandbox/authority.py",
+      "line": 78,
+      "trigger": "The docstring says a token leaked to a Research process still cannot execute in another project's handle because the handle project is checked against the authority and request. In fact the project id is caller-supplied: supervisor.py:1832 reads it from the body/query and only requires the X-RAVEL-Project header to match, supervisor.py:556 compares handle.project_id to that same claimed value, and supervisor.py:1885 authenticates only the deployment-wide bearer token. A token holder who knows another project's id and a handle id can provision, execute, reconnect or destroy that project's sandbox. docs/premium/tasklogs/T19.md:157 likewise claims the handle check already blocks cross-project use; infra/sandbox/README.md:111-114 states the true limitation.",
+      "impact": "Project binding is enforced against the caller's own claim, not authenticated per project. The README documents the shared-token trust domain, so this is an accepted V0 deployment boundary, but the tasklog and authority comment overstate the protection and could lead an integrator to treat the host as multi-tenant-safe.",
+      "acceptance_id": "T19-AC3",
+      "required_fix": "Correct the tasklog and authority docstring to state that a deployment token holder can act for any project id it knows; keep per-project tokens/mTLS (or network isolation of the supervisor) as the follow-up that makes the host multi-tenant. Do not claim the handle check authenticates project identity.",
+      "advisory": true
+    },
+    {
+      "priority": "P2",
+      "file": "src/ravel/sandbox/supervisor.py",
+      "line": 822,
+      "trigger": "The 10 GiB scratch quota is applied only to the /tmp tmpfs (line 820-821). The project workspace is a Docker volume with no size limit (line 822-826), and `execute` streams the command's stdout/stderr into supervisor files (line 1034-1039) that are only truncated when read after the run (line 1200-1208). A sandbox command can therefore fill the host filesystem through the persistent workspace volume, or transiently through output files, beyond the documented disk quota for up to the timeout.",
+      "impact": "T19-AC2's disk quota is met for the specified scratch mount but not for the two host-disk channels the same container can write. The tasklog documents a single-daemon trust domain consuming host CPU/disk in general (tasklogs/T19.md:163-164), but not that workspace and output capture are uncapped; a runaway command can exhaust the supervisor host's disk.",
+      "acceptance_id": "T19-AC2",
+      "required_fix": "Cap exec output at the stream (bounded reader or a Docker/log-driver limit) and either add a workspace volume quota or state explicitly that the persistent project workspace is not covered by the scratch quota. Add a test that a command writing far beyond the workspace/output bound is stopped.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/supervisor.py",
+      "line": 715,
+      "trigger": "Provisioning stores a default-constructed SandboxCapabilities object in the handle (line 715, also the failure path at line 762), and GET /capabilities returns another default object (line 1923-1925); neither reads `docker inspect` of the container that was actually created. provider.py:247-265 `_require_compliant` then treats those hardcoded booleans as an attestation before every execution.",
+      "impact": "The production fail-closed capability gate trusts a constant. A daemon or image that silently dropped a flag (read-only rootfs, non-root, cap-drop, seccomp) would not be detected by the provider, although the T19 tests independently inspect the real container and would catch it in the gate. The docstring in models.py:82-88 calls these facts about the implementation.",
+      "acceptance_id": "T19-AC1",
+      "required_fix": "Derive the handle capabilities from `docker inspect` of the created container (or a supervisor-side attestation of the inspect document), and return UnsupportedCapability when a required flag is not present.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/action_guard.py",
+      "line": 237,
+      "trigger": "The SANDBOX_EXEC payload includes timeout_seconds (line 62-67), but DatabaseActionGuard.verify compares only project, kind, status, actor, claimed_by, binding, command_digest and lease_epoch (lines 207-252). command_digest itself covers argv, cwd and environment names but not the timeout (models.py:501-528). An Action approved with a 5 s timeout can therefore execute the same command with any timeout up to the handle limit.",
+      "impact": "The approved resource envelope is not bound to the command that runs. The supervisor's handle limit and the AuthorityEnvelope still cap the damage, so this is a binding-completeness gap rather than an unbounded escape, but a long-running command can consume more than the Action's approved wall clock.",
+      "acceptance_id": "T19-AC3",
+      "required_fix": "Include timeout_seconds in the command digest, or have verify compare the Action payload's timeout_seconds with the requested timeout (and reject a missing or larger value).",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/supervisor.py",
+      "line": 1132,
+      "trigger": "_kill_run kills the recorded pid and its process group inside the container. A command that starts a child in a new session (`setsid`) leaves that child outside the process group; the container remains READY and the child keeps running under the container's cgroup quota. The timeout tests check the main sleep process only.",
+      "impact": "A timed-out or cancelled run can leave a daemonized process consuming CPU/memory/PIDs inside the project sandbox until a stop or destroy. It cannot leave the container, but the per-run timeout does not guarantee that the command's effects have stopped.",
+      "acceptance_id": "T19-AC2",
+      "required_fix": "On timeout/cancel, stop or freeze the whole container (then reconnect for later work), or sweep all processes in the container's PID namespace, and add a test with a setsid child.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/paths.py",
+      "line": 81,
+      "trigger": "The docstring promises no `.`, `..` or empty component, but the check uses PurePosixPath(path).parts, which normalizes `a/./b` and `a//b` to ('a','b'), so those forms are accepted. The final trailing-separator check catches a trailing slash but not an internal doubled separator or current-directory component.",
+      "impact": "No confinement escape: the normalized path is still resolved under the workspace and the container helper repeats a lexical check. The defect is that the stated invariant is not the one enforced, so a future caller relying on the rejection can be surprised.",
+      "acceptance_id": "T19-AC1",
+      "required_fix": "Split the path on '/' and reject empty, '.' and '..' components before PurePosixPath normalization, or correct the docstring to say those forms are normalized.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/fileops.py",
+      "line": 96,
+      "trigger": "`_check_components` lstats every existing component, then `_open_regular` opens the final path with O_NOFOLLOW. A concurrent sandbox command can replace an intermediate directory with a symlink between the check and the open, and the kernel follows that intermediate link. O_NOFOLLOW protects only the final component.",
+      "impact": "The helper can be raced into reading a file elsewhere in the same container (for example /etc/passwd) and returning its bytes as workspace content. There is no host bind mount or Docker socket, so this does not cross the container boundary, but it defeats the workspace-confinement guarantee for the files API.",
+      "acceptance_id": "T19-AC1",
+      "required_fix": "Open each component with openat(O_NOFOLLOW|O_DIRECTORY) and only open the final file relative to the verified parent, or use openat2 with RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS where available; add a race test.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/supervisor.py",
+      "line": 1304,
+      "trigger": "fileops.py:335 stores each collected file's basename as the ArtifactRef name, and artifact_bytes looks up a ref by name only. Two files with the same basename in different artifact subdirectories produce two refs with the same name; artifact_bytes(run, name) always returns the first, so a caller registering the second ref can receive the first file's bytes and a different digest.",
+      "impact": "An artifact can be registered under the wrong path/name, with a hash that does not represent the file the caller intended. Registration itself re-hashes the bytes, so the stored content is internally consistent; the provenance mapping is what is wrong. No cross-project access.",
+      "acceptance_id": "T19-AC1",
+      "required_fix": "Key collected artifacts by their relative path (or a unique name derived from it) and have artifact_bytes select by that key; alternatively refuse duplicate basenames during collection.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/egress.py",
+      "line": 40,
+      "trigger": "The FORBIDDEN_PORTS comment says an operator can still name one explicitly, but ProxyPolicy.target_for checks forbidden_ports before the allowlist (lines 232-238) and always refuses them. The behavior is the safer one; the comment describes an override that does not exist.",
+      "impact": "An operator reading the comment could believe an explicit allowlist entry for SSH, PostgreSQL, Redis, Temporal or the Docker API will be honored, and would misinterpret the 403. No code path actually permits the port.",
+      "acceptance_id": "T19-AC1",
+      "required_fix": "Correct the comment to say forbidden ports cannot be allowlisted, or implement the documented explicit override with an operator authorization record.",
+      "advisory": true
+    },
+    {
+      "priority": "P3",
+      "file": "src/ravel/sandbox/models.py",
+      "line": 214,
+      "trigger": "The RunRef docstring says the ref is returned before the command has finished, but POST /handles/{id}/execute blocks in the threadpool until service.execute reaches a terminal state and returns that final RunRef (supervisor.py:2048-2068). provider.execute then immediately records the Action outcome from the terminal state; the docstring describes an asynchronous contract the API does not implement.",
+      "impact": "A caller following the docstring may call status expecting RUNNING or may not expect the HTTP request to occupy a worker for the whole timeout. The Action settlement is correct only because the endpoint is synchronous; changing it to asynchronous would break record_outcome without any test noticing.",
+      "acceptance_id": "T19-AC2",
+      "required_fix": "Align the RunRef docstring with the blocking endpoint (or make execution asynchronous and record the outcome in status/cancel); add a test for the Action settlement path if the endpoint changes.",
+      "advisory": true
+    }
+  ],
+  "residual_risks": [
+    "The shared deployment supervisor token is accepted as a documented V0 trust-domain boundary (infra/sandbox/README.md:111-114). It is not per-project authentication; finding F1 requires the tasklog and authority docstring to stop claiming otherwise. A multi-tenant deployment needs per-project tokens/mTLS or supervisor network isolation first.",
+    "Chromium runs with --no-sandbox. This is acceptable documented scope for T19: the container is the boundary (non-root 65534, read-only rootfs, cap-drop ALL, no-new-privileges, Docker default seccomp, no socket, internal-only network with the proxy as sole peer), and the tests read Seccomp=2/NoNewPrivs=1 and prove there is no direct route. The browser process itself has no additional Chromium sandbox.",
+    "Docker's default seccomp profile is used, not a RAVEL-owned allowlist. It is a real kernel restriction (Seccomp=2 read from /proc/self/status), but its policy belongs to the distribution; a future Docker default change is an external dependency.",
+    "One Docker daemon is one trust domain and there is no global sandbox-count cap; only one sandbox per project/purpose. This is documented V0 scope and does not violate an AC, but a token holder with many project ids can consume host resources up to each project's quota.",
+    "The workspace volume is not size-capped and exec output is capped only after completion (finding F2); this is the main remaining host-disk DoS channel.",
+    "The no-Docker AC4 outcome is a FAIL gate whose log contains BLOCKED_EXTERNAL(resource=Linux/Docker), not a manifest-level BLOCKED_EXTERNAL result, because scripts/premium_task.py has only PASS/FAIL. The substantive requirement (no PASS, no DONE, no mock/skip) holds; the task runner vocabulary is pre-existing T01/T22 scope.",
+    "The artifact store in the T19 evidence is MemoryArtifactStore, not MinIO; the Gateway, repository and hash verification are real code and the tasklog records the store limitation. Real object-store certification remains external.",
+    "The browser fixture is a deterministic documentation-range target served by a local HTTP server, not a live public website; real public-web Research is deferred to the external Research row by the task card.",
+    "The full unit suite was not rerun. The two named failures were reproduced on a clean base export and at HEAD, and T19 changes none of their files; the broader 1115-test claim in the tasklog was not independently re-executed.",
+    "Findings F5 (setsid child after timeout) and F7 (intermediate symlink race) are code-inspection findings; no adversarial test was executed for them in this review."
+  ],
+  "integration_candidate": true
+}
