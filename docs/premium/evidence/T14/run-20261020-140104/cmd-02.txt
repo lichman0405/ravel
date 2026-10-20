@@ -1,0 +1,359 @@
+$ bash tests/premium/T14/run_node_suite.sh
+
+node v22.23.3
+pnpm 9.15.9
+Scope: all 3 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +295
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 295, reused 295, downloaded 0, added 295, done
+
+Done in 1.3s using pnpm v9.15.9
+
+> @ravel/desktop@0.1.0 typecheck /tmp/ravel-t14-node.RGxK2I/apps/desktop
+> tsc --noEmit -p tsconfig.json
+
+
+> @ravel/desktop@0.1.0 build /tmp/ravel-t14-node.RGxK2I/apps/desktop
+> node scripts/build.mjs
+
+
+  dist/main/main.cjs            37.4kb
+  dist/lib/gateway-service.cjs  23.1kb
+  dist/lib/session-store.cjs     5.1kb
+  dist/lib/config.cjs            4.2kb
+  dist/lib/security.cjs          3.1kb
+  dist/lib/contract.cjs          2.0kb
+  dist/main/preload.cjs          1.7kb
+
+⚡ Done in 15ms
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 16 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/renderer/index.html                   0.72 kB │ gzip:  0.39 kB
+dist/renderer/assets/index-BlLf_F-0.css    3.79 kB │ gzip:  1.29 kB
+dist/renderer/assets/index-CWDeCLiK.js   226.18 kB │ gzip: 70.50 kB
+
+✓ built in 194ms
+
+> @ravel/desktop@0.1.0 test:unit /tmp/ravel-t14-node.RGxK2I/apps/desktop
+> node scripts/build.mjs --libs-only && node --test "../../tests/premium/T14/node/*.test.cjs"
+
+
+  dist/main/main.cjs            37.4kb
+  dist/lib/gateway-service.cjs  23.1kb
+  dist/lib/session-store.cjs     5.1kb
+  dist/lib/config.cjs            4.2kb
+  dist/lib/security.cjs          3.1kb
+  dist/lib/contract.cjs          2.0kb
+  dist/main/preload.cjs          1.7kb
+
+⚡ Done in 11ms
+TAP version 13
+# Subtest: an https Gateway is accepted and normalised
+ok 1 - an https Gateway is accepted and normalised
+  ---
+  duration_ms: 0.816522
+  type: 'test'
+  ...
+# Subtest: plain http is admitted only on loopback
+ok 2 - plain http is admitted only on loopback
+  ---
+  duration_ms: 0.36577
+  type: 'test'
+  ...
+# Subtest: a Gateway URL cannot smuggle credentials, a query or a fragment
+ok 3 - a Gateway URL cannot smuggle credentials, a query or a fragment
+  ---
+  duration_ms: 0.233274
+  type: 'test'
+  ...
+# Subtest: the environment endpoint wins over the configuration file
+ok 4 - the environment endpoint wins over the configuration file
+  ---
+  duration_ms: 0.524372
+  type: 'test'
+  ...
+# Subtest: an invalid environment endpoint is refused without falling back
+ok 5 - an invalid environment endpoint is refused without falling back
+  ---
+  duration_ms: 0.755908
+  type: 'test'
+  ...
+# Subtest: the configuration file is read only when the environment is silent
+ok 6 - the configuration file is read only when the environment is silent
+  ---
+  duration_ms: 0.212887
+  type: 'test'
+  ...
+# Subtest: an unconfigured desktop says so instead of guessing an endpoint
+ok 7 - an unconfigured desktop says so instead of guessing an endpoint
+  ---
+  duration_ms: 0.113462
+  type: 'test'
+  ...
+# Subtest: a broken configuration file becomes a stated problem, not an endpoint
+ok 8 - a broken configuration file becomes a stated problem, not an endpoint
+  ---
+  duration_ms: 0.187044
+  type: 'test'
+  ...
+# Subtest: an unreadable configuration file is not treated as absent
+ok 9 - an unreadable configuration file is not treated as absent
+  ---
+  duration_ms: 0.189577
+  type: 'test'
+  ...
+# Subtest: the named IPC allowlist is fixed and complete
+ok 10 - the named IPC allowlist is fixed and complete
+  ---
+  duration_ms: 2.684446
+  type: 'test'
+  ...
+# Subtest: the main process registers exactly the six invoke channels and no generic IPC
+ok 11 - the main process registers exactly the six invoke channels and no generic IPC
+  ---
+  duration_ms: 0.302596
+  type: 'test'
+  ...
+# Subtest: every handler refuses an untrusted sender before doing work
+ok 12 - every handler refuses an untrusted sender before doing work
+  ---
+  duration_ms: 0.274478
+  type: 'test'
+  ...
+# Subtest: the window is created only through the hardened preferences
+ok 13 - the window is created only through the hardened preferences
+  ---
+  duration_ms: 0.144436
+  type: 'test'
+  ...
+# Subtest: the preload exposes only the explicit bridge methods
+ok 14 - the preload exposes only the explicit bridge methods
+  ---
+  duration_ms: 0.229912
+  type: 'test'
+  ...
+# Subtest: the renderer has no credential store, no network escape and no node surface
+ok 15 - the renderer has no credential store, no network escape and no node surface
+  ---
+  duration_ms: 0.247551
+  type: 'test'
+  ...
+# Subtest: the desktop calls only the generated T13 methods it needs
+ok 16 - the desktop calls only the generated T13 methods it needs
+  ---
+  duration_ms: 0.228863
+  type: 'test'
+  ...
+# Subtest: tokens live in memory or in the encrypted session store, never in the renderer
+ok 17 - tokens live in memory or in the encrypted session store, never in the renderer
+  ---
+  duration_ms: 0.208406
+  type: 'test'
+  ...
+# Subtest: the Gateway endpoint is operator configuration, not an invented default
+ok 18 - the Gateway endpoint is operator configuration, not an invented default
+  ---
+  duration_ms: 0.659541
+  type: 'test'
+  ...
+# Subtest: the desktop dependency pin set is exact and locked
+ok 19 - the desktop dependency pin set is exact and locked
+  ---
+  duration_ms: 0.63798
+  type: 'test'
+  ...
+# Subtest: the Windows build is an explicit x64 portable artifact and says it is unsigned
+ok 20 - the Windows build is an explicit x64 portable artifact and says it is unsigned
+  ---
+  duration_ms: 0.339133
+  type: 'test'
+  ...
+# Subtest: login uses the Gateway's real endpoint and projects a session without tokens
+ok 21 - login uses the Gateway's real endpoint and projects a session without tokens
+  ---
+  duration_ms: 21.009606
+  type: 'test'
+  ...
+# Subtest: a refused password is a credential error, not an offline Gateway
+ok 22 - a refused password is a credential error, not an offline Gateway
+  ---
+  duration_ms: 0.980153
+  type: 'test'
+  ...
+# Subtest: an unreachable Gateway becomes OFFLINE and keeps no credentials
+ok 23 - an unreachable Gateway becomes OFFLINE and keeps no credentials
+  ---
+  duration_ms: 0.281676
+  type: 'test'
+  ...
+# Subtest: the project list is read with the access token and only display fields survive
+ok 24 - the project list is read with the access token and only display fields survive
+  ---
+  duration_ms: 1.031597
+  type: 'test'
+  ...
+# Subtest: a concurrent 401 rotates the refresh chain exactly once
+ok 25 - a concurrent 401 rotates the refresh chain exactly once
+  ---
+  duration_ms: 29.793573
+  type: 'test'
+  ...
+# Subtest: a replayed or expired refresh token signs the desktop out
+ok 26 - a replayed or expired refresh token signs the desktop out
+  ---
+  duration_ms: 1.161462
+  type: 'test'
+  ...
+# Subtest: a project read refused after a successful refresh is reported, not retried forever
+ok 27 - a project read refused after a successful refresh is reported, not retried forever
+  ---
+  duration_ms: 1.047175
+  type: 'test'
+  ...
+# Subtest: logout tells the Gateway, forgets locally, and exposes no further read
+ok 28 - logout tells the Gateway, forgets locally, and exposes no further read
+  ---
+  duration_ms: 0.625963
+  type: 'test'
+  ...
+# Subtest: logout still clears locally when the Gateway cannot be reached
+ok 29 - logout still clears locally when the Gateway cannot be reached
+  ---
+  duration_ms: 0.636682
+  type: 'test'
+  ...
+# Subtest: restore without a saved session signs out and makes no request
+ok 30 - restore without a saved session signs out and makes no request
+  ---
+  duration_ms: 0.521
+  type: 'test'
+  ...
+# Subtest: restore rotates a saved refresh token into a working session
+ok 31 - restore rotates a saved refresh token into a working session
+  ---
+  duration_ms: 0.516695
+  type: 'test'
+  ...
+# Subtest: offline restore keeps the saved pair, reports OFFLINE and reconnects
+ok 32 - offline restore keeps the saved pair, reports OFFLINE and reconnects
+  ---
+  duration_ms: 1.979479
+  type: 'test'
+  ...
+# Subtest: restore with a refused refresh token signs out and clears the store
+ok 33 - restore with a refused refresh token signs out and clears the store
+  ---
+  duration_ms: 0.564457
+  type: 'test'
+  ...
+# Subtest: reconnect never throws and reports the real state
+ok 34 - reconnect never throws and reports the real state
+  ---
+  duration_ms: 0.202186
+  type: 'test'
+  ...
+# Subtest: an unconfigured desktop refuses Gateway calls and states the configuration gap
+ok 35 - an unconfigured desktop refuses Gateway calls and states the configuration gap
+  ---
+  duration_ms: 0.309754
+  type: 'test'
+  ...
+# Subtest: a Gateway that never answers becomes OFFLINE within the configured timeout
+ok 36 - a Gateway that never answers becomes OFFLINE within the configured timeout
+  ---
+  duration_ms: 21.681516
+  type: 'test'
+  ...
+# Subtest: the service has no scientific-DAG mutation surface
+ok 37 - the service has no scientific-DAG mutation surface
+  ---
+  duration_ms: 0.640165
+  type: 'test'
+  ...
+# Subtest: the only window preferences are the hardened ones
+ok 38 - the only window preferences are the hardened ones
+  ---
+  duration_ms: 1.179267
+  type: 'test'
+  ...
+# Subtest: the trusted renderer URL is exact, and an anchor is the same document
+ok 39 - the trusted renderer URL is exact, and an anchor is the same document
+  ---
+  duration_ms: 0.339513
+  type: 'test'
+  ...
+# Subtest: navigation is allowed only to the exact renderer document
+ok 40 - navigation is allowed only to the exact renderer document
+  ---
+  duration_ms: 0.135405
+  type: 'test'
+  ...
+# Subtest: an IPC sender must be the live main frame of the main window
+ok 41 - an IPC sender must be the live main frame of the main window
+  ---
+  duration_ms: 0.309698
+  type: 'test'
+  ...
+# Subtest: no window may be opened and no web permission is granted
+ok 42 - no window may be opened and no web permission is granted
+  ---
+  duration_ms: 0.145599
+  type: 'test'
+  ...
+# Subtest: tokens are written only as ciphertext when encryption exists
+ok 43 - tokens are written only as ciphertext when encryption exists
+  ---
+  duration_ms: 1.820274
+  type: 'test'
+  ...
+# Subtest: an unavailable OS encryption means memory only, never a plaintext file
+ok 44 - an unavailable OS encryption means memory only, never a plaintext file
+  ---
+  duration_ms: 0.438107
+  type: 'test'
+  ...
+# Subtest: a storage that throws is treated as unavailable, not as plaintext
+ok 45 - a storage that throws is treated as unavailable, not as plaintext
+  ---
+  duration_ms: 0.271117
+  type: 'test'
+  ...
+# Subtest: a failed encryption writes nothing and leaves no temporary file
+ok 46 - a failed encryption writes nothing and leaves no temporary file
+  ---
+  duration_ms: 0.563379
+  type: 'test'
+  ...
+# Subtest: clearing forgets memory and removes the encrypted file
+ok 47 - clearing forgets memory and removes the encrypted file
+  ---
+  duration_ms: 1.755357
+  type: 'test'
+  ...
+# Subtest: a corrupt or foreign session file is refused
+ok 48 - a corrupt or foreign session file is refused
+  ---
+  duration_ms: 3.100215
+  type: 'test'
+  ...
+# Subtest: a decrypted payload is validated before it becomes a session
+ok 49 - a decrypted payload is validated before it becomes a session
+  ---
+  duration_ms: 0.420648
+  type: 'test'
+  ...
+1..49
+# tests 49
+# suites 0
+# pass 49
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149.095676
+copied Linux-built desktop dist to /workspace/ravel-worktrees/T14/apps/desktop/dist
